@@ -55,7 +55,7 @@ header{padding:0;border:0;background:transparent}
 @media(max-width:1000px){.editor-grid{grid-template-columns:1fr}}@media(max-width:520px){.editor-head{align-items:flex-start;flex-direction:column}.trim-grid{grid-template-columns:1fr 1fr}}
 
 
-/* FlowPrompt Studio v8: compact professional shell and persistent theme switch */
+/* FlowPrompt Studio v13: improved Sherly memory detection */
 :root{color-scheme:dark;--ui-gap:12px}
 html{scroll-behavior:smooth;scrollbar-gutter:stable}
 body{background:var(--bg);min-height:100vh}
@@ -169,9 +169,27 @@ body.light-theme .chat-shell{background:#fff}body.light-theme .chat-top,body.lig
 
 
 .memory-panel{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0;background:var(--panel-soft,rgba(127,127,127,.04))}.memory-panel summary{cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px}.memory-panel summary span{font-size:12px;font-weight:500;color:var(--muted)}.memory-panel textarea{width:100%;resize:vertical;min-height:88px;margin:8px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--input-bg,var(--panel));color:var(--text);font:inherit}.memory-panel .actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.memory-panel .small{color:var(--muted)}
+
+/* v14 — playful local app lock */
+.app-lock{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(ellipse at top,#26304d 0%,#101522 55%,#090d16 100%);color:#f3f5ff;font-family:inherit}
+.app-lock[hidden]{display:none!important}.lock-card{width:min(100%,390px);padding:30px 26px;border:1px solid #3a4564;border-radius:24px;background:rgba(17,25,43,.94);box-shadow:0 24px 90px #0008;text-align:center}.lock-heart{width:58px;height:58px;margin:0 auto 15px;display:grid;place-items:center;border-radius:19px;background:linear-gradient(135deg,#ffc6e0,#b9c4ff);color:#252744;font-size:28px}.lock-card h2{font-size:23px;margin:0 0 7px}.lock-card p{color:#aeb9d4;font-size:13px;line-height:1.6;margin:0 0 20px}.lock-form{display:flex;gap:8px}.lock-form input{min-width:0;flex:1;padding:12px 13px;border:1px solid #3b4967;border-radius:12px;background:#0c1423;color:#fff;font:inherit;outline:none}.lock-form input:focus{border-color:#b8c3ff;box-shadow:0 0 0 3px #aab7ff22}.lock-form button{border:0;border-radius:12px;padding:0 16px;background:linear-gradient(135deg,#ffc6e0,#b9c4ff);color:#22243b;font-weight:800;cursor:pointer}.lock-error{min-height:20px;padding-top:9px;color:#ff9cae;font-size:12px}.lock-foot{font-size:10px!important;margin:8px 0 0!important;color:#7f8ba8!important}
+
 </style>
 </head>
 <body>
+<div class="app-lock" id="appLock" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+  <div class="lock-card">
+    <div class="lock-heart">♡</div>
+    <h2 id="lockTitle">Eh, siapa nih? 🎀</h2>
+    <p>Masukin kata sandi rahasia dulu yaa.<br>Kalau kamu orangnya, Sherly langsung kenal kok. WKWK</p>
+    <form class="lock-form" id="appLockForm">
+      <input id="appLockPassword" type="password" placeholder="Kata sandi…" autocomplete="current-password" aria-label="Kata sandi" required>
+      <button type="submit">Masuk ♡</button>
+    </form>
+    <div class="lock-error" id="appLockError" role="status" aria-live="polite"></div>
+    <p class="lock-foot">Kunci ringan di browser · bukan sistem keamanan akun</p>
+  </div>
+</div>
 <main class="app-shell">
   <aside class="sidebar">
     <div class="brand-mini"><div class="brand-mark">F</div><div><strong>FlowPrompt</strong><small>STUDIO</small></div></div>
@@ -368,7 +386,7 @@ body.light-theme .chat-shell{background:#fff}body.light-theme .chat-top,body.lig
       <div class="chat-shell panel">
         <div class="chat-top"><div class="chat-avatar">S<span></span></div><div class="chat-ident"><strong>Sherly ♡</strong><small>Virtual AI influencer · Korean fashion & daily vibes</small></div><span class="chat-model-pill" id="chatModelBadge">Gemini · gemini-3.8-flash</span><button class="ghost chat-clear" id="chatClear">Bersihkan chat</button></div>
         <div class="chat-bible"><strong>Personality Bible</strong><span>Ramah · percaya diri · modern · profesional saat perlu · playful. Bahasa Indonesia natural, hangat, sedikit jahil, tidak kaku, tidak berlebihan pakai emoji. Nggak perlu mengumumkan identitas virtual tanpa alasan; jawab jujur bila ditanya langsung.</span></div>
-        <details class="memory-panel" open><summary>🧠 Memori Sherly <span id="memoryCount">Tersimpan di browser ini</span></summary><p class="small">Simpan hal penting yang Sherly perlu ingat lintas sesi: preferensi kamu, topik yang sedang berjalan, atau keputusan proyek. Untuk menyuruh Sherly mengingat sesuatu dari chat, awali pesan dengan “Ingat bahwa…”.</p><textarea id="sherlyMemory" rows="4" placeholder="Contoh: Aku suka gaya ngobrol santai dan humor WKWK. Proyek utama kita adalah akun @sherlyves. Wajah di video GBK adalah referensi identitas utama Sherly."></textarea><div class="actions"><button class="secondary" id="saveMemory">Simpan memori</button><button class="ghost" id="clearMemory">Hapus memori</button><span id="memoryStatus" class="small">Memori disimpan hanya di browser ini.</span></div></details>
+        <details class="memory-panel" open><summary>🧠 Memori Sherly <span id="memoryCount">Tersimpan di browser ini</span></summary><p class="small">Simpan hal penting yang Sherly perlu ingat lintas sesi: preferensi kamu, topik yang sedang berjalan, atau keputusan proyek. Untuk menyimpan memori dari chat, awali dengan “Ingat bahwa…” atau tulis permintaan seperti “tolong simpan ini ke memori” di dalam pesan. Cek kotak ini untuk memastikan catatannya masuk.</p><textarea id="sherlyMemory" rows="4" placeholder="Contoh: Aku suka gaya ngobrol santai dan humor WKWK. Proyek utama kita adalah akun @sherlyves. Wajah di video GBK adalah referensi identitas utama Sherly."></textarea><div class="actions"><button class="secondary" id="saveMemory">Simpan memori</button><button class="ghost" id="clearMemory">Hapus memori</button><span id="memoryStatus" class="small">Memori disimpan hanya di browser ini.</span></div></details>
         <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
         <div class="chat-suggestions"><button class="ghost" data-chat-suggest="Sherly, bantu aku cari ide Reels kedua yang cocok sama vibe kamu dong 😆">Ide Reels</button><button class="ghost" data-chat-suggest="Pilih outfit Korean style buat konten besok dong, yang cute tapi natural.">Ide outfit</button><button class="ghost" data-chat-suggest="Aku lagi capek nih, temenin ngobrol bentar yuk hehe.">Ngobrol santai</button></div>
         <form id="chatForm" class="chat-composer"><textarea id="chatInput" rows="2" placeholder="Ketik pesan buat Sherly… (Enter untuk kirim, Shift+Enter baris baru)" aria-label="Pesan untuk Sherly"></textarea><button class="primary" id="chatSend" type="submit">Kirim ↗</button></form>
@@ -436,7 +454,7 @@ const sherlyBible=`Kamu adalah Sherly, karakter virtual AI influencer berusia 22
 function getSherlyMemory(){try{return localStorage.getItem(MEMORY_STORE)||''}catch(e){return ''}}
 function saveSherlyMemory(show=true){try{localStorage.setItem(MEMORY_STORE,$('sherlyMemory').value.trim());$('memoryStatus').textContent='Memori tersimpan ✓';$('memoryCount').textContent=$('sherlyMemory').value.trim()?'Memori aktif':'Belum ada catatan';if(show)chatStatus('Memori Sherly berhasil disimpan di browser ini.','ok')}catch(e){$('memoryStatus').textContent='Browser tidak mengizinkan penyimpanan.'}}
 function loadSherlyMemory(){const m=getSherlyMemory();$('sherlyMemory').value=m;$('memoryCount').textContent=m?'Memori aktif':'Belum ada catatan'}
-function autoRemember(text){const match=text.match(/^(?:sherly[,! ]*)?(?:tolong\s+)?(?:ingat(?:\s+bahwa)?|catat(?:\s+ya)?|jangan\s+lupa(?:\s+bahwa)?)\s*[:,-]?\s*(.+)$/i);if(!match)return;const note=match[1].trim();if(!note)return;const current=getSherlyMemory().split('\n').map(x=>x.trim()).filter(Boolean);if(!current.some(x=>x.toLowerCase()===note.toLowerCase()))current.push(note);$('sherlyMemory').value=current.slice(-60).join('\n');saveSherlyMemory(false);}
+function autoRemember(text){const clean=text.trim();const startMatch=clean.match(/^(?:sherly[,! ]*)?(?:tolong\s+)?(?:ingat(?:\s+bahwa)?|catat(?:\s+ya)?|jangan\s+lupa(?:\s+bahwa)?)\s*[:,-]?\s*(.+)$/i);const explicitAnywhere=/\b(?:tolong\s+(?:simpan|ingat|catat)|simpan\s+(?:informasi|hal|ini|catatan|ke memori)|ingat(?:\s+bahwa)?|catat(?:\s+ya)?|jangan\s+lupa)\b/i.test(clean);if(!startMatch&&!explicitAnywhere)return;const note=(startMatch?startMatch[1]:clean).replace(/\s+/g,' ').trim();if(!note)return;const current=getSherlyMemory().split('\n').map(x=>x.trim()).filter(Boolean);if(!current.some(x=>x.toLowerCase()===note.toLowerCase()))current.push(note);$('sherlyMemory').value=current.slice(-60).join('\n');saveSherlyMemory(false);$('memoryStatus').textContent='Memori otomatis tersimpan ✓';$('memoryCount').textContent='Memori aktif';}
 function renderSherlyChat(){const box=$('chatMessages');box.innerHTML='';if(!sherlyChat.length){const empty=document.createElement('div');empty.className='chat-empty';empty.innerHTML='<div class="sparkle">🎀 ✨</div><strong>Heiii, sini ngobrol!</strong><p>Aku Sherly hehe. Mau bahas ide konten, outfit, hari kamu, atau random talk juga boleh kok 😆</p>';box.appendChild(empty);return}for(const m of sherlyChat){const row=document.createElement('div');row.className='chat-msg '+(m.role==='user'?'user':'sherly');const avatar=document.createElement('div');avatar.className='mini-avatar';avatar.textContent=m.role==='user'?'K':'S';const wrap=document.createElement('div');const bubble=document.createElement('div');bubble.className='chat-bubble';bubble.textContent=m.text;const meta=document.createElement('div');meta.className='chat-meta';meta.textContent=m.role==='user'?'Kamu':'Sherly ♡';wrap.append(bubble,meta);row.append(avatar,wrap);box.appendChild(row)}box.scrollTop=box.scrollHeight}
 function chatStatus(msg,kind=''){const e=$('chatStatus');e.textContent=msg;e.className='status '+kind}
 function saveSherlyChat(){try{localStorage.setItem(CHAT_STORE,JSON.stringify(sherlyChat.slice(-80)))}catch(e){}}
@@ -620,6 +638,25 @@ themeToggle.addEventListener('click',()=>applyTheme(!document.body.classList.con
 
 loadBrandForm();$('plannerDate').value=localDateString(new Date());renderIdeas();renderSchedule();
 loadPrefs();if(!$('model').value||$('model').value==='gemini-2.5-flash')providerChanged();$('chatModelBadge').textContent=providerLabel($('provider').value)+' · '+$('model').value;openVault().then(()=>refreshVault()).then(()=>refreshDashboard()).catch(e=>vaultStatus('IndexedDB tidak tersedia: '+e.message,'err'));
+
+// Friendly local lock. Convenience gate only; the password is client-side, not strong security.
+(function(){
+  const lock=document.getElementById('appLock');
+  const form=document.getElementById('appLockForm');
+  const input=document.getElementById('appLockPassword');
+  const error=document.getElementById('appLockError');
+  if(sessionStorage.getItem('flowprompt_unlocked_v1')==='yes'){lock.hidden=true;return;}
+  document.body.style.overflow='hidden';
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    if(input.value==='syg :D'){
+      sessionStorage.setItem('flowprompt_unlocked_v1','yes');
+      lock.hidden=true;document.body.style.overflow='';error.textContent='';
+    }else{error.textContent='Hmm, belum cocok 😝 Coba lagi, kawan.';input.select();}
+  });
+  input.focus();
+})();
+
 </script>
 </body>
 </html>
