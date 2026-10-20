@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rumah Sherly — Creative Studio</title>
+<title>Rumah Sherly — Creative Studio v21</title>
 <style>
 :root{--bg:#0b1020;--panel:#121a2d;--panel2:#18233a;--line:#2a3854;--text:#eef3ff;--muted:#9cabc8;--accent:#8b9cff;--accent2:#63e6be;--danger:#ff8795;--radius:16px}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 500px at 10% -10%,#202e56 0%,transparent 60%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -220,6 +220,107 @@ body{background:radial-gradient(900px 500px at 88% -8%,#fce7f0 0%,transparent 62
 @media(max-width:900px){.sherly-home-hero{grid-template-columns:1fr;padding:24px}.home-art{height:190px}.wants-grid{grid-template-columns:1fr}.want-card{display:grid;grid-template-columns:85px minmax(0,1fr);column-gap:13px;align-items:start}.want-art{grid-row:1/5;height:88px;margin:0}.want-tag,.want-card h3,.want-card p,.want-meta{grid-column:2}.want-card p{min-height:0}.want-select,.want-save{grid-column:1/-1}.home-project-row{grid-template-columns:1fr}}
 @media(max-width:700px){.sherly-home-hero{padding:19px;gap:15px;border-radius:20px}.home-copy h2{font-size:30px}.home-copy p{font-size:12px}.home-art{height:160px}.daily-wants{padding:15px}.daily-wants-head{flex-direction:column;gap:8px}.daily-wants-head h2{font-size:21px}.today-date{align-self:flex-start}.want-card{padding:11px;grid-template-columns:70px minmax(0,1fr);gap:8px}.want-art{height:75px;font-size:33px}.want-card h3{font-size:14px}.want-card p{font-size:10px}.want-meta{padding:5px 0 8px}.saved-ideas-row{align-items:flex-start;flex-direction:column}.home-project,.home-quote{padding:15px}.project-foot{align-items:flex-start;flex-direction:column}.topbar-actions .badge{display:none}}
 
+
+/* v21 — Sherly Korean-girly icon language + soothing dark-pink night theme */
+.nav-icon{width:26px;flex:0 0 26px;text-align:center;font-size:19px;line-height:1.1;filter:saturate(.95)}
+.brand-mark{font-size:22px;display:grid;place-items:center}
+.quick-icon,.want-art,.project-icon{font-family:system-ui,-apple-system,sans-serif}
+.nav-item{letter-spacing:-.01em}
+@media(min-width:701px){.nav-item{min-height:41px}.brand-mini{padding-bottom:18px}}
+body:not(.light-theme){
+  --bg:#21121f;--panel:#2b1728;--panel2:#351b30;--line:#583149;--text:#f9eaf2;--muted:#c6a5b8;--accent:#f08ab8;--accent2:#a9d7bd;--danger:#ff9eae;
+  color-scheme:dark;
+  background:radial-gradient(950px 500px at 85% -10%,#5a2346 0%,transparent 62%),radial-gradient(720px 450px at 5% 18%,#3b1b36 0%,transparent 62%),#21121f;
+  color:#f9eaf2;
+}
+body:not(.light-theme) .sidebar{background:rgba(35,17,32,.96);border-color:#4d2941;box-shadow:7px 0 30px #0d061033}
+body:not(.light-theme) .brand-mini strong{color:#ffe6f1}
+body:not(.light-theme) .brand-mini small{color:#c58aa9}
+body:not(.light-theme) .brand-mark{background:linear-gradient(135deg,#f3a4c5,#c69ce8);box-shadow:0 8px 25px #e779ae30;color:white}
+body:not(.light-theme) .nav-label{color:#b97d9d}
+body:not(.light-theme) .nav-item{color:#d2aec2}
+body:not(.light-theme) .nav-item:hover{background:#3a2035;color:#fff2f8}
+body:not(.light-theme) .nav-item.active{color:#fff0f7;background:linear-gradient(100deg,#5a2948,#40243e);border-color:#75405f;box-shadow:inset 3px 0 #f08ab8}
+body:not(.light-theme) .nav-icon,body:not(.light-theme) .nav-item.active .nav-icon{color:#f4a3c7}
+body:not(.light-theme) .nav-count{color:#f5c9df;background:#512b46}
+body:not(.light-theme) .sidebar-note{border-color:#4b2a40;color:#c69bb4;background:#2a1727}
+body:not(.light-theme) .sidebar-note small{color:#9e7891}
+body:not(.light-theme) .status-dot{background:#9ad2b4;box-shadow:0 0 12px #9ad2b455}
+body:not(.light-theme) .topbar{border-color:#4a293e}
+body:not(.light-theme) .topbar h1,body:not(.light-theme) .page-intro h2{color:#ffeaf4}
+body:not(.light-theme) .topbar p,body:not(.light-theme) .page-intro p{color:#c7a5b8}
+body:not(.light-theme) .eyebrow,body:not(.light-theme) .home-kicker,body:not(.light-theme) .hero-kicker{color:#f09ac0}
+body:not(.light-theme) .badge{background:#512943;color:#ffcce2}
+body:not(.light-theme) .primary,body:not(.light-theme) .want-select{background:linear-gradient(135deg,#ef91b8,#ce6699);color:#fff8fc;box-shadow:0 7px 20px #e879ad20}
+body:not(.light-theme) .secondary{background:#49263e;color:#f6d5e5;border-color:#6a3b58}
+body:not(.light-theme) .ghost,body:not(.light-theme) .home-outline{background:#2d1929;color:#e8b6d0;border-color:#5b334c}
+body:not(.light-theme) .panel,body:not(.light-theme) .quick-card,body:not(.light-theme) .stat-card{background:linear-gradient(155deg,#321b2e,#281625);border-color:#503047;box-shadow:0 12px 34px #10070e28;color:#f7e5ef}
+body:not(.light-theme) .quick-card:hover{background:#3a2035;border-color:#9a5278}
+body:not(.light-theme) .quick-card strong,body:not(.light-theme) .stat-card strong,body:not(.light-theme) .section-heading h2{color:#ffedf5}
+body:not(.light-theme) .quick-card small,body:not(.light-theme) .stat-card span,body:not(.light-theme) .stat-card small{color:#c4a0b5}
+body:not(.light-theme) .quick-icon{background:#512b46;color:#ffc4de}
+body:not(.light-theme) .welcome-card,body:not(.light-theme) .sherly-home-hero{background:radial-gradient(circle at 80% 20%,#6a315655,transparent 38%),linear-gradient(115deg,#48223d,#321d31 58%,#3b2444);border-color:#6a3a57;color:#ffeaf4;box-shadow:0 15px 38px #10070e33}
+body:not(.light-theme) .welcome-card h2,body:not(.light-theme) .home-copy h2{color:#fff0f7}
+body:not(.light-theme) .welcome-card p,body:not(.light-theme) .home-copy p{color:#d2b1c4}
+body:not(.light-theme) .home-art{background:linear-gradient(145deg,#60314e,#472b4b 55%,#493044);border-color:#74415f}
+body:not(.light-theme) .home-window{background:#4a2b44;border-color:#f7d7e7}
+body:not(.light-theme) .window-sky{background:linear-gradient(#5d4a72,#75455d)}
+body:not(.light-theme) .window-sill{background:#f7d7e7}
+body:not(.light-theme) .sun-orb{background:#ffd9e8;box-shadow:0 0 0 15px #ffd9e822}
+body:not(.light-theme) .home-art-label{color:#f5c6dd;background:#351c30dd}
+body:not(.light-theme) .daily-wants,body:not(.light-theme) .workflow-strip,body:not(.light-theme) .daily-banner{background:linear-gradient(120deg,#321b2e,#2a1728);border-color:#503047}
+body:not(.light-theme) .daily-wants-head h2,body:not(.light-theme) .home-section-title h2,body:not(.light-theme) .daily-banner h2{color:#ffebf4}
+body:not(.light-theme) .daily-wants-head p,body:not(.light-theme) .home-section-title p{color:#c3a0b4}
+body:not(.light-theme) .today-date{background:#512943;border-color:#6a3a57;color:#ffc5df}
+body:not(.light-theme) .want-card{border-color:#583149}
+body:not(.light-theme) .want-pink{background:linear-gradient(160deg,#48233c,#321b2d)}
+body:not(.light-theme) .want-lavender{background:linear-gradient(160deg,#392744,#2c1a2d)}
+body:not(.light-theme) .want-cream{background:linear-gradient(160deg,#44302f,#2d1b2b)}
+body:not(.light-theme) .want-art{background:#65344f;color:#ffe0ed}
+body:not(.light-theme) .want-lavender .want-art{background:#51405e}
+body:not(.light-theme) .want-cream .want-art{background:#624044}
+body:not(.light-theme) .want-tag,body:not(.light-theme) .project-label{color:#efa0c2}
+body:not(.light-theme) .want-card h3,body:not(.light-theme) .project-main h3{color:#ffeaf4}
+body:not(.light-theme) .want-card p,body:not(.light-theme) .project-main p,body:not(.light-theme) .want-meta{color:#c7a3b8}
+body:not(.light-theme) .want-save{border-color:#69405a;color:#f0b5d0;background:#321b2d}
+body:not(.light-theme) .project-icon{background:#512943;color:#ffd5e6}
+body:not(.light-theme) .project-progress{background:#4b2b40}
+body:not(.light-theme) .project-progress span{background:linear-gradient(90deg,#f1a1c4,#c6a0e5)}
+body:not(.light-theme) .home-quote{background:linear-gradient(135deg,#3b2540,#48253b);border-color:#65405d}
+body:not(.light-theme) .home-quote p{color:#f0cfe0}
+body:not(.light-theme) .home-quote span,body:not(.light-theme) .project-foot{color:#c4a0b5}
+body:not(.light-theme) input,body:not(.light-theme) select,body:not(.light-theme) textarea{background:#241522;color:#f9eaf2;border-color:#68405a}
+body:not(.light-theme) input:focus,body:not(.light-theme) select:focus,body:not(.light-theme) textarea:focus{border-color:#ef91b8;box-shadow:0 0 0 3px #ef91b822}
+body:not(.light-theme) .output{background:#1d111d;color:#f7e5ef;border-color:#503047}
+body:not(.light-theme) .clip,body:not(.light-theme) .asset-card{background:#291727;border-color:#503047}
+body:not(.light-theme) .clip p{color:#e1bfd0}
+body:not(.light-theme) .chat-shell{background:#291727;border-color:#503047}
+body:not(.light-theme) .chat-top,body:not(.light-theme) .chat-composer{background:#241522;border-color:#503047}
+body:not(.light-theme) .chat-messages{background:#281626}
+body:not(.light-theme) .chat-bubble{background:#49263e;color:#ffeaf4;border-color:#623550}
+body:not(.light-theme) .chat-msg.user .chat-bubble{background:#59304e;border-color:#784263}
+body:not(.light-theme) .chat-bible,body:not(.light-theme) .memory-panel{background:#321b2e;border-color:#503047;color:#d8b6c8}
+body:not(.light-theme) .lock-card{background:#321b2e;border-color:#65405a;color:#ffeaf4}
+body:not(.light-theme) .lock-card p{color:#d2b1c4}
+body:not(.light-theme) .lock-form input{background:#241522;color:#f9eaf2;border-color:#68405a}
+body:not(.light-theme) .warning,body:not(.light-theme) .publish-caveat{background:#3b2a26;border-color:#79523f;color:#f5d7b2}
+body:not(.light-theme) .empty-state{color:#c4a0b5;border-color:#68405a}
+body:not(.light-theme) .footer{color:#a9819a}
+body:not(.light-theme) .theme-toggle{background:#48233d;border-color:#74415f;color:#ffd8e9}
+body:not(.light-theme) .theme-toggle .nav-icon{color:#ffd1e5}
+@media(max-width:700px){.nav-icon{font-size:18px}.nav-item{gap:8px}.brand-mini{gap:8px}}
+
+/* v22: keep the personal theme switch in the top corner, not in the navigation */
+.corner-theme-toggle{position:relative;display:inline-flex;align-items:center;justify-content:center;width:39px;height:39px;flex:0 0 39px;border:1px solid #e8c5d5;border-radius:13px;background:#fff6fa;color:#a34d78;font-size:19px;cursor:pointer;box-shadow:0 5px 15px #a94e7410;transition:transform .18s ease,background .18s ease,border-color .18s ease}
+.corner-theme-toggle:hover{transform:translateY(-1px);background:#ffeaf3}
+.corner-theme-toggle:focus-visible{outline:3px solid #df8fb2;outline-offset:3px}
+.corner-theme-toggle .theme-tooltip{position:absolute;right:0;top:calc(100% + 8px);z-index:20;white-space:nowrap;padding:6px 9px;border-radius:8px;background:#fff7fb;color:#80506a;border:1px solid #eed2df;font-size:10px;box-shadow:0 6px 18px #5a244018;opacity:0;pointer-events:none;transform:translateY(-3px);transition:opacity .15s ease,transform .15s ease}
+.corner-theme-toggle:hover .theme-tooltip,.corner-theme-toggle:focus-visible .theme-tooltip{opacity:1;transform:translateY(0)}
+body:not(.light-theme) .corner-theme-toggle{background:#48233d;border-color:#74415f;color:#ffd8e9}
+body:not(.light-theme) .corner-theme-toggle .theme-tooltip{background:#321b2e;border-color:#68405a;color:#ffeaf4}
+.topbar-actions{align-items:center}
+@media(max-width:700px){.corner-theme-toggle{width:35px;height:35px;flex-basis:35px;border-radius:11px;font-size:17px}.topbar-actions{gap:6px}.topbar{align-items:flex-start}}
+
 </style>
 </head>
 <body>
@@ -238,29 +339,28 @@ body{background:radial-gradient(900px 500px at 88% -8%,#fce7f0 0%,transparent 62
 </div>
 <main class="app-shell">
   <aside class="sidebar">
-    <div class="brand-mini"><div class="brand-mark">♡</div><div><strong>Rumah Sherly</strong><small>CREATIVE STUDIO</small></div></div>
+    <div class="brand-mini"><div class="brand-mark">🎀</div><div><strong>Rumah Sherly</strong><small>CREATIVE STUDIO</small></div></div>
     <div class="nav-label">WORKSPACE</div>
-    <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
+    <button class="nav-item active" data-view="dashboard"><span class="nav-icon">🏡</span><span>Rumah</span></button>
     <div class="nav-label">CREATE</div>
-    <button class="nav-item" data-view="characters"><span class="nav-icon">♙</span><span>Karakter</span><span class="nav-count" id="characterCount">0</span></button>
-    <button class="nav-item" data-view="branding"><span class="nav-icon">♡</span><span>Branding</span></button>
-    <button class="nav-item" data-view="chat"><span class="nav-icon">☻</span><span>Chat Sherly</span><span class="nav-count">BETA</span></button>
-    <button class="nav-item" data-view="studio"><span class="nav-icon">✦</span><span>Studio Prompt</span></button>
-    <button class="nav-item" data-view="editor"><span class="nav-icon">▶</span><span>Edit Video</span></button>
+    <button class="nav-item" data-view="characters"><span class="nav-icon">🎀</span><span>Karakter</span><span class="nav-count" id="characterCount">0</span></button>
+    <button class="nav-item" data-view="branding"><span class="nav-icon">💗</span><span>Personality</span></button>
+    <button class="nav-item" data-view="chat"><span class="nav-icon">💌</span><span>Chat Sherly</span><span class="nav-count">BETA</span></button>
+    <button class="nav-item" data-view="studio"><span class="nav-icon">✨</span><span>Studio Prompt</span></button>
+    <button class="nav-item" data-view="editor"><span class="nav-icon">🎬</span><span>Edit Video</span></button>
     <div class="nav-label">PUBLISH & ORGANIZE</div>
-    <button class="nav-item" data-view="planner"><span class="nav-icon">◷</span><span>Planner</span></button>
-    <button class="nav-item" data-view="calendar"><span class="nav-icon">▦</span><span>Kalender</span></button>
-    <button class="nav-item" data-view="assets"><span class="nav-icon">▧</span><span>Asset Library</span></button>
-    <button class="nav-item" data-view="cloud"><span class="nav-icon">☁</span><span>Cloud Publish</span></button>
+    <button class="nav-item" data-view="planner"><span class="nav-icon">📝</span><span>Planner</span></button>
+    <button class="nav-item" data-view="calendar"><span class="nav-icon">🗓️</span><span>Kalender</span></button>
+    <button class="nav-item" data-view="assets"><span class="nav-icon">🧸</span><span>Asset Library</span></button>
+    <button class="nav-item" data-view="cloud"><span class="nav-icon">🫧</span><span>Cloud Publish</span></button>
     <div class="sidebar-spacer"></div>
-    <button class="nav-item theme-toggle" id="themeToggle" type="button"><span class="nav-icon" id="themeIcon">☾</span><span id="themeLabel">Mode malam aktif</span></button>
-    <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span>Pengaturan</span></button>
+    <button class="nav-item" data-view="settings"><span class="nav-icon">🪞</span><span>Pengaturan</span></button>
     <div class="sidebar-note"><span class="status-dot"></span> Local workspace<br><small>Data tersimpan di browser ini</small></div>
   </aside>
   <div class="workspace">
     <header class="topbar">
       <div><div class="eyebrow">A LITTLE HOME FOR OUR STORIES</div><h1 id="pageTitle">Rumah Sherly</h1><p id="pageSubtitle">Ide kecil, cerita harian, dan karya yang kita bangun bersama.</p></div>
-      <div class="topbar-actions"><span class="badge">♡ RUANG PRIBADI</span><button class="primary top-cta" data-go="studio">✦ Buat karya</button></div>
+      <div class="topbar-actions"><button class="corner-theme-toggle" id="themeToggle" type="button" aria-label="Ganti mode tampilan" title="Ganti mode tampilan" aria-pressed="true"><span id="themeIcon">🌙</span><span class="theme-tooltip" id="themeLabel">Mode malam aktif</span></button><span class="badge">♡ RUANG PRIBADI</span><button class="primary top-cta" data-go="studio">✦ Buat karya</button></div>
     </header>
     <section class="view active" id="view-dashboard">
       <section class="sherly-home-hero">
@@ -288,7 +388,7 @@ body{background:radial-gradient(900px 500px at 88% -8%,#fce7f0 0%,transparent 62
       <div class="stats-grid"><div class="stat-card"><span>Karakter tersimpan</span><strong id="dashCharacters">0</strong><small>Profil dengan identity lock</small></div><div class="stat-card"><span>Asset prompt</span><strong id="dashAssets">0</strong><small>Hasil yang tersimpan lokal</small></div><div class="stat-card"><span>Provider aktif</span><strong id="dashProvider">Gemini</strong><small id="dashModel">gemini-3.8-flash</small></div></div>
       <div class="workflow-strip"><div class="workflow-title"><span class="eyebrow">ALUR KERJA</span><strong>Mulai dari sini</strong></div><button data-go="characters"><span>01</span><b>Karakter</b><small>Identity lock</small></button><button data-go="studio"><span>02</span><b>Prompt Studio</b><small>Generate ide</small></button><button data-go="editor"><span>03</span><b>Edit video</b><small>Rapikan klip</small></button><button data-go="calendar"><span>04</span><b>Jadwalkan</b><small>Siapkan posting</small></button></div><div class="daily-banner"><div><span class="eyebrow">IDE HARI INI</span><h2 id="todayIdeaTitle">Siapkan konten hari ini</h2><p id="todayIdeaText">Pilih Planner untuk mendapat ide yang selaras dengan karakter dan pilar kontenmu.</p></div><button class="secondary" data-go="planner">Lihat rekomendasi ↗</button></div>
       <div class="section-heading"><div><h2>Akses cepat</h2><p>Pilih bagian yang mau kamu kerjakan.</p></div></div>
-      <div class="quick-grid"><button class="quick-card" data-go="characters"><span class="quick-icon">♙</span><strong>Character Vault</strong><small>Simpan identitas, foto referensi, dan cast.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="branding"><span class="quick-icon">♡</span><strong>Personality Bible</strong><small>Bangun personality dan positioning karakter.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="planner"><span class="quick-icon">◷</span><strong>Daily Planner</strong><small>Dapatkan ide konten harian yang terarah.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="studio"><span class="quick-icon">✦</span><strong>Prompt Studio</strong><small>Rancang alur, dialog, dan continuity video.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="assets"><span class="quick-icon">▧</span><strong>Asset Library</strong><small>Buka kembali prompt yang pernah dibuat.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="calendar"><span class="quick-icon">▦</span><strong>Kalender publikasi</strong><small>Atur jadwal target dan status posting.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="settings"><span class="quick-icon">⚙</span><strong>Pengaturan AI</strong><small>Atur provider, model, dan API key.</small><span class="quick-arrow">↗</span></button></div>
+      <div class="quick-grid"><button class="quick-card" data-go="characters"><span class="quick-icon">🎀</span><strong>Character Vault</strong><small>Simpan identitas, foto referensi, dan cast.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="branding"><span class="quick-icon">💗</span><strong>Personality Bible</strong><small>Bangun personality dan positioning karakter.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="planner"><span class="quick-icon">📝</span><strong>Daily Planner</strong><small>Dapatkan ide konten harian yang terarah.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="studio"><span class="quick-icon">✨</span><strong>Prompt Studio</strong><small>Rancang alur, dialog, dan continuity video.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="assets"><span class="quick-icon">🧸</span><strong>Asset Library</strong><small>Buka kembali prompt yang pernah dibuat.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="calendar"><span class="quick-icon">🗓️</span><strong>Kalender publikasi</strong><small>Atur jadwal target dan status posting.</small><span class="quick-arrow">↗</span></button><button class="quick-card" data-go="settings"><span class="quick-icon">🪞</span><strong>Pengaturan AI</strong><small>Atur provider, model, dan API key.</small><span class="quick-arrow">↗</span></button></div>
     </section>
     <section class="view" id="view-characters">
       <div class="page-intro"><span class="eyebrow">IDENTITY MANAGEMENT</span><h2>Karakter & cast</h2><p>Simpan profil karakter supaya identitasnya konsisten di prompt berikutnya.</p></div>
@@ -715,7 +815,7 @@ $('cloudMetrics').addEventListener('click',async()=>{try{const d=await cloudFetc
 
 // Persistent theme preference (night mode is the default).
 const themeToggle=$('themeToggle');
-function applyTheme(light){document.body.classList.toggle('light-theme',!!light);localStorage.setItem('flowprompt_theme',light?'light':'dark');$('themeIcon').textContent=light?'☀':'☾';$('themeLabel').textContent=light?'Mode terang aktif':'Mode malam aktif';themeToggle.setAttribute('aria-pressed',String(!light));}
+function applyTheme(light){document.body.classList.toggle('light-theme',!!light);localStorage.setItem('flowprompt_theme',light?'light':'dark');$('themeIcon').textContent=light?'🌤️':'🌙';$('themeLabel').textContent=light?'Mode terang aktif':'Mode malam aktif';themeToggle.setAttribute('aria-pressed',String(!light));}
 applyTheme(localStorage.getItem('flowprompt_theme')==='light');
 themeToggle.addEventListener('click',()=>applyTheme(!document.body.classList.contains('light-theme')));
 
