@@ -925,5 +925,65 @@ loadPrefs();if(!$('model').value||$('model').value==='gemini-2.5-flash')provider
 })();
 </script>
 
+
+<script>
+// v28: Final API-key persistence guard. Runs after the app's original initialization
+// so the saved key is restored after any later form initialization.
+(function(){
+  const $ = id => document.getElementById(id);
+  const validProviders = ['gemini','openrouter','groq'];
+  function showStatus(message, kind){
+    const el = $('apiStatus');
+    if (el) { el.textContent = message; el.className = 'status ' + (kind || ''); }
+  }
+  function restoreSavedKey(){
+    try {
+      const active = localStorage.getItem('flowprompt_active_provider');
+      if (validProviders.includes(active) && $('provider')) $('provider').value = active;
+      const provider = $('provider') ? $('provider').value : 'gemini';
+      const key = localStorage.getItem('flowprompt_key_' + provider) || '';
+      if ($('apikey')) $('apikey').value = key;
+      if ($('savekey')) $('savekey').checked = true;
+      if (key) showStatus('API key ' + (provider === 'gemini' ? 'Gemini' : provider === 'openrouter' ? 'OpenRouter' : 'Groq') + ' berhasil dipulihkan dari penyimpanan browser.', 'ok');
+    } catch (err) {
+      showStatus('Penyimpanan browser tidak dapat dibaca. Periksa izin penyimpanan situs.', 'err');
+    }
+  }
+  function saveKey(){
+    const provider = $('provider') ? $('provider').value : 'gemini';
+    const key = $('apikey') ? $('apikey').value.trim() : '';
+    if (!key) { showStatus('API key kosong. Tempel key terlebih dahulu.', 'err'); return; }
+    try {
+      localStorage.setItem('flowprompt_key_' + provider, key);
+      localStorage.setItem('flowprompt_active_provider', provider);
+      // Save provider/model preferences separately; never put the API key in this object.
+      const form = JSON.parse(localStorage.getItem('flowprompt_form') || '{}');
+      form.provider = provider;
+      if ($('model')) form.model = $('model').value;
+      localStorage.setItem('flowprompt_form', JSON.stringify(form));
+      if ($('savekey')) $('savekey').checked = true;
+      showStatus('API key tersimpan. Refresh halaman untuk menguji pemulihan.', 'ok');
+    } catch (err) {
+      showStatus('Gagal menyimpan API key. Browser menolak penyimpanan situs ini.', 'err');
+    }
+  }
+  // Rebind as a final guard after the app's original handlers.
+  const saveButton = $('saveKeyNow');
+  if (saveButton) saveButton.addEventListener('click', saveKey);
+  const provider = $('provider');
+  if (provider) provider.addEventListener('change', function(){
+    try {
+      const p = provider.value;
+      localStorage.setItem('flowprompt_active_provider', p);
+      const key = localStorage.getItem('flowprompt_key_' + p) || '';
+      if ($('apikey')) $('apikey').value = key;
+      if (key) showStatus('API key ' + (p === 'gemini' ? 'Gemini' : p === 'openrouter' ? 'OpenRouter' : 'Groq') + ' ditemukan di penyimpanan browser.', 'ok');
+    } catch (err) { showStatus('Penyimpanan browser tidak dapat dibaca.', 'err'); }
+  });
+  // Restore once immediately (all app controls are already in the document).
+  restoreSavedKey();
+})();
+</script>
+
 </body>
 </html>
