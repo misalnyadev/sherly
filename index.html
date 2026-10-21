@@ -842,16 +842,35 @@ $('cloudSchedule').addEventListener('click',async()=>{try{const date=$('cloudPub
 $('cloudRefresh').addEventListener('click',cloudLoadJobs);
 $('cloudMetrics').addEventListener('click',async()=>{try{const d=await cloudFetch('/api/analytics/sync',{method:'POST',body:JSON.stringify({})});$('cloudMetricsOutput').textContent=d.message||'Sinkronisasi dimulai.';await cloudLoadJobs()}catch(e){$('cloudMetricsOutput').textContent='Gagal sinkronisasi: '+e.message}});
 
-// Persistent theme preference (night mode is the default).
-const themeToggle=$('themeToggle');
-function applyTheme(light){document.body.classList.toggle('light-theme',!!light);localStorage.setItem('flowprompt_theme',light?'light':'dark');$('themeIcon').textContent=light?'🌤️':'🌙';$('themeLabel').textContent=light?'Mode terang aktif':'Mode malam aktif';themeToggle.setAttribute('aria-pressed',String(!light));}
-applyTheme(localStorage.getItem('flowprompt_theme')==='light');
-themeToggle.addEventListener('click',()=>applyTheme(!document.body.classList.contains('light-theme')));
+// Theme initialization is handled by the isolated theme script below.
 
 initTtsSettings();loadBrandForm();$('plannerDate').value=localDateString(new Date());renderIdeas();renderSchedule();
 loadPrefs();if(!$('model').value||$('model').value==='gemini-2.5-flash')providerChanged();$('chatModelBadge').textContent=providerLabel($('provider').value)+' · '+$('model').value;openVault().then(()=>refreshVault()).then(()=>refreshDashboard()).catch(e=>vaultStatus('IndexedDB tidak tersedia: '+e.message,'err'));
 
 
+</script>
+
+<script>
+// Isolated theme controller: still initializes even if another feature script throws.
+(function(){
+  const button=document.getElementById('themeToggle');
+  const icon=document.getElementById('themeIcon');
+  const label=document.getElementById('themeLabel');
+  if(!button || !icon || !label) return;
+  function setTheme(light, persist){
+    document.body.classList.toggle('light-theme', !!light);
+    icon.textContent = light ? '🌤️' : '🌙';
+    label.textContent = light ? 'Mode terang aktif' : 'Mode malam aktif';
+    button.setAttribute('aria-pressed', String(!!light));
+    if(persist){ try { localStorage.setItem('flowprompt_theme', light ? 'light' : 'dark'); } catch(e) {} }
+  }
+  let initialLight=false;
+  try { initialLight=localStorage.getItem('flowprompt_theme')==='light'; } catch(e) {}
+  setTheme(initialLight, false);
+  button.addEventListener('click', function(){
+    setTheme(!document.body.classList.contains('light-theme'), true);
+  });
+})();
 </script>
 
 <script>
