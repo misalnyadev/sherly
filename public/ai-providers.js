@@ -51,11 +51,11 @@
         <div class="vault-model">
           <label for="model-${p}">Model yang dipakai Chat Sherly</label>
           <div class="vault-model-row">
-            <input id="model-${p}" list="dl-${p}" value="${esc(current)}" placeholder="model-id" aria-label="Model ${esc(PROVIDER_LABEL[p])}">
+            <input id="model-${p}" value="${esc(current)}" placeholder="model-id" autocomplete="off" spellcheck="false" aria-label="Model ${esc(PROVIDER_LABEL[p])}">
             <button class="outline-btn" data-fetch-models="${p}" type="button">Ambil daftar</button>
             <button class="outline-btn" data-save-model="${p}" type="button">Simpan</button>
           </div>
-          <datalist id="dl-${p}"></datalist>
+          <div class="model-picker" id="picker-${p}" hidden></div>
           <div class="vault-model-src">Sumber model: ${esc(sourceLabel)} · “Ambil daftar” memuat model terbaru langsung dari ${esc(PROVIDER_LABEL[p])}</div>
         </div>
       </div>`;
@@ -64,22 +64,42 @@
     container.querySelectorAll('[data-save-model]').forEach(b => b.addEventListener('click', () => saveModel(b.dataset.saveModel, b)));
   }
 
+  function renderModelList(provider, models, query) {
+    const list = $(`mlist-${provider}`);
+    const q = (query || '').trim().toLowerCase();
+    const filtered = models.filter(m => !q || m.id.toLowerCase().includes(q));
+    if (!filtered.length) { list.innerHTML = '<div class="model-picker-error">Tidak ada model cocok dengan pencarian.</div>'; return; }
+    const MAX = 200;
+    list.innerHTML = filtered.slice(0, MAX).map(m => `<button type="button" class="model-item" data-model-id="${esc(m.id)}"><span>${esc(m.id)}</span>${m.recommended ? '<span class="model-badge">DISARANKAN</span>' : ''}</button>`).join('')
+      + (filtered.length > MAX ? `<div class="model-count">Menampilkan ${MAX} dari ${filtered.length} — persempit dengan pencarian.</div>` : '');
+    list.querySelectorAll('[data-model-id]').forEach(item => item.addEventListener('click', () => {
+      $(`model-${provider}`).value = item.dataset.modelId;
+      $(`picker-${provider}`).hidden = true;
+      toast(`Model dipilih: ${item.dataset.modelId} — klik “Simpan” untuk menyimpan.`);
+    }));
+  }
+
   async function fetchModels(provider, btn) {
     const input = $(`model-${provider}`);
-    const dl = $(`dl-${provider}`);
+    const picker = $(`picker-${provider}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Memuat...'; }
+    picker.hidden = false;
+    picker.innerHTML = '<div class="model-picker-error">Mengambil daftar model...</div>';
     try {
       const data = await api('/api/ai-provider-models/' + provider);
       const models = data.models || [];
-      dl.innerHTML = models.map(m => `<option value="${esc(m.id)}">${esc(m.id + (m.recommended ? ' — disarankan' : ''))}</option>`).join('');
+      if (!models.length) {
+        picker.innerHTML = '<div class="model-picker-error">Provider tidak mengembalikan model apa pun dengan key saat ini.</div>';
+        return;
+      }
       const current = input.value.trim();
       const stillThere = models.some(m => m.id === current);
-      toast(stillThere
-        ? `${models.length} model tersedia — rekomendasi diurutkan paling atas.`
-        : `${models.length} model tersedia. Model tersimpan "${current}" tidak ditemukan — pilih model baru.`);
-      if (!stillThere && models[0]) input.value = models.find(m => m.recommended)?.id || models[0].id;
+      picker.innerHTML = `<div class="model-count">${models.length} model tersedia${stillThere ? '' : ' — model tersimpan tidak ditemukan di daftar ini, pilih pengganti'} · klik untuk memilih</div><input class="model-search" id="msearch-${provider}" placeholder="Cari model (mis. gpt, gemini, llama)..." autocomplete="off" spellcheck="false"><div class="model-list" id="mlist-${provider}"></div>`;
+      renderModelList(provider, models, '');
+      $(`msearch-${provider}`).addEventListener('input', (e) => renderModelList(provider, models, e.target.value));
+      $(`msearch-${provider}`).focus();
     } catch (error) {
-      toast('Gagal mengambil daftar model: ' + error.message);
+      picker.innerHTML = `<div class="model-picker-error">Gagal mengambil daftar model: ${esc(error.message)}<br><small>Sebab umum: key tidak valid/kedaluwarsa — daftar model juga memakai key yang sama, jadi key gagal = daftar gagal. Periksa key di kartu ini, lalu coba lagi.</small></div>`;
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Ambil daftar'; }
     }

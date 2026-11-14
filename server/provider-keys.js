@@ -5,6 +5,7 @@ import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 export const PROVIDERS = ['groq', 'gemini', 'openrouter'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter'];
 export const AUTO_DISABLE_AFTER = 5;
+const PROBE_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter' };
 
 const DEFAULT_MODELS = {
   groq: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
@@ -99,6 +100,9 @@ export async function createKey(supabase, { provider, key_name, api_key, priorit
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
   const probe = await probeProviderKey(provider, api_key).catch(e => ({ ok: false, error: e.message }));
+  if (!probe.ok) {
+    throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
+  }
   const enc = encryptSecret(api_key);
   const row = {
     user_id,
@@ -110,10 +114,10 @@ export async function createKey(supabase, { provider, key_name, api_key, priorit
     last4: enc.last4,
     priority: Number.isFinite(Number(priority)) ? Math.max(1, Math.min(1000, Math.trunc(Number(priority)))) : 100,
     is_active: true,
-    health_status: probe.ok ? 'ok' : 'failing',
-    consecutive_failures: probe.ok ? 0 : 1,
-    last_failure_at: probe.ok ? null : new Date().toISOString(),
-    last_error: probe.ok ? null : (probe.error || 'Probe gagal').slice(0, 500),
+    health_status: 'ok',
+    consecutive_failures: 0,
+    last_failure_at: null,
+    last_error: null,
   };
   const { data, error } = await supabase.from('ai_provider_keys').insert(row).select().single();
   if (error) {
@@ -159,14 +163,17 @@ export async function rotateKey(supabase, id, api_key) {
   const { data: current, error: getError } = await supabase.from('ai_provider_keys').select('provider').eq('id', id).maybeSingle();
   if (getError || !current) throw Object.assign(new Error('Key tidak ditemukan.'), { status: 404 });
   const probe = await probeProviderKey(current.provider, api_key).catch(e => ({ ok: false, error: e.message }));
+  if (!probe.ok) {
+    throw Object.assign(new Error(`Tes koneksi gagal — key lama TIDAK diganti. ${PROBE_LABEL[current.provider] || current.provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
+  }
   const enc = encryptSecret(api_key);
   const { data, error } = await supabase.from('ai_provider_keys').update({
     ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag, last4: enc.last4,
-    health_status: probe.ok ? 'ok' : 'failing',
-    consecutive_failures: probe.ok ? 0 : 1,
+    health_status: 'ok',
+    consecutive_failures: 0,
     is_active: true,
-    last_failure_at: probe.ok ? null : new Date().toISOString(),
-    last_error: probe.ok ? null : (probe.error || 'Probe gagal').slice(0, 500),
+    last_failure_at: null,
+    last_error: null,
   }).eq('id', id).select().single();
   if (error) throw Object.assign(new Error(error.message), { status: 400 });
   return { key: toMeta(data), probe };
