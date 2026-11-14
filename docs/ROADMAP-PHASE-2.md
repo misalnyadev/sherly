@@ -12,6 +12,7 @@ _Disusun 2026-11-14 setelah membaca langsung repo `misalnyadev/aira` (Next.js 16
 | Resume percakapan saat refresh | Riwayat server-side | `openChat` memuat percakapan terakhir; tombol + = Percakapan baru (flag `sherly.forceNewChat`) |
 | Kelola Bank Suara di Pengaturan | Bank Rekaman Suara (R2): statistik, daftar, siapkan frasa umum, kosongkan | Panel **Bank Suara Sherly** di Pengaturan (Supabase Storage + tabel): statistik + total ukuran, putar/hapus per klip, "Siapkan 12 frasa umum", "Kosongkan Bank" — tersinkron semua perangkat (per akun) |
 | Hybrid Bank Suara (lokal → online) | Klip R2 dari device lain dipakai bareng | "Upload dari VoiceBox lokal" di Bank Suara: file wav/mp3/ogg/m4a (batch per-file-per-request, aman limit Vercel ~4,5MB), teks dari nama file (editable), normalisasi identik chat, hash provider+model+suara+gaya+teks yang sama — langsung terpakai otomatis tanpa panggil API |
+| Local TTS browser | "Suara Lokal Perangkat" (Microsoft Andika, dll) | Mode "📱 Suara Perangkat (lokal, gratis)" di Suara Sherly: Web Speech API, list id-ID diutamakan, slider kecepatan; tombol Dengarkan langsung berbicara tanpa server. Catatan: output browser tidak bisa direkam → tidak masuk Bank |
 
 ## 🔜 Tahap berikutnya (berurutan, diusulkan)
 
