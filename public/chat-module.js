@@ -406,13 +406,13 @@ $('ssChatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey)
   document.querySelectorAll('.nav button[data-page]').forEach(b=>b.addEventListener('click',e=>{
     if(b.dataset.page==='Chat Sherly'){
       e.preventDefault();e.stopImmediatePropagation();
-      document.querySelectorAll('.nav button').forEach(n=>n.classList.toggle('active',n===b));
+      document.querySelectorAll('.nav button,.side-nav-btn').forEach(n=>n.classList.toggle('active',n===b));
       openChat();
     } else {
       closeChat(); // let the existing application navigation handle the selected module
     }
   },true));
-  document.querySelectorAll('.panel.chat button.primary').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();document.querySelectorAll('.nav button').forEach(n=>n.classList.toggle('active',n.dataset.page==='Chat Sherly'));openChat()},true));
+  document.querySelectorAll('.panel.chat button.primary').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();document.querySelectorAll('.nav button,.side-nav-btn').forEach(n=>n.classList.toggle('active',n.dataset.page==='Chat Sherly'));openChat()},true));
   setProfile(null);
   window.openSherlyChat=openChat;
   window.sherlyLogout=logout;
