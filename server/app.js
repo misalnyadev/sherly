@@ -14,6 +14,7 @@ import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEM
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, ['image/jpeg','image/png','image/webp'].includes(file.mimetype)) });
+const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, /^(audio\/(wav|x-wav|mpeg|mp3|ogg|mp4|x-m4a|webm)|application\/ogg)$/i.test(file.mimetype) || /\.(wav|mp3|ogg|m4a|webm)$/i.test(file.originalname || '')) });
 const bucket = 'character-references';
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -402,6 +403,46 @@ app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
     }
     return res.status(502).json({ error: 'Gemini TTS gagal merespons: ' + String(lastError?.message || 'error tidak diketahui').slice(0, 300) });
   } catch (error) { res.status(502).json({ error: error.message || 'TTS request failed.' }); }
+});
+
+// Upload massal klip dari VoiceBox lokal — disimpan dengan hash yang SAMA dengan jalur chat (provider gemini + kandidat model pertama) sehingga langsung terpakai otomatis.
+app.post('/api/ai/tts/bank/upload', requireUser, requireAdmin, uploadAudio.array('audio', 10), async (req, res) => {
+  const userId = req.user.id;
+  if (!req.files?.length) return res.status(400).json({ error: 'Tidak ada file audio yang diterima (wav/mp3/ogg/m4a, maks 8MB per file).' });
+  let texts = [];
+  try { texts = JSON.parse(req.body?.texts || '[]'); } catch { texts = []; }
+  const voice = GEMINI_TTS_VOICE_IDS.has(req.body?.voice) ? req.body.voice : DEFAULT_VOICE;
+  const style = sanitizeStyleHint(req.body?.style);
+  const model = TTS_MODEL_CANDIDATES[0];
+  const results = [];
+  let uploaded = 0, skipped = 0, failed = 0;
+  for (let i = 0; i < req.files.length; i++) {
+    const file = req.files[i];
+    const fallback = String(file.originalname || `klip-${i + 1}`).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    const rawText = typeof texts[i] === 'string' && texts[i].trim() ? texts[i].trim() : fallback;
+    const text = speakableText(rawText); // normalisasi identik dengan jalur chat → hash cocok
+    if (!text) { failed++; results.push({ text: rawText, status: 'failed', reason: 'Teks kosong' }); continue; }
+    const clipHash = ttsClipHash({ provider: 'gemini', model, voice, style, text });
+    try {
+      const { data: existing, error: findError } = await req.supabase.from('sherly_tts_clips').select('id').eq('user_id', userId).eq('clip_hash', clipHash).maybeSingle();
+      if (findError && isMissingTtsTable(findError)) return res.status(503).json({ error: 'Migrasi supabase/tts_clips_migration.sql belum dijalankan.' });
+      if (existing) { skipped++; results.push({ text, status: 'skipped' }); continue; }
+      const orig = String(file.originalname || '').toLowerCase();
+      const mime = String(file.mimetype || '').toLowerCase();
+      const ext = mime.includes('wav') || orig.endsWith('.wav') ? 'wav' : (mime.includes('mpeg') || mime.includes('mp3') || orig.endsWith('.mp3')) ? 'mp3' : (mime.includes('ogg') || orig.endsWith('.ogg')) ? 'ogg' : (orig.endsWith('.webm') ? 'webm' : 'm4a');
+      const storagePath = `${userId}/${clipHash}.${ext}`;
+      const { error: upError } = await req.supabase.storage.from('tts-clips').upload(storagePath, file.buffer, { contentType: file.mimetype || 'audio/wav', upsert: true });
+      if (upError) throw upError;
+      const row = { user_id: userId, clip_hash: clipHash, storage_path: storagePath, provider: 'gemini', voice, model, style, text, mime_type: file.mimetype || 'audio/wav', bytes: file.size };
+      const { error: insError } = await req.supabase.from('sherly_tts_clips').upsert(row, { onConflict: 'user_id,clip_hash' });
+      if (insError) throw insError;
+      uploaded++; results.push({ text, status: 'uploaded' });
+    } catch (error) {
+      if (isMissingTtsTable(error) || isMissingTtsBucket(error)) return res.status(503).json({ error: 'Bank Suara belum siap — jalankan supabase/tts_clips_migration.sql.' });
+      failed++; results.push({ text, status: 'failed', reason: String(error?.message || error).slice(0, 200) });
+    }
+  }
+  res.json({ ok: true, uploaded, skipped, failed, results });
 });
 
 // ============ Bank Suara (TTS cache) — kelola rekaman yang tersimpan ============

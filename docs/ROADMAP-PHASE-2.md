@@ -11,6 +11,7 @@ _Disusun 2026-11-14 setelah membaca langsung repo `misalnyadev/aira` (Next.js 16
 | Multi-bubble ≤2 & emoji jarang | `promptBuilder.ts` (1–4 bubble) | Disesuaikan: 1–2 bubble (maks 3), kalimat ±20 kata, maks 1 emoji & jarang — sesuai masukan: chat singkat ala WA |
 | Resume percakapan saat refresh | Riwayat server-side | `openChat` memuat percakapan terakhir; tombol + = Percakapan baru (flag `sherly.forceNewChat`) |
 | Kelola Bank Suara di Pengaturan | Bank Rekaman Suara (R2): statistik, daftar, siapkan frasa umum, kosongkan | Panel **Bank Suara Sherly** di Pengaturan (Supabase Storage + tabel): statistik + total ukuran, putar/hapus per klip, "Siapkan 12 frasa umum", "Kosongkan Bank" — tersinkron semua perangkat (per akun) |
+| Hybrid Bank Suara (lokal → online) | Klip R2 dari device lain dipakai bareng | "Upload dari VoiceBox lokal" di Bank Suara: file wav/mp3/ogg/m4a (batch per-file-per-request, aman limit Vercel ~4,5MB), teks dari nama file (editable), normalisasi identik chat, hash provider+model+suara+gaya+teks yang sama — langsung terpakai otomatis tanpa panggil API |
 
 ## 🔜 Tahap berikutnya (berurutan, diusulkan)
 
