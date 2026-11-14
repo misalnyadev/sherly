@@ -563,6 +563,7 @@ Pengujian menyeluruh (fitur, keamanan, multi-user, storage, AI fallback, konsist
 | D-17 | Menu pengaturan provider berada di dalam **Pengaturan** (AI Provider Manager); item sidebar terpisah dihapus | 2026-11-14 | Sesuai rencana layout awal; satu tempat untuk semua pengaturan |
 | D-18 | Profil Pengguna tersimpan di **database** (`user_profiles`, RLS per akun); localStorage hanya cache. Chat membaca profil dari DB; topbar menampilkan nama + jenis akun; klik chip akun → halaman Profil; tombol keluar di sudut kanan bawah Profil | 2026-11-14 | Identitas tetap sama di PC/HP mana pun saat login; tidak ada API key/PII terekspos ke frontend publik |
 | D-19 | `frontend monolitik` diterima sementara; modularisasi bertahap (bukan rewrite) | 2026-11-14 | Keseimbangan kecepatan vs kualitas |
+| D-20 | Desain Chat Sherly: dark tetap, tanpa huruf bold; header ala HeyTalent (foto + nama + status); area pesan tanpa scrollbar terlihat; composer di paling bawah; panel tanpa border kiri-kanan; bubble Sherly ber-avatar; suggestion chips di empty state | 2026-11-14 | Sesuai rencana layout awal; clean & fokus, performa chat tetap |
 
 Perubahan keputusan produk **harus** diperbarui di tabel ini (append, jangan hapus).
 
