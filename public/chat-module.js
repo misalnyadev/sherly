@@ -1,7 +1,7 @@
 (() => {
   const style = `
-  .ss-chat{position:relative;width:100%;height:100%;flex:1;min-height:0;background:radial-gradient(1100px 480px at 50% -12%,rgba(216,45,145,.16),transparent 62%),radial-gradient(700px 380px at 88% 110%,rgba(124,43,133,.14),transparent 60%),#070b14;display:none;grid-template-rows:auto minmax(0,1fr) auto;color:#f4f5fb;font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;border:0;border-radius:18px;overflow:hidden}
-  main.ss-chat-active>.layout,main.ss-chat-active>.page-view{display:none!important}main.ss-chat-active>#ssChatRoot{display:flex!important;flex:1;min-height:0}main.ss-chat-active{height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0!important}
+  .ss-chat{position:relative;width:100%;height:100%;flex:1;min-height:0;align-self:stretch;background:radial-gradient(1100px 480px at 50% -12%,rgba(216,45,145,.16),transparent 62%),radial-gradient(700px 380px at 88% 110%,rgba(124,43,133,.14),transparent 60%),#070b14;display:none;grid-template-rows:auto minmax(0,1fr) auto;color:#f4f5fb;font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;border:0;border-radius:18px;overflow:hidden}
+  main.ss-chat-active>.layout,main.ss-chat-active>.page-view{display:none!important}main.ss-chat-active>#ssChatRoot{display:flex!important;flex:1;min-height:0;align-items:stretch;position:relative}main.ss-chat-active{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0!important}
   .ss-chat.open{display:grid}
   .ss-chat-main{min-width:0;min-height:0;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
   .ss-chat button{cursor:pointer;font:inherit}
@@ -67,9 +67,9 @@
   .ss-attach-chip button:hover{color:#ffb5bd;background:rgba(255,255,255,.05)}
   .ss-compose-wrap{padding:10px 18px max(10px,env(safe-area-inset-bottom))}
   .ss-chat-hint{margin-top:6px;font-size:9.5px;color:#54637c}
-  @media(max-width:700px){.ss-chat{height:calc(100dvh - 100px);min-height:480px;border-radius:12px}.ss-chat-toolbar{padding:10px 12px;gap:9px}.ss-chat-messages{padding:18px 12px}.ss-compose-wrap{padding:10px}.ss-row{max-width:94%}.ss-chat-toolbar .ss-provider{max-width:125px}.ss-ava{width:40px;height:40px}.ss-suggest{flex-direction:column;align-items:stretch}}
+  @media(max-width:700px){.ss-chat{min-height:480px;border-radius:12px}.ss-chat-toolbar{padding:10px 12px;gap:9px}.ss-chat-messages{padding:18px 12px}.ss-compose-wrap{padding:10px}.ss-row{max-width:94%}.ss-chat-toolbar .ss-provider{max-width:125px}.ss-ava{width:40px;height:40px}.ss-suggest{flex-direction:column;align-items:stretch}}
     .ss-auth{position:fixed;inset:0;z-index:100;background:#02050bdc;display:none;place-items:center;padding:20px;font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}.ss-auth.open{display:grid}.ss-auth-card{width:min(420px,100%);background:#101b2c;border:1px solid #344158;border-radius:18px;padding:26px;box-shadow:0 25px 80px #000b;color:#f4f5fb}.ss-auth-card h2{margin:0 0 7px}.ss-auth-card p{color:#91a2b9;line-height:1.6}.ss-auth-card label{display:block;color:#b9c5d5;font-size:12px;margin:14px 0 6px}.ss-auth-card input{width:100%;padding:12px;border-radius:9px;border:1px solid #344158;background:#080f1b;color:white;outline:0;box-sizing:border-box}.ss-auth-card input:focus{border-color:#e84ba9}.ss-auth-actions{display:flex;gap:9px;margin-top:18px}.ss-auth-actions button{flex:1}.ss-auth-primary{background:linear-gradient(100deg,#d82d91,#7c2b85)!important;border:0!important;font-weight:500}.ss-auth-error{color:#ff9ebd;font-size:12px;min-height:18px;margin-top:10px}
-  @media(max-width:700px){.ss-chat{height:calc(100dvh - 100px);min-height:480px;grid-template-columns:minmax(0,1fr)}.ss-chat-toolbar{padding:12px}.ss-chat-messages{padding:18px 13px}.ss-compose-wrap{padding:10px}.ss-bubble{max-width:94%}.ss-chat-toolbar select{max-width:125px}}
+  @media(max-width:700px){.ss-chat{min-height:480px;grid-template-columns:minmax(0,1fr)}.ss-chat-toolbar{padding:12px}.ss-chat-messages{padding:18px 13px}.ss-compose-wrap{padding:10px}.ss-bubble{max-width:94%}.ss-chat-toolbar select{max-width:125px}}
   `;
   const styleEl = document.createElement('style'); styleEl.textContent = style; document.head.appendChild(styleEl);
   const root = document.createElement('div'); root.innerHTML = `
@@ -198,7 +198,18 @@
   $('ssMessages').addEventListener('click',(e)=>{const btn=e.target.closest('.ss-tts-btn');if(!btn)return;e.preventDefault();toggleTts(btn)});
   // Auto-grow textarea sampai 150px
   $('ssChatInput').addEventListener('input',function(){this.style.height='44px';const next=Math.min(this.scrollHeight,150);this.style.height=next+'px'});
-  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); if(!hasToken()){openLogin()}else{loadConversations();$('ssChatInput').focus()} }
+  // Pastikan panel chat selalu menempel dari bawah topbar sampai dasar layar.
+  // Set eksplisit tinggi #ssChatRoot dalam piksel (bukan hanya andalkan dvh/flex) agar komposer tidak 'naik' di browser mana pun.
+  function sizeChat(){
+    if (!mainEl?.classList.contains('ss-chat-active')) return;
+    const root = $('ssChatRoot'); if (!root) return;
+    root.style.height = ''; // ukur ulang dari layout
+    const topbar = mainEl.querySelector('.topbar');
+    const avail = mainEl.clientHeight - (topbar?.offsetHeight || 0) - 17;
+    if (Number.isFinite(avail) && avail > 240) root.style.height = Math.floor(avail) + 'px';
+  }
+  window.addEventListener('resize', sizeChat);
+  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); if(!hasToken()){openLogin()}else{loadConversations();$('ssChatInput').focus()} }
   function closeChat(){ $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); }
   function empty(){ $('ssMessages').innerHTML='<div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div>'; }
   function bubble(role,content,meta='',opts={}){const box=$('ssMessages');box.querySelector('.ss-chat-empty')?.remove();const row=document.createElement('div');row.className=`ss-row ${role}`;if(role==='assistant'){const img=document.createElement('img');img.className='ss-row-ava';img.src='assets/sherly-portrait.png';img.alt='Sherly';row.appendChild(img)}const el=document.createElement('div');el.className=`ss-bubble ${role}`;
