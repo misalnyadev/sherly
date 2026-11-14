@@ -7,9 +7,10 @@ export const AUTO_ORDER = ['groq', 'gemini', 'openrouter'];
 export const AUTO_DISABLE_AFTER = 5;
 const PROBE_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter' };
 
+// Catatan 2026-11: Google menjawab bahwa gemini-2.5-flash “is no longer available to new users” (lihat error API live).
 const DEFAULT_MODELS = {
   groq: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
-  gemini: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  gemini: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   openrouter: process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
 };
 
@@ -17,13 +18,13 @@ const DEFAULT_MODELS = {
 const RECOMMENDED_MODELS = [
   'openai/gpt-oss-120b', 'openai/gpt-oss-20b',
   'llama-3.3-70b-versatile',
+  'gemini-3.8-flash', 'google/gemini-3.8-flash',
   'openai/gpt-4o-mini', 'google/gemini-2.5-flash', 'gemini-2.5-flash',
   'mistralai/mistral-small-2603', 'mistralai/mistral-small-3.2-24b-instruct',
   'meta-llama/llama-3.3-70b-instruct', 'anthropic/claude-3.5-haiku',
 ];
 
 const envKey = (provider) => ({ gemini: process.env.GEMINI_API_KEY, groq: process.env.GROQ_API_KEY, openrouter: process.env.OPENROUTER_API_KEY }[provider] || null);
-const envConfig = (provider) => ({ key: envKey(provider), model: DEFAULT_MODELS[provider] });
 
 /** Shape of a safe, client-facing key record (no ciphertext/iv/tag). */
 export function toMeta(row) {
@@ -316,37 +317,33 @@ export async function pickReplacementModel(provider, apiKey, failedModel) {
   return (recommended || candidates[0] || null)?.id || null;
 }
 
-/** Minimal live call that costs ~zero tokens. Returns {ok, status?, error?}. */
+/** Connection test that needs NO specific model: lists models with the key (≈zero tokens).
+ *  A key that is valid passes even if a particular model (e.g. gemini-2.5-flash) is retired. */
 export async function probeProviderKey(provider, apiKey) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 8) return { ok: false, error: 'API key tidak valid (kosong/terlalu pendek).' };
-  const { model } = envConfig(provider);
   const controller = AbortSignal.timeout(20000);
+  const key = apiKey.trim();
   try {
+    let res;
     if (provider === 'gemini') {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 1 } }),
+      res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+        headers: { 'x-goog-api-key': key },
         signal: controller,
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) return { ok: true, status: res.status };
-      return { ok: false, status: res.status, error: data?.error?.message || `Gemini error (${res.status})` };
+    } else {
+      const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+      res = await fetch(`${base}/models`, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+          ...(provider === 'openrouter' ? { 'HTTP-Referer': 'https://sherlystudio.vercel.app', 'X-Title': 'SherlyStudio' } : {}),
+        },
+        signal: controller,
+      });
     }
-    const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
-    const res = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey.trim()}`, 'Content-Type': 'application/json',
-        ...(provider === 'openrouter' ? { 'HTTP-Referer': 'https://sherlystudio.vercel.app', 'X-Title': 'SherlyStudio' } : {}),
-      },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
-      signal: controller,
-    });
     const data = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, status: res.status };
-    return { ok: false, status: res.status, error: data?.error?.message || `${provider} error (${res.status})` };
+    const msg = data?.error?.message || (typeof data?.error === 'string' ? data.error : null) || `${provider} error (${res.status})`;
+    return { ok: false, status: res.status, error: msg };
   } catch (error) {
     return { ok: false, error: error.name === 'TimeoutError' ? 'Probe timeout (20s).' : error.message };
   }
