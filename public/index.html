@@ -47,6 +47,20 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 @media(max-width:600px){.form-grid{grid-template-columns:1fr}.form-field.full{grid-column:auto}.page-heading{align-items:flex-start;flex-direction:column}}
 </style><style>
 /* AI Key Vault */
+.vault-model{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.vault-model label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px}
+.vault-model-row{display:flex;gap:6px}
+.vault-model-row input{flex:1;min-width:0;background:#080f1c;color:#fff;border:1px solid #344052;border-radius:9px;padding:8px;font-size:11px}
+.vault-model-row .outline-btn{padding:8px 12px;font-size:10px;white-space:nowrap}
+.vault-model-src{font-size:9px;color:var(--muted);margin-top:4px}
+.member-row>td{background:#0a1220;padding:10px}
+.member-table{width:100%;border-collapse:collapse;font-size:11px}
+.member-table th,.member-table td{text-align:left;padding:6px 8px;border-bottom:1px solid #131f31;white-space:nowrap}
+.member-table th{color:var(--muted);font-size:9px;letter-spacing:.08em;text-transform:uppercase}
+.group-row td{vertical-align:middle}
+.group-expand{background:none;border:0;color:#9fb2cc;cursor:pointer;font-size:14px}
+.key-chip{display:inline-block;background:#101b2a;border:1px solid var(--line);border-radius:6px;padding:2px 6px;margin:1px;font-size:10px}
+
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .vault-card{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;padding:16px}
 .vault-card h3{margin:0 0 2px;font-size:14px;display:flex;align-items:center;gap:8px;text-transform:capitalize}
@@ -120,18 +134,18 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
   </div><div class="modal-actions"><button type="button" class="outline-btn" id="cancelCharacter">Batal</button><button type="submit" class="pink-btn" id="saveCharacterBtn">Simpan Karakter</button></div></form>
  </div></div>
 <section id="aiProvidersView" class="page-view">
-  <div class="page-heading"><div><h1>AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Nilai key tidak pernah tampil di frontend — rotasi saat gagal berjalan otomatis.</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
+  <div class="page-heading"><div><h1>AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Satu label dapat berisi banyak key. Nilai key tidak pernah tampil — rotasi &amp; fallback otomatis saat gagal.</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
   <div id="vaultBanner" class="warn-banner" style="display:none"></div>
   <div class="vault-providers" id="vaultProviderCards"><p style="color:var(--muted)">Memuat status provider...</p></div>
-  <div class="panel"><div class="section-head"><h2><i data-icon="key"></i> API Keys Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
+  <div class="panel"><div class="section-head"><h2><i data-icon="key"></i> Grup API Key Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
    <div class="vault-table-wrap"><table class="vault-table" id="vaultKeysTable"><thead><tr><th>Nama</th><th>Provider</th><th>Key</th><th>Prioritas</th><th>Status</th><th>Kesehatan</th><th>Terakhir dipakai</th><th>Aksi</th></tr></thead><tbody><tr><td colspan="8" style="color:var(--muted)">Memuat...</td></tr></tbody></table></div>
-   <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Otomatis nonaktif setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>, key dengan angka prioritas terkecil lebih dulu. Key vault dipakai Chat Sherly untuk akun admin ini.</p>
+   <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
   </div>
 </section>
 <div class="modal-backdrop" id="keyModal"><div class="modal"><h2 id="keyModalTitle">Tambah API Key</h2><p class="modal-sub">Key dienkripsi server-side sebelum disimpan. Hanya 4 digit terakhir yang bisa dilihat kembali.</p>
  <form id="keyForm"><input type="hidden" id="keyFormId"><div class="form-grid">
   <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option></select></div>
-  <div class="form-field"><label>Nama key *</label><input id="keyName" required maxlength="80" placeholder="mis. groq-utama"></div>
+  <div class="form-field"><label>Nama grup / label key *</label><input id="keyName" required maxlength="80" list="keyNameSuggestions" placeholder="mis. groq-utama"><small>Pakai label yang sama untuk menggabungkan banyak key ke satu grup.</small><datalist id="keyNameSuggestions"></datalist></div>
   <div class="form-field full"><label id="keyValueLabel">API Key *</label><input id="keyValue" type="password" required minlength="8" autocomplete="off" placeholder="Tempel API key di sini"><small id="keyValueNote">Minimal 8 karakter. Nilai asli tidak pernah tersimpan di server/frontend.</small></div>
   <div class="form-field"><label>Prioritas (kecil = lebih didahulukan)</label><input id="keyPriority" type="number" min="1" max="1000" value="100"></div>
  </div><div class="modal-actions"><button type="button" class="outline-btn" id="cancelKeyBtn">Batal</button><button type="submit" class="pink-btn" id="saveKeyBtn">Simpan Key</button></div></form>

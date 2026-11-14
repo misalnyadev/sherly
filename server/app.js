@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { chatWithAI } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest } from './vault.js';
-import { listKeyMeta, createKey, updateKey, rotateKey, deleteKey, testKey, envFallbackStatus, AUTO_ORDER } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels } from './provider-keys.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -160,18 +160,17 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
     const messages = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone)), { supabase: req.supabase });
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone)), { supabase: req.supabase, accessToken: req.accessToken });
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
-    res.json({ ok: true, conversation_id: conversationId, reply: result.text, provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model: result.model, usage: result.usage });
+    res.json({ ok: true, conversation_id: conversationId, reply: result.text, provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
   }
 });
 
-// AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
 const requireVault = (_req, res, next) => {
   if (!vaultConfigured()) return res.status(503).json({ error: 'Vault belum dikonfigurasi. Set AI_ENCRYPTION_KEY di environment (contoh: openssl rand -hex 32).' });
   next();
@@ -181,14 +180,42 @@ const wrapKeyRoute = (fn) => async (req, res) => {
   catch (error) { res.status(error.status || 500).json({ error: error.message || 'Operasi vault gagal.' }); }
 };
 
+app.delete('/api/ai-keys/group', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
+  const { provider, key_name } = req.body || {};
+  await deleteGroup(req.supabase, { provider, key_name });
+  return { ok: true };
+}));
+app.put('/api/ai-provider-settings', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
+  const { provider, model } = req.body || {};
+  return { settings: await saveProviderModel(req.supabase, provider, model, req.accessToken) };
+}));
+app.get('/api/ai-provider-models/:provider', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
+  const provider = String(req.params.provider || '');
+  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider tidak valid.'), { status: 400 });
+  // Prefer a vault key (priority asc); fall back to env key.
+  let apiKey = null;
+  const usable = vaultConfigured() ? await getUsableKeys(req.supabase, provider).catch(() => []) : [];
+  if (usable.length) apiKey = usable[0].apiKey;
+  else apiKey = envFallbackKey(provider);
+  if (!apiKey) throw Object.assign(new Error('Belum ada API key (vault maupun env) untuk provider ini. Tambahkan key dulu.'), { status: 400 });
+  const models = await fetchProviderModels(provider, apiKey);
+  return { provider, models };
+}));
+function envFallbackKey(provider) {
+  return { groq: process.env.GROQ_API_KEY, gemini: process.env.GEMINI_API_KEY, openrouter: process.env.OPENROUTER_API_KEY }[provider] || null;
+}
+
+
+// AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
 app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const envFallback = envFallbackStatus();
   const vaultReady = vaultConfigured();
-  if (!vaultReady) return { keys: [], vaultConfigured: false, vaultSelfTest: false, envFallback, autoOrder: AUTO_ORDER, warning: 'AI_ENCRYPTION_KEY belum dikonfigurasi di environment server.' };
+  const models = vaultReady ? await getAllProviderModels(req.supabase).catch(() => ({})) : {};
+  if (!vaultReady) return { groups: [], models, vaultConfigured: false, vaultSelfTest: false, envFallback, autoOrder: AUTO_ORDER, warning: 'AI_ENCRYPTION_KEY belum dikonfigurasi di environment server.' };
   try {
-    return { keys: await listKeyMeta(req.supabase), vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER };
+    return { groups: await listKeyGroups(req.supabase), models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER };
   } catch (error) {
-    return { keys: [], vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, warning: 'Tabel ai_provider_keys belum bisa diakses. Jalankan supabase/ai_key_vault_migration.sql. (' + error.message + ')' };
+    return { groups: [], models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, warning: 'Tabel ai_provider_keys belum bisa diakses. Jalankan migrasi vault (schema.sql, ai_key_vault_migration.sql, ai_key_vault_groups_migration.sql). (' + error.message + ')' };
   }
 }));
 app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
