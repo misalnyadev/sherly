@@ -415,4 +415,5 @@ $('ssChatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey)
   setProfile(null);
   window.openSherlyChat=openChat;
   window.sherlyLogout=logout;
+  window.sherlyCloseChat=closeChat;
 })();
