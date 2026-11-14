@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chatWithAI } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
+import { vaultConfigured, vaultSelfTest } from './vault.js';
+import { listKeyMeta, createKey, updateKey, rotateKey, deleteKey, testKey, envFallbackStatus, AUTO_ORDER } from './provider-keys.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -70,7 +72,7 @@ function buildTrustedContext(user, timezone) {
   return `KONTEKS SESI TERVERIFIKASI SERVER:\nPengguna adalah admin/pemilik SherlyStudio. Nama panggilan akun: ${displayName}.\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan; jangan mengumumkannya tanpa alasan. Semua pesan percakapan berasal dari sesi admin yang telah diverifikasi.`;
 }
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured, aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) }, timestamp: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured, aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) }, vaultConfigured: vaultConfigured(), timestamp: new Date().toISOString() }));
 
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -158,16 +160,52 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
     const messages = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone)));
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone)), { supabase: req.supabase });
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
-    res.json({ ok: true, conversation_id: conversationId, reply: result.text, provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, model: result.model, usage: result.usage });
+    res.json({ ok: true, conversation_id: conversationId, reply: result.text, provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
   }
 });
+
+// AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
+const requireVault = (_req, res, next) => {
+  if (!vaultConfigured()) return res.status(503).json({ error: 'Vault belum dikonfigurasi. Set AI_ENCRYPTION_KEY di environment (contoh: openssl rand -hex 32).' });
+  next();
+};
+const wrapKeyRoute = (fn) => async (req, res) => {
+  try { res.json(await fn(req)); }
+  catch (error) { res.status(error.status || 500).json({ error: error.message || 'Operasi vault gagal.' }); }
+};
+
+app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
+  const envFallback = envFallbackStatus();
+  const vaultReady = vaultConfigured();
+  if (!vaultReady) return { keys: [], vaultConfigured: false, vaultSelfTest: false, envFallback, autoOrder: AUTO_ORDER, warning: 'AI_ENCRYPTION_KEY belum dikonfigurasi di environment server.' };
+  try {
+    return { keys: await listKeyMeta(req.supabase), vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER };
+  } catch (error) {
+    return { keys: [], vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, warning: 'Tabel ai_provider_keys belum bisa diakses. Jalankan supabase/ai_key_vault_migration.sql. (' + error.message + ')' };
+  }
+}));
+app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
+  const { provider, key_name, api_key, priority } = req.body || {};
+  if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
+  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority });
+  return { key, probe };
+}));
+app.put('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => ({ key: await updateKey(req.supabase, req.params.id, req.body || {}) })));
+app.post('/api/ai-keys/:id/rotate', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
+  const { api_key } = req.body || {};
+  if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key baru wajib diisi (minimal 8 karakter).'), { status: 400 });
+  const { key, probe } = await rotateKey(req.supabase, req.params.id, api_key);
+  return { key, probe };
+}));
+app.post('/api/ai-keys/:id/test', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => ({ probe: await testKey(req.supabase, req.params.id) })));
+app.delete('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => { await deleteKey(req.supabase, req.params.id); return { ok: true }; }));
 
 app.get('/{*splat}', (_req, res) => res.sendFile(path.resolve(__dirname, '../public/index.html')));
 export default app;
