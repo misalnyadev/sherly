@@ -74,6 +74,16 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .probe-result.pending{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.3);color:#cbd5e1}
 .probe-result.ok{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}
 .probe-result.err{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.4);color:#ffb5bd}
+.cap-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.cap-tab{border:1px solid #3a3a55;background:#0e1626;color:#c9b8d0;border-radius:30px;padding:8px 14px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.cap-tab small{opacity:.65;font-size:10px}
+.cap-tab.active{border-color:#e83ca5;background:linear-gradient(100deg,#d82d9126,#7a2d9126);color:#ffd6ef}
+.cap-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;letter-spacing:.05em;border:1px solid #49334e;color:#e9b6d8;border-radius:20px;padding:2px 7px;text-transform:uppercase}
+.cap-badges{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px}
+.cap-empty{border:1px dashed #4a3b55;border-radius:14px;padding:36px 28px;text-align:center;color:var(--muted);margin:6px 0 18px}
+.cap-empty h3{color:#ffd6ef;margin:0 0 8px;font-size:17px}
+.cap-empty p{max-width:520px;margin:6px auto;font-size:12px;line-height:1.6}
+.provider-caps{display:flex;gap:5px;flex-wrap:wrap;margin-left:6px}
 .modal-actions #probeKeyBtn{margin-right:auto}
 
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
@@ -149,10 +159,12 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
   </div><div class="modal-actions"><button type="button" class="outline-btn" id="cancelCharacter">Batal</button><button type="submit" class="pink-btn" id="saveCharacterBtn">Simpan Karakter</button></div></form>
  </div></div>
 <section id="aiProvidersView" class="page-view">
-  <div class="page-heading"><div><h1>AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Satu label dapat berisi banyak key. Nilai key tidak pernah tampil — rotasi &amp; fallback otomatis saat gagal.</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
+  <div class="page-heading"><div><h1>AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Satu label dapat berisi banyak key. Nilai key tidak pernah tampil — rotasi &amp; fallback otomatis saat gagal. Key dikelompokkan per kategori: Teks &amp; Logika, Vision, TTS, dan (segera) Studio — gambar &amp; video (mis. kie.ai).</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
   <div id="vaultBanner" class="warn-banner" style="display:none"></div>
+  <div class="cap-tabs" id="capabilityTabs" role="tablist" aria-label="Kategori kemampuan provider"></div>
+  <div class="cap-empty" id="capabilityEmpty" hidden></div>
   <div class="vault-providers" id="vaultProviderCards"><p style="color:var(--muted)">Memuat status provider...</p></div>
-  <div class="panel"><div class="section-head"><h2><i data-icon="key"></i> Grup API Key Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
+  <div class="panel" id="vaultGroupsPanel"><div class="section-head"><h2><i data-icon="key"></i> Grup API Key Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
    <div class="vault-table-wrap"><table class="vault-table" id="vaultKeysTable"><thead><tr><th>Nama</th><th>Provider</th><th>Key</th><th>Prioritas</th><th>Status</th><th>Kesehatan</th><th>Terakhir dipakai</th><th>Aksi</th></tr></thead><tbody><tr><td colspan="8" style="color:var(--muted)">Memuat...</td></tr></tbody></table></div>
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
   </div>

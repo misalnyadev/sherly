@@ -5,6 +5,26 @@ import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 export const PROVIDERS = ['groq', 'gemini', 'openrouter'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter'];
 export const AUTO_DISABLE_AFTER = 5;
+
+// ---------- Capability taxonomy (API key categories) ----------
+// Keys are stored PER PROVIDER — capabilities describe what that provider can power.
+// Studio categories have no provider yet: kie.ai is the planned candidate for
+// text-to-image / image-to-image / text-to-video / image-to-video.
+export const CAPABILITIES = [
+  { id: 'chat',       label: 'Teks & Logika',            short: 'Teks',   badge: '💬', description: 'Chat, reasoning, copywriting & analisis — otak utama Sherly.' },
+  { id: 'vision',     label: 'Vision / Analisis Gambar', short: 'Vision', badge: '👁️', description: 'Memahami isi gambar & referensi visual (QC, upload, dll).' },
+  { id: 'tts',        label: 'Text-to-Speech',           short: 'TTS',    badge: '🔊', description: 'Mengubah teks menjadi voiceover.' },
+  { id: 'image_gen',  label: 'Text-to-Image',            short: 'T2I',    badge: '🖼️', description: 'Studio: generate gambar dari prompt (mis. kie.ai).' },
+  { id: 'image_edit', label: 'Image-to-Image',           short: 'I2I',    badge: '✏️', description: 'Studio: restyle/edit gambar dengan prompt (mis. kie.ai).' },
+  { id: 'video_gen',  label: 'Text-to-Video',            short: 'T2V',    badge: '🎬', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
+  { id: 'video_edit', label: 'Image-to-Video',           short: 'I2V',    badge: '🎞️', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
+];
+export const CAPABILITY_IDS = CAPABILITIES.map(c => c.id);
+export const PROVIDER_CAPABILITIES = {
+  groq: ['chat', 'vision'],
+  gemini: ['chat', 'vision', 'tts'],
+  openrouter: ['chat', 'vision'],
+};
 const PROBE_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter' };
 
 // Catatan 2026-11: Google menjawab bahwa gemini-2.5-flash “is no longer available to new users” (lihat error API live).
