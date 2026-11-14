@@ -9,6 +9,62 @@
   let modelCache = {};
   let keyModalMode = 'add'; // add | edit | rotate
   let addPrefill = null;    // {provider, key_name}
+  // Capability taxonomy (server sends authoritative list; fallbacks keep UI alive if payload lama)
+  const FALLBACK_CAPABILITIES = [
+    { id: 'chat', label: 'Teks & Logika', short: 'Teks', badge: '💬', description: 'Chat, reasoning, copywriting & analisis — otak utama Sherly.' },
+    { id: 'vision', label: 'Vision / Analisis Gambar', short: 'Vision', badge: '👁️', description: 'Memahami isi gambar & referensi visual.' },
+    { id: 'tts', label: 'Text-to-Speech', short: 'TTS', badge: '🔊', description: 'Mengubah teks menjadi voiceover.' },
+    { id: 'image_gen', label: 'Text-to-Image', short: 'T2I', badge: '🖼️', description: 'Studio: generate gambar dari prompt (mis. kie.ai).' },
+    { id: 'image_edit', label: 'Image-to-Image', short: 'I2I', badge: '✏️', description: 'Studio: restyle/edit gambar dengan prompt (mis. kie.ai).' },
+    { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: '🎬', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
+    { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: '🎞️', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
+  ];
+  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'] };
+  let capabilityRegistry = FALLBACK_CAPABILITIES;
+  let providerCapabilities = FALLBACK_PROVIDER_CAPS;
+  let activeCapability = 'all';
+  let lastAIPayload = null;
+
+  const capById = (id) => capabilityRegistry.find(c => c.id === id);
+  const capsOf = (provider) => providerCapabilities[provider] || [];
+  const providersForCap = (capId) => PROVIDERS.filter(p => capsOf(p).includes(capId));
+  function capabilityBadges(provider) {
+    return capsOf(provider).map(id => { const c = capById(id); return c ? `<span class="cap-badge" title="${esc(c.label)}">${c.badge} ${esc(c.short || c.label)}</span>` : ''; }).join('');
+  }
+  function renderCapabilityTabs() {
+    const wrap = $('capabilityTabs');
+    if (!wrap) return;
+    const tabs = [{ id: 'all', label: 'Semua', short: 'Semua', badge: '✦' }].concat(capabilityRegistry);
+    wrap.innerHTML = tabs.map(t => {
+      const count = t.id === 'all' ? PROVIDERS.length : providersForCap(t.id).length;
+      return `<button type="button" class="cap-tab${activeCapability === t.id ? ' active' : ''}" data-cap-tab="${esc(t.id)}" role="tab" aria-selected="${activeCapability === t.id}"><span>${t.badge || ''} ${esc(t.label)}</span><small>${count}</small></button>`;
+    }).join('');
+    wrap.querySelectorAll('[data-cap-tab]').forEach(b => b.addEventListener('click', () => {
+      activeCapability = b.dataset.capTab;
+      renderCapabilityTabs();
+      if (lastAIPayload) { renderProviderCards(lastAIPayload); renderGroupsTable(lastGroups); }
+    }));
+  }
+  function showCapabilityEmptyIfNeeded() {
+    const empty = $('capabilityEmpty');
+    const cards = $('vaultProviderCards');
+    const panel = $('vaultGroupsPanel');
+    const visibleProviders = PROVIDERS.filter(p => activeCapability === 'all' || capsOf(p).includes(activeCapability));
+    const isEmpty = visibleProviders.length === 0;
+    if (empty) {
+      const cap = capById(activeCapability);
+      if (isEmpty && cap) {
+        empty.hidden = false;
+        empty.innerHTML = `<h3>${cap.badge || ''} ${esc(cap.label)}</h3><p>${esc(cap.description || '')}</p><p>Belum ada provider terdaftar untuk kategori ini. Di roadmap: <b>kie.ai</b> (text-to-image, image-to-image, text-to-video, image-to-video) serta provider TTS khusus — tab ini akan terisi otomatis begitu key-nya ditambahkan.</p><p><small>Sambil menunggu, kategori <b>Teks &amp; Logika</b> / <b>Vision</b> sudah bisa dipakai dengan key Groq, Gemini, atau OpenRouter yang tersimpan.</small></p>`;
+      } else {
+        empty.hidden = true;
+        empty.innerHTML = '';
+      }
+    }
+    if (cards) cards.style.display = isEmpty ? 'none' : '';
+    if (panel) panel.style.display = isEmpty ? 'none' : '';
+    return isEmpty;
+  }
 
   function injectIcons(root) {
     if (typeof ICONS === 'undefined') return;
@@ -27,10 +83,13 @@
   const findGroup = (key) => groupCache.find(g => g.key === key);
 
   // ---------- Provider cards (status + model selector) ----------
-  function renderProviderCards({ groups, envFallback }) {
+  function renderProviderCards(payload) {
+    const { groups, envFallback } = payload || {};
+    if (showCapabilityEmptyIfNeeded()) return;
     const env = envFallback || {};
+    const visibleProviders = PROVIDERS.filter(p => activeCapability === 'all' || capsOf(p).includes(activeCapability));
     const container = $('vaultProviderCards');
-    container.innerHTML = PROVIDERS.map((p) => {
+    container.innerHTML = visibleProviders.map((p) => {
       const gs = groups.filter(g => g.provider === p);
       const total = gs.reduce((n, g) => n + g.total, 0);
       const active = gs.reduce((n, g) => n + g.active_count, 0);
@@ -46,6 +105,7 @@
       const sourceLabel = source === 'settings' ? 'tersimpan di pengaturan' : 'default aplikasi/env';
       return `<div class="vault-card">
         <h3>${esc(PROVIDER_LABEL[p])}</h3>
+        <div class="cap-badges">${capabilityBadges(p)}</div>
         <p>${esc(detail)}</p>
         <div class="vault-meta">${pill(headlineClass === 'ok' ? 'ok' : headlineClass)} <span>${esc(headline)}</span> ${env[p] ? '<span class="pill env">ENV FALLBACK</span>' : ''} ${failing ? `<span class="pill failing">${failing} FAILING</span>` : ''}</div>
         <div class="vault-model">
@@ -140,7 +200,10 @@
     </tr>`).join('');
   }
 
-  function renderGroupsTable(groups) {
+  let lastGroups = [];
+  function renderGroupsTable(groupRows) {
+    lastGroups = groupRows || [];
+    const groups = lastGroups.filter(g => activeCapability === 'all' || capsOf(g.provider).includes(activeCapability));
     const tbody = document.querySelector('#vaultKeysTable tbody');
     if (!groups.length) {
       tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);white-space:normal">Belum ada API key tersimpan. Klik “Tambah API Key” — satu label bisa menampung banyak key sekaligus.</td></tr>';
@@ -149,7 +212,7 @@
     tbody.innerHTML = groups.map((g) => `
     <tr class="group-row">
       <td><b>${esc(g.key_name)}</b><br><small style="color:var(--muted)">${g.total} key · ${g.active_count} aktif</small></td>
-      <td>${esc(PROVIDER_LABEL[g.provider] || g.provider)}</td>
+      <td>${esc(PROVIDER_LABEL[g.provider] || g.provider)}<div class="provider-caps">${capabilityBadges(g.provider)}</div></td>
       <td>${g.keys.map(k => `<span class="key-chip">••••${esc(k.last4)}</span>`).join(' ')}</td>
       <td>${esc(g.priority)}</td>
       <td><button class="toggle-btn ${g.active_count ? '' : 'off'}" data-group-toggle="${esc(g.key)}">${g.active_count ? 'Nonaktifkan' : 'Aktifkan'}</button></td>
@@ -188,6 +251,10 @@
     const tbody = document.querySelector('#vaultKeysTable tbody');
     try {
       const data = await api('/api/ai-keys');
+      lastAIPayload = data;
+      capabilityRegistry = (Array.isArray(data.capabilities) && data.capabilities.length) ? data.capabilities : FALLBACK_CAPABILITIES;
+      providerCapabilities = data.providerCapabilities || FALLBACK_PROVIDER_CAPS;
+      renderCapabilityTabs();
       groupCache = data.groups || [];
       modelCache = data.models || {};
       const banner = $('vaultBanner');

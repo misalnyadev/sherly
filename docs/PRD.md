@@ -291,16 +291,19 @@ Admin dapat mengelola nama provider, model tersedia, model default, model aktif,
 Sejak rilis v1.2 (14 Nov 2026): **Grouped vault** — satu label dapat menyimpan banyak API key (rotasi otomatis antar member, grup adalah unit pengelolaan di UI, provider tetap menjadi unit fallback); **pengaturan model per provider** tersimpan di tabel `ai_provider_settings` dan dapat diubah dari UI; **auto-deteksi model** — tombol "Ambil daftar" memuat katalog model terbaru dari provider, dan jika model tersimpan tidak tersedia (error model_not_found/decommissioned), backend otomatis memilih pengganti, menyimpannya, dan retry sekali.
 Tambah/edit/enable/disable/delete key; tentukan provider; prioritas & urutan rotasi; beberapa key per provider; rotasi/fallback saat gagal; tampilkan status tanpa menampilkan nilai rahasia.
 
-### 12.2 Enkripsi
+### 12.2 Kategori Kapabilitas API Key (v1.3, 14 Nov 2026)
+API Provider Manager mengelompokkan provider per **kategori kapabilitas** (bukan per key — satu key dapat melayani banyak kapabilitas): **Teks & Logika** (`chat`), **Vision/Analisis Gambar** (`vision`), **Text-to-Speech** (`tts`) — sudah tersedia; **Text-to-Image** (`image_gen`), **Image-to-Image** (`image_edit`), **Text-to-Video** (`video_gen`), **Image-to-Video** (`video_edit`) — kategori Studio, belum ada provider. Registry kapabilitas tersimpan di kode (`server/provider-keys.js` → `CAPABILITIES`, `PROVIDER_CAPABILITIES`) dan dikirim ke frontend oleh `GET /api/ai-keys` (`capabilities`, `providerCapabilities`); tab kategori memfilter kartu provider & tabel grup. Mapping saat ini: Groq → Teks+Vision; Gemini → Teks+Vision+TTS; OpenRouter → Teks+Vision. **Roadmap Studio**: provider seperti **kie.ai** (text-to-image / image-to-image / text-to-video / image-to-video) akan didaftarkan ke registry yang sama (`PROVIDERS` + `PROVIDER_CAPABILITIES` + probe/model endpoint khusus) — otomatis muncul di tab yang sesuai tanpa mengubah UI. Belum ada migrasi skema; tidak ada key duplikat per kategori.
+
+### 12.3 Enkripsi
 - **AES-256-GCM**; key dienkripsi sebelum disimpan; dekripsi hanya di backend.
 - Database menyimpan ciphertext + metadata (IV, auth tag, versi key).
 - Master encryption key sebagai secret terpisah: **`AI_ENCRYPTION_KEY`** (bukan API key provider).
 - Rotasi master key: dukung re-enkripsi bertahap; dokumentasikan prosedur.
 
-### 12.3 Tabel `ai_provider_keys` (rencana)
+### 12.4 Tabel `ai_provider_keys` (rencana)
 `id`, `provider`, `key_name`, `ciphertext`, `crypto_meta` (iv/tag/kdf), `priority`, `is_active`, `last_used_at`, `health_status` (ok/failing/disabled), `created_at`, `updated_at`. Hanya backend (service role) yang dapat mendekripsi; frontend tidak pernah menerima ciphertext mentah tanpa otorisasi (atau menerima metadata saja).
 
-### 12.4 Aturan Keamanan Vault
+### 12.5 Aturan Keamanan Vault
 - API key tidak pernah di-log.
 - Error provider tidak boleh membocorkan key.
 - Nonaktifkan key otomatis setelah N kegagalan berturut-turut + notifikasi (P9).
