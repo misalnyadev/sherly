@@ -70,6 +70,11 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .model-item:last-child{border-bottom:0}
 .model-badge{flex:none;font-size:8px;font-weight:700;color:#55d6a3;border:1px solid #1f5c41;background:#103a2a;border-radius:20px;padding:2px 8px;letter-spacing:.05em}
 .model-picker-error{padding:12px;color:#ffb5bd;font-size:11px;line-height:1.5}
+.probe-result{margin:12px 2px 0;padding:11px 13px;border-radius:12px;font-size:12px;line-height:1.5;border:1px solid transparent}
+.probe-result.pending{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.3);color:#cbd5e1}
+.probe-result.ok{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}
+.probe-result.err{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.4);color:#ffb5bd}
+.modal-actions #probeKeyBtn{margin-right:auto}
 
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .vault-card{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;padding:16px}
@@ -152,13 +157,13 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
   </div>
 </section>
-<div class="modal-backdrop" id="keyModal"><div class="modal"><h2 id="keyModalTitle">Tambah API Key</h2><p class="modal-sub">Key dienkripsi server-side sebelum disimpan. Hanya 4 digit terakhir yang bisa dilihat kembali.</p>
+<div class="modal-backdrop" id="keyModal"><div class="modal"><h2 id="keyModalTitle">Tambah API Key</h2><p class="modal-sub">Key dienkripsi server-side sebelum disimpan. Klik <b>Tes koneksi</b> untuk mencoba dulu, atau langsung <b>Simpan Key</b> — server selalu menguji koneksi lebih dulu dan key yang gagal <b>tidak akan disimpan</b>. Hanya 4 digit terakhir yang bisa dilihat kembali.</p>
  <form id="keyForm"><input type="hidden" id="keyFormId"><div class="form-grid">
   <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option></select></div>
   <div class="form-field"><label>Nama grup / label key *</label><input id="keyName" required maxlength="80" list="keyNameSuggestions" placeholder="mis. groq-utama"><small>Pakai label yang sama untuk menggabungkan banyak key ke satu grup.</small><datalist id="keyNameSuggestions"></datalist></div>
   <div class="form-field full"><label id="keyValueLabel">API Key *</label><input id="keyValue" type="password" required minlength="8" autocomplete="off" placeholder="Tempel API key di sini"><small id="keyValueNote">Minimal 8 karakter. Nilai asli tidak pernah tersimpan di server/frontend.</small></div>
   <div class="form-field"><label>Prioritas (kecil = lebih didahulukan)</label><input id="keyPriority" type="number" min="1" max="1000" value="100"></div>
- </div><div class="modal-actions"><button type="button" class="outline-btn" id="cancelKeyBtn">Batal</button><button type="submit" class="pink-btn" id="saveKeyBtn">Simpan Key</button></div></form>
+ </div><div class="probe-result" id="probeResult" hidden></div><div class="modal-actions"><button type="button" class="outline-btn" id="probeKeyBtn">Tes koneksi</button><button type="button" class="outline-btn" id="cancelKeyBtn">Batal</button><button type="submit" class="pink-btn" id="saveKeyBtn">Simpan Key</button></div></form>
 </div></div>
  <div class="layout">
  <section class="maincol">
