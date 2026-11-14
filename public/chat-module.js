@@ -77,6 +77,9 @@
   .ss-voice-label{display:block;color:#b9c5d5;font-size:12px;margin:14px 0 6px}.ss-voice-style{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #344158;background:#080f1b;color:#fff;outline:0;box-sizing:border-box;font:inherit;resize:vertical}.ss-voice-style:focus{border-color:#e84ba9}.ss-voice-note{color:#7184a1;font-size:11px;margin:6px 2px 0;line-height:1.5}
   .ss-voice-actions{display:flex;gap:9px;margin-top:14px}.ss-voice-actions button{flex:1;padding:11px;border-radius:10px;border:1px solid #344158;background:#131f31;color:#cdd6e4;cursor:pointer;font:inherit;font-weight:500}.ss-voice-test:hover{border-color:#2dd4bf;color:#99f6e4}.ss-voice-save{background:#0f766e!important;border-color:#14b8a6!important;color:#fff!important}.ss-voice-save:hover{background:#115e59!important}
   .ss-voice-saved{min-height:18px;margin:8px 2px 0;font-size:12px;color:#34d399}
+  .ss-voice-modes{display:flex;gap:8px;margin:2px 0 12px}.ss-voice-mode{flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #344158;background:#131f31;color:#cdd6e4;cursor:pointer;font-size:12.5px}.ss-voice-mode.active{border-color:#2dd4bf;background:#0d2b29;color:#5eead4}
+  .ss-device-block select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #344158;background:#080f1b;color:#fff;outline:0;font:inherit}.ss-device-block label{display:block;color:#b9c5d5;font-size:12px;margin:12px 0 6px}
+  .ss-rate-row{display:flex;align-items:center;gap:10px}.ss-rate-row input[type=range]{flex:1;accent-color:#e84ba9}.ss-rate-row output{min-width:44px;text-align:right;color:#ffd6ef;font-size:13px}
   `;
   const styleEl = document.createElement('style'); styleEl.textContent = style; document.head.appendChild(styleEl);
   const root = document.createElement('div'); root.innerHTML = `
@@ -98,7 +101,7 @@
       <div class="ss-compose-wrap"><div class="ss-attach-chip" id="ssAttachChip" hidden><img id="ssAttachThumb" alt="Pratinjau lampiran"><span id="ssAttachName"></span><button type="button" id="ssAttachRemove" aria-label="Hapus lampiran">✕</button></div><form class="ss-compose" id="ssChatForm"><button type="button" class="ss-attach" id="ssAttachBtn" aria-label="Kirim gambar atau file"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l8.57-8.57A4 4 0 1118 8.84l-8.59 8.57a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button><input id="ssAttachInput" type="file" accept="image/*,.txt,.md,.csv,.json" hidden><textarea id="ssChatInput" rows="1" maxlength="12000" placeholder="Tulis pesan untuk Sherly..." aria-label="Pesan untuk Sherly"></textarea><button class="ss-send" id="ssSend" type="submit" aria-label="Kirim pesan"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button></form><div class="ss-chat-hint">Enter untuk mengirim · Shift + Enter untuk baris baru</div></div>
     </section>
   </section>
-  <div class="ss-voice" id="ssVoicePanel" role="dialog" aria-modal="true" aria-labelledby="ssVoiceTitle" aria-hidden="true"><form class="ss-voice-card" id="ssVoiceForm"><div class="ss-voice-head"><div><h2 id="ssVoiceTitle">🎙️ Suara Sherly</h2><p>Pilih suara Gemini untuk Sherly — dipakai tombol Dengarkan &amp; Bank Suara (pengucapan yang sama tidak digenerate ulang).</p></div><button type="button" class="ss-voice-close" id="ssVoiceClose" aria-label="Tutup">✕</button></div><div class="ss-voice-grid" id="ssVoiceGrid"></div><label class="ss-voice-label" for="ssVoiceStyle">Gaya bicara khas (opsional)</label><textarea id="ssVoiceStyle" class="ss-voice-style" rows="2" maxlength="180" placeholder="Indonesia dengan intonasi dan jeda nafas yang natural"></textarea><p class="ss-voice-note">Dipakai sebagai instruksi gaya saat Sherly bicara. Kosongkan = gaya default. Tersimpan di perangkat ini dan ikut dipakai Bank Suara.</p><div class="ss-voice-actions"><button type="button" class="ss-voice-test" id="ssVoiceTest">Tes</button><button type="submit" class="ss-voice-save">Simpan</button></div><p class="ss-voice-saved" id="ssVoiceSaved" role="status"></p></form></div>
+  <div class="ss-voice" id="ssVoicePanel" role="dialog" aria-modal="true" aria-labelledby="ssVoiceTitle" aria-hidden="true"><form class="ss-voice-card" id="ssVoiceForm"><div class="ss-voice-head"><div><h2 id="ssVoiceTitle">🎙️ Suara Sherly</h2><p>Pilih mesin suara untuk Sherly — Bank Suara (Gemini) atau suara perangkat (lokal, gratis).</p></div><button type="button" class="ss-voice-close" id="ssVoiceClose" aria-label="Tutup">✕</button></div><div class="ss-voice-modes" role="tablist" aria-label="Mesin suara"><button type="button" class="ss-voice-mode active" id="ssModeGemini" data-mode="gemini">☁️ Gemini TTS · Bank Suara</button><button type="button" class="ss-voice-mode" id="ssModeDevice" data-mode="device">📱 Suara Perangkat (lokal, gratis)</button></div><div id="ssGeminiBlock"><div class="ss-voice-grid" id="ssVoiceGrid"></div><label class="ss-voice-label" for="ssVoiceStyle">Gaya bicara khas (opsional)</label><textarea id="ssVoiceStyle" class="ss-voice-style" rows="2" maxlength="180" placeholder="Indonesia dengan intonasi dan jeda nafas yang natural"></textarea><p class="ss-voice-note">Dipakai sebagai instruksi gaya saat Sherly bicara. Kosongkan = gaya default. Tersimpan di perangkat ini dan ikut dipakai Bank Suara.</p></div><div id="ssDeviceBlock" class="ss-device-block" hidden><label for="ssDeviceVoice">Suara perangkat (id-ID diutamakan — kualitas tergantung sistem HP/PC kamu)</label><select id="ssDeviceVoice"></select><label for="ssDeviceRate">Kecepatan bicara</label><div class="ss-rate-row"><input type="range" id="ssDeviceRate" min="0.7" max="1.3" step="0.05" value="1"><output id="ssDeviceRateOut">1.0×</output></div><p class="ss-voice-note">Suara perangkat dibacakan langsung oleh HP/PC — gratis, tanpa API, tanpa Bank Suara. Browser tidak bisa merekam suara bawaan, jadi tidak bisa disimpan ke Bank. Cocok kalau kuota/key habis.</p></div><div class="ss-voice-actions"><button type="button" class="ss-voice-test" id="ssVoiceTest">Tes</button><button type="submit" class="ss-voice-save">Simpan</button></div><p class="ss-voice-saved" id="ssVoiceSaved" role="status"></p></form></div>
   <div class="ss-auth" id="ssLogin" role="dialog" aria-modal="true" aria-labelledby="ssLoginTitle"><form class="ss-auth-card" id="ssLoginForm"><h2 id="ssLoginTitle">Masuk ke SherlyStudio</h2><p>Gunakan akun admin SherlyStudio untuk mengakses Chat Sherly.</p><label for="ssEmail">Email</label><input id="ssEmail" type="email" autocomplete="username" required placeholder="email@domain.com"><label for="ssPassword">Password</label><input id="ssPassword" type="password" autocomplete="current-password" required placeholder="Password akun Supabase"><div class="ss-auth-error" id="ssLoginError" aria-live="polite"></div><div class="ss-auth-actions"><button type="button" id="ssCancelLogin">Batal</button><button class="ss-auth-primary" id="ssLoginSubmit" type="submit">Masuk</button></div></form></div>`;
   root.id = 'ssChatRoot';
   const mainEl = document.querySelector('main');
@@ -120,8 +123,8 @@
   const authHeaders = async () => ({'Content-Type':'application/json','Authorization':`Bearer ${(await window.sherlyGetAccessToken?.()) || token}`});
   // ---------- Preferensi suara Sherly (dipakai tombol Dengarkan & Bank Suara) ----------
   const VOICE_CHOICES = [['Kore','Tegas & hangat'],['Aoede','Ringan & santai'],['Leda','Muda & ceria'],['Zephyr','Cerah & semangat'],['Sulafat','Lembut & ramah'],['Callirrhoe','Kalem & mengalir'],['Despina','Halus & akrab'],['Puck','Riang & akrab'],['Charon','Tenang & dalam'],['Fenrir','Tegas & semangat'],['Orus','Mantap & hangat'],['Iapetus','Jernih & santai'],['Enceladus','Lembut & dekat'],['Umbriel','Kalem & tenang']];
-  function voicePrefs(){ try { const p = JSON.parse(localStorage.getItem('sherly.voicePrefs') || '{}'); return { voice: VOICE_CHOICES.some(v=>v[0]===p.voice) ? p.voice : 'Zephyr', style: typeof p.style === 'string' ? p.style.slice(0,180) : '' }; } catch { return { voice: 'Zephyr', style: '' }; } }
-  function saveVoicePrefs(prefs){ try { localStorage.setItem('sherly.voicePrefs', JSON.stringify({ voice: prefs.voice, style: String(prefs.style||'').slice(0,180) })); } catch {} }
+  function voicePrefs(){ try { const p = JSON.parse(localStorage.getItem('sherly.voicePrefs') || '{}'); return { voice: VOICE_CHOICES.some(v=>v[0]===p.voice) ? p.voice : 'Zephyr', style: typeof p.style === 'string' ? p.style.slice(0,180) : '', mode: p?.mode === 'device' ? 'device' : 'gemini', deviceVoiceURI: typeof p?.deviceVoiceURI === 'string' ? p.deviceVoiceURI : '', rate: Math.min(1.3, Math.max(0.7, Number(p?.rate) || 1)) }; } catch { return { voice: 'Zephyr', style: '', mode: 'gemini', deviceVoiceURI: '', rate: 1 }; } }
+  function saveVoicePrefs(prefs){ try { const cur = voicePrefs(); localStorage.setItem('sherly.voicePrefs', JSON.stringify({ voice: prefs.voice ?? cur.voice, style: String(prefs.style ?? cur.style).slice(0,180), mode: prefs.mode ?? cur.mode, deviceVoiceURI: prefs.deviceVoiceURI ?? cur.deviceVoiceURI, rate: prefs.rate ?? cur.rate })); } catch {} }
   function setProfile(user){
     const owner = document.querySelector('.topbar .owner');
     const b = owner?.querySelector('b'), small = owner?.querySelector('small');
@@ -176,14 +179,20 @@
 
   // ---------- TTS playback ----------
   let ttsAudio = null, ttsCurrentBtn = null;
-  function stopTts(){ if (ttsAudio) { try { ttsAudio.pause(); } catch {} ttsAudio = null; } ttsCurrentBtn?.classList.remove('playing'); ttsCurrentBtn = null; }
+  function stopTts(){ if (ttsAudio) { try { ttsAudio.pause(); } catch {} ttsAudio = null; } if (window.speechSynthesis) { try { speechSynthesis.cancel(); } catch {} } ttsCurrentBtn?.classList.remove('playing'); ttsCurrentBtn = null; }
   async function toggleTts(btn){
-    if (ttsCurrentBtn === btn && ttsAudio) { stopTts(); return; }
+    if (ttsCurrentBtn === btn && (ttsAudio || (window.speechSynthesis && speechSynthesis.speaking))) { stopTts(); return; }
     stopTts();
     const bubble = btn.closest('.ss-bubble');
     const text = bubble?.querySelector('.ss-bubble-text')?.textContent?.trim() || '';
     if (!text) return;
     const label = btn.querySelector('span');
+    // Mode Suara Perangkat (lokal): langsung dibacakan perangkat, tanpa server/Bank Suara
+    if (voicePrefs().mode === 'device') {
+      ttsCurrentBtn = btn; btn.classList.add('playing'); if (label) label.textContent = 'Berhenti';
+      speakDevice(text, { onEnd: () => { btn.classList.remove('playing'); if (label) label.textContent = 'Dengarkan'; ttsCurrentBtn = null; } });
+      return;
+    }
     btn.disabled = true; if (label) label.textContent = 'Membuat...';
     try {
       const r = await fetch('/api/ai/tts', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ text: text.slice(0, 1500), ...voicePrefs() }) });
@@ -289,13 +298,70 @@
       voiceGrid.appendChild(chip);
     }
   }
+  // ---------- Mode: Gemini (Bank Suara) vs Suara Perangkat (lokal) ----------
+  let currentMode = voicePrefs().mode;
+  const modeBtns = { gemini: $('ssModeGemini'), device: $('ssModeDevice') };
+  const geminiBlock = $('ssGeminiBlock'), deviceBlock = $('ssDeviceBlock');
+  const deviceVoiceSel = $('ssDeviceVoice'), deviceRate = $('ssDeviceRate'), deviceRateOut = $('ssDeviceRateOut');
+  function deviceVoices(){
+    const all = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    // id-ID diutamakan, lalu bahasa lain; tiap opsi tampil: nama · lang
+    return all.slice().sort((a, b) => ((b.lang || '').toLowerCase().startsWith('id') - (a.lang || '').toLowerCase().startsWith('id')) || String(a.name).localeCompare(String(b.name)));
+  }
+  function renderDeviceVoices(selectedURI){
+    if (!deviceVoiceSel) return;
+    const voices = deviceVoices();
+    deviceVoiceSel.innerHTML = '';
+    if (!voices.length) { const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Tidak ada suara perangkat ditemukan'; deviceVoiceSel.appendChild(opt); deviceVoiceSel.disabled = true; return; }
+    deviceVoiceSel.disabled = false;
+    let chosen = null;
+    for (const v of voices) {
+      const opt = document.createElement('option');
+      opt.value = v.voiceURI;
+      opt.textContent = `${v.name} · ${v.lang}${/id/i.test(v.lang) ? ' ★' : ''}`;
+      if (v.voiceURI === selectedURI) chosen = opt;
+      deviceVoiceSel.appendChild(opt);
+    }
+    if (chosen) deviceVoiceSel.value = chosen.value;
+    else { const firstId = voices.find(v => /^id/i.test(v.lang)); if (firstId) deviceVoiceSel.value = firstId.voiceURI; }
+  }
+  function setMode(mode){
+    currentMode = mode === 'device' ? 'device' : 'gemini';
+    modeBtns.gemini?.classList.toggle('active', currentMode === 'gemini');
+    modeBtns.device?.classList.toggle('active', currentMode === 'device');
+    if (geminiBlock) geminiBlock.hidden = currentMode !== 'gemini';
+    if (deviceBlock) deviceBlock.hidden = currentMode !== 'device';
+    if (currentMode === 'device') renderDeviceVoices(voicePrefs().deviceVoiceURI);
+  }
+  modeBtns.gemini?.addEventListener('click', () => { setMode('gemini'); voiceSaved.textContent=''; });
+  modeBtns.device?.addEventListener('click', () => { setMode('device'); voiceSaved.textContent=''; });
+  deviceRate?.addEventListener('input', () => { if (deviceRateOut) deviceRateOut.textContent = Number(deviceRate.value).toFixed(2).replace(/0$/, '') + '×'; });
+  if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if (currentMode === 'device') renderDeviceVoices(voicePrefs().deviceVoiceURI); };
+  /** Ucapkan teks dengan suara perangkat (lokal). Return utterance-nya. */
+  function speakDevice(text, { onStart, onEnd } = {}){
+    if (!window.speechSynthesis) return null;
+    const prefs = voicePrefs();
+    const utter = new SpeechSynthesisUtterance(String(text).slice(0, 800));
+    utter.lang = 'id-ID';
+    utter.rate = prefs.rate || 1;
+    const v = deviceVoices().find(v => v.voiceURI === prefs.deviceVoiceURI) || deviceVoices().find(v => /^id/i.test(v.lang)) || null;
+    if (v) { utter.voice = v; utter.lang = v.lang || 'id-ID'; }
+    utter.onstart = () => onStart?.();
+    utter.onend = () => onEnd?.();
+    utter.onerror = () => onEnd?.();
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+    return utter;
+  }
   function openVoicePanel(){
     const prefs = voicePrefs();
     selectedVoice = prefs.voice;
     voiceStyle.value = prefs.style;
+    if (deviceRate) { deviceRate.value = String(prefs.rate || 1); if (deviceRateOut) deviceRateOut.textContent = Number(prefs.rate || 1).toFixed(2).replace(/0$/, '') + '×'; }
     voiceSaved.textContent = '';
     voiceTest.disabled = false; voiceTest.textContent = 'Tes';
     renderVoiceChips();
+    setMode(prefs.mode);
     voicePanel.classList.add('open');
     voicePanel.setAttribute('aria-hidden', 'false');
   }
@@ -306,11 +372,17 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && voicePanel.classList.contains('open')) closeVoicePanel(); });
   $('ssVoiceForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    saveVoicePrefs({ voice: selectedVoice, style: voiceStyle.value });
-    voiceSaved.textContent = '✓ Suara Sherly disimpan — dipakai Dengarkan & Bank Suara.';
-    if (typeof window.toast === 'function') window.toast('Suara Sherly disimpan.');
+    saveVoicePrefs({ voice: selectedVoice, style: voiceStyle.value, mode: currentMode, deviceVoiceURI: deviceVoiceSel?.value || '', rate: Number(deviceRate?.value) || 1 });
+    voiceSaved.textContent = currentMode === 'device' ? '✓ Suara perangkat disimpan — dipakai tombol Dengarkan (lokal).' : '✓ Suara Sherly disimpan — dipakai Dengarkan & Bank Suara.';
+    if (typeof window.toast === 'function') window.toast('Preferensi suara Sherly disimpan.');
   });
   voiceTest.addEventListener('click', async () => {
+    if (currentMode === 'device') {
+      saveVoicePrefs({ voice: selectedVoice, style: voiceStyle.value, mode: 'device', deviceVoiceURI: deviceVoiceSel?.value || '', rate: Number(deviceRate?.value) || 1 });
+      voiceTest.disabled = true; voiceTest.textContent = 'Memutar...';
+      speakDevice('Halo, aku Sherly. Ini contoh suara perangkatku.', { onEnd: () => { voiceTest.disabled = false; voiceTest.textContent = 'Tes'; } });
+      return;
+    }
     voiceTest.disabled = true; voiceTest.textContent = 'Merekam...';
     try {
       const r = await fetch('/api/ai/tts', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ text: 'Halo, aku Sherly. Ini contoh suaraku hari ini.', voice: selectedVoice, style: voiceStyle.value }) });
