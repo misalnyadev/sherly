@@ -7,6 +7,9 @@ _Disusun 2026-11-14 setelah membaca langsung repo `misalnyadev/aira` (Next.js 16
 |---|---|---|
 | Multi-bubble manusia | `promptBuilder.ts` — token `[[NEXT]]`, 1–4 bubble pendek, heuristik kalimat ≤140 char | `server/ai.js` `splitIntoBubbles()` + persona Sherly manusia nyata; `/api/ai/chat` mengembalikan `bubbles[]` (disimpan `\n\n`); client merender berurutan (~450ms/bubble, bubble terakhir membawa meta + tombol Dengarkan) |
 | Bank Suara (TTS cache) | `app/api/tts/route.ts` — hash(provider+voice+style+text) → cek `tts_clips` (R2) → stream; else generate & simpan | `supabase/tts_clips_migration.sql` (tabel + bucket `tts-clips` + RLS); `/api/ai/tts` cek cache dulu (jalan bahkan tanpa API key), lalu sintesis Gemini TTS & simpan; header `X-TTS-Source: cache|api` |
+| Panel Suara per karakter (pilih suara & style) | UI `Profil Karakter → Suara` (14 prebuilt voices + style hint) | Klik foto profil Sherly → panel **Suara Sherly** (14 suara Gemini + gaya bicara opsional); tersimpan di localStorage perangkat; hash bank kini provider+model+voice+style+teks |
+| Multi-bubble ≤2 & emoji jarang | `promptBuilder.ts` (1–4 bubble) | Disesuaikan: 1–2 bubble (maks 3), kalimat ±20 kata, maks 1 emoji & jarang — sesuai masukan: chat singkat ala WA |
+| Resume percakapan saat refresh | Riwayat server-side | `openChat` memuat percakapan terakhir; tombol + = Percakapan baru (flag `sherly.forceNewChat`) |
 
 ## 🔜 Tahap berikutnya (berurutan, diusulkan)
 

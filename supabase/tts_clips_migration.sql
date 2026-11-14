@@ -2,7 +2,7 @@
 -- Menyimpan hasil generate TTS per akun agar pengucapan yang sama tidak digenerate ulang.
 -- Safe to re-run (idempotent). Run AFTER schema.sql.
 
--- 1) Indeks klip suara per akun (hash dari provider+voice+model+teks)
+-- 1) Indeks klip suara per akun (hash dari provider+voice+model+gaya+teks)
 create table if not exists public.sherly_tts_clips (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -11,6 +11,7 @@ create table if not exists public.sherly_tts_clips (
   provider text not null, -- 'gemini'
   voice text not null,
   model text not null,
+  style text not null default '',
   text text not null,
   mime_type text not null default 'audio/wav',
   bytes integer not null default 0,
