@@ -88,23 +88,36 @@ export async function synthesizeSpeech({ apiKey, text, voiceName = DEFAULT_VOICE
   const styleHint = sanitizeStyleHint(style);
   if (!clean) throw new Error('Teks untuk suara kosong.');
   let lastError = null;
-  for (const model of models) {
+  const callFormat = (model, modern) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    // Format modern: gaya bicara dikirim sebagai speech_metadata (instruksi, BUKAN teks yang dibaca).
+    const speechPart = modern
+      ? { text: clean, ...(styleHint ? { speech_metadata: { style: styleHint } } : {}) }
+      : { text: clean }; // fallback legacy: gaya tidak disisipkan agar tidak ikut dibacakan
+    const voiceConfig = modern ? { voice: voiceName } : { prebuiltVoiceConfig: { voiceName } };
     const body = {
-      contents: [{ parts: [{ text: styleHint ? `${styleHint}: ${clean}` : clean }] }],
+      contents: [{ role: 'user', parts: [speechPart] }],
       generationConfig: {
         responseModalities: ['AUDIO'],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+        speechConfig: { voiceConfig },
       },
     };
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45000),
+    });
+  };
+  for (const model of models) {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(45000),
-      });
-      const data = await res.json().catch(() => ({}));
+      let res = await callFormat(model, true);
+      let data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status === 400) {
+        // Model lama tidak mengenal format modern -> coba sekali format legacy (tanpa style).
+        res = await callFormat(model, false);
+        data = await res.json().catch(() => ({}));
+      }
       if (!res.ok) {
         const msg = data?.error?.message || `Gemini TTS error (${res.status})`;
         // Model tidak ada -> coba kandidat berikutnya; error lain -> lempar langsung
