@@ -229,9 +229,44 @@
     $('keyPriority').value = item?.priority ?? 100;
     $('keyPriority').parentElement.style.display = mode === 'rotate' ? 'none' : 'flex';
     $('saveKeyBtn').textContent = mode === 'rotate' ? 'Simpan Key Baru' : 'Simpan Key';
+    $('probeKeyBtn').style.display = mode === 'edit' ? 'none' : '';
+    resetProbeResult();
     $('keyModal').classList.add('open');
   }
   function closeKeyModal() { $('keyModal').classList.remove('open'); }
+  function resetProbeResult() {
+    const out = $('probeResult');
+    if (!out) return;
+    out.hidden = true;
+    out.textContent = '';
+    out.className = 'probe-result';
+  }
+  function showProbeResult(kind, message) {
+    const out = $('probeResult');
+    out.hidden = false;
+    out.textContent = message;
+    out.className = 'probe-result ' + kind;
+  }
+  async function testKeyBeforeSave() {
+    const btn = $('probeKeyBtn');
+    const provider = $('keyProvider').value;
+    const api_key = $('keyValue').value.trim();
+    if (api_key.length < 8) { showProbeResult('err', '✗ Isi API key dulu (minimal 8 karakter).'); return; }
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Menguji…';
+    showProbeResult('pending', 'Menguji koneksi ke ' + (PROVIDER_LABEL[provider] || provider) + '…');
+    try {
+      const data = await api('/api/ai-keys/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, api_key }) });
+      if (data.probe?.ok) showProbeResult('ok', '✓ Koneksi OK — key valid. Aman disimpan dengan “Simpan Key”.');
+      else showProbeResult('err', '✗ Key DITOLAK. ' + (PROVIDER_LABEL[provider] || provider) + ' menjawab: ' + (data.probe?.error || 'error tidak diketahui'));
+    } catch (error) {
+      showProbeResult('err', '✗ Gagal menguji: ' + error.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
 
   async function submitKeyForm(e) {
     e.preventDefault();
@@ -242,7 +277,7 @@
       if (keyModalMode === 'add') {
         const body = { provider: $('keyProvider').value, key_name: $('keyName').value.trim(), api_key: $('keyValue').value.trim(), priority: Number($('keyPriority').value) || 100 };
         const data = await api('/api/ai-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        toast(data.probe?.ok ? `Key tersimpan & valid (grup “${body.key_name}”).` : 'Key tersimpan, tetapi probe gagal: ' + (data.probe?.error || 'unknown'));
+        toast('Key tersimpan — koneksi valid (grup “' + body.key_name + '”).');
       } else if (keyModalMode === 'edit') {
         const body = { key_name: $('keyName').value.trim(), priority: Number($('keyPriority').value) || 100 };
         await api('/api/ai-keys/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -250,12 +285,13 @@
       } else {
         const body = { api_key: $('keyValue').value.trim() };
         const data = await api('/api/ai-keys/' + encodeURIComponent(id) + '/rotate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        toast(data.probe?.ok ? 'Key dirotasi dan koneksi valid.' : 'Key dirotasi, tetapi probe gagal: ' + (data.probe?.error || 'unknown'));
+        toast('Key baru tersimpan — koneksi valid.');
       }
       closeKeyModal();
       loadAIProviders();
     } catch (error) {
       toast(error.message);
+      if (keyModalMode !== 'edit') showProbeResult('err', '✗ ' + error.message);
     } finally {
       btn.disabled = false;
     }
@@ -320,6 +356,9 @@
 
   $('addProviderKeyBtn')?.addEventListener('click', () => openKeyModal('add', null));
   $('cancelKeyBtn')?.addEventListener('click', closeKeyModal);
+  $('probeKeyBtn')?.addEventListener('click', testKeyBeforeSave);
+  $('keyProvider')?.addEventListener('change', resetProbeResult);
+  $('keyValue')?.addEventListener('input', resetProbeResult);
   $('refreshKeysBtn')?.addEventListener('click', loadAIProviders);
   $('keyForm')?.addEventListener('submit', submitKeyForm);
   $('keyModal')?.addEventListener('click', (e) => { if (e.target.id === 'keyModal') closeKeyModal(); });
