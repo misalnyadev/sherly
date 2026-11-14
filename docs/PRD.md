@@ -288,6 +288,7 @@ Admin dapat mengelola nama provider, model tersedia, model default, model aktif,
 **Tujuan:** kelola banyak API key lintas provider dengan aman. **Bukan** konfigurasi biasa di `.env`.
 
 ### 12.1 Fitur
+Sejak rilis v1.2 (14 Nov 2026): **Grouped vault** — satu label dapat menyimpan banyak API key (rotasi otomatis antar member, grup adalah unit pengelolaan di UI, provider tetap menjadi unit fallback); **pengaturan model per provider** tersimpan di tabel `ai_provider_settings` dan dapat diubah dari UI; **auto-deteksi model** — tombol "Ambil daftar" memuat katalog model terbaru dari provider, dan jika model tersimpan tidak tersedia (error model_not_found/decommissioned), backend otomatis memilih pengganti, menyimpannya, dan retry sekali.
 Tambah/edit/enable/disable/delete key; tentukan provider; prioritas & urutan rotasi; beberapa key per provider; rotasi/fallback saat gagal; tampilkan status tanpa menampilkan nilai rahasia.
 
 ### 12.2 Enkripsi
