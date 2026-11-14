@@ -105,6 +105,13 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .settings-tabs{display:flex;gap:8px;margin:2px 0 16px}
 .settings-tab{border:1px solid #3a3a55;background:#0e1626;color:#c9b8d0;border-radius:30px;padding:9px 16px;font-size:12px;cursor:pointer}
 .settings-tab.active{border-color:#e83ca5;background:linear-gradient(100deg,#d82d9126,#7a2d9126);color:#ffd6ef}
+.bank-suara-stats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 12px}.bank-stat{flex:1;min-width:140px;background:#0e1626;border:1px solid #26314a;border-radius:12px;padding:12px 14px}.bank-stat b{display:block;font-size:22px;color:#ffd6ef}.bank-stat span{font-size:11px;color:#8fa1b7}
+.bank-suara-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.bank-suara-progress{min-height:18px;font-size:12px;color:#9be3c8;margin:4px 2px 10px}
+.bank-suara-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow:auto;padding-right:4px}.bank-suara-empty{color:var(--muted);font-size:13px;text-align:center;padding:18px 8px}
+.bank-clip{display:flex;align-items:center;gap:10px;background:#0e1626;border:1px solid #26314a;border-radius:12px;padding:9px 12px}.bank-clip-play{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid #2dd4bf55;background:#0d2b29;color:#5eead4;cursor:pointer;display:flex;align-items:center;justify-content:center}.bank-clip-play:hover{border-color:#2dd4bf}.bank-clip-play:disabled{opacity:.6}
+.bank-clip-body{min-width:0;flex:1}.bank-clip-text{font-size:13px;color:#eef1f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bank-clip-meta{font-size:11px;color:#7184a1;margin-top:2px}
+.bank-clip-del{flex:0 0 auto;background:none;border:0;color:#7a8ca6;cursor:pointer;padding:6px;border-radius:8px}.bank-clip-del:hover{color:#ff9ebd;background:#1b2436}
 .topbar .owner{cursor:pointer}
 .topbar .owner.is-guest b{color:#ffd6ef}
 .topbar .owner.is-guest small{color:#f5c5e5}
@@ -194,6 +201,21 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
   <div class="panel" id="vaultGroupsPanel"><div class="section-head"><h2><i data-icon="key"></i> Grup API Key Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
    <div class="vault-table-wrap"><table class="vault-table" id="vaultKeysTable"><thead><tr><th>Nama</th><th>Provider</th><th>Key</th><th>Prioritas</th><th>Status</th><th>Kesehatan</th><th>Terakhir dipakai</th><th>Aksi</th></tr></thead><tbody><tr><td colspan="8" style="color:var(--muted)">Memuat...</td></tr></tbody></table></div>
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
+  </div>
+  <div class="panel" id="bankSuaraPanel">
+   <div class="section-head"><h2><span aria-hidden="true">🎙️</span> Bank Suara Sherly</h2><button class="link" id="bankSuaraRefreshBtn">Segarkan</button></div>
+   <p style="color:var(--muted);font-size:12px;margin:0 0 12px;line-height:1.6">Setiap pengucapan Sherly yang sudah di-TTS tersimpan di server dan dipakai ulang — bisa dipakai lintas PC &amp; HP, dan kata yang sama tidak digenerate dua kali. Klik foto Sherly di chat untuk mengganti suara &amp; gaya bicaranya.</p>
+   <div class="bank-suara-stats">
+     <div class="bank-stat"><b id="bankStCount">–</b><span>klip tersimpan</span></div>
+     <div class="bank-stat"><b id="bankStBytes">–</b><span>total ukuran</span></div>
+     <div class="bank-stat"><b id="bankStVoice">–</b><span>suara aktif (perangkat ini)</span></div>
+   </div>
+   <div class="bank-suara-actions">
+     <button type="button" class="pink-btn" id="bankPrepareBtn"><span aria-hidden="true">✨</span> Siapkan 12 frasa umum</button>
+     <button type="button" class="outline-btn danger-btn" id="bankClearBtn">Kosongkan Bank</button>
+   </div>
+   <p class="bank-suara-progress" id="bankProgress" role="status"></p>
+   <div class="bank-suara-list" id="bankSuaraList"><p class="bank-suara-empty">Memuat Bank Suara...</p></div>
   </div>
 </section>
 <section id="profileView" class="page-view">
@@ -304,7 +326,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
-function go(page){currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken)window.loadAIProviders?.();if(page==='Profil')window.loadProfile?.();if(!['Karakter','Pengaturan','Profil','Beranda'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(!['Karakter','Pengaturan','Profil','Beranda'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')toast('Pencarian: '+e.target.value)});
 
@@ -340,5 +362,6 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/profile.js"></script>
 <script src="/chat-module.js"></script>
 <script src="/ai-providers.js"></script>
+<script src="/bank-suara.js"></script>
 </body>
 </html>

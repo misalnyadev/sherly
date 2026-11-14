@@ -10,6 +10,7 @@ _Disusun 2026-11-14 setelah membaca langsung repo `misalnyadev/aira` (Next.js 16
 | Panel Suara per karakter (pilih suara & style) | UI `Profil Karakter → Suara` (14 prebuilt voices + style hint) | Klik foto profil Sherly → panel **Suara Sherly** (14 suara Gemini + gaya bicara opsional); tersimpan di localStorage perangkat; hash bank kini provider+model+voice+style+teks |
 | Multi-bubble ≤2 & emoji jarang | `promptBuilder.ts` (1–4 bubble) | Disesuaikan: 1–2 bubble (maks 3), kalimat ±20 kata, maks 1 emoji & jarang — sesuai masukan: chat singkat ala WA |
 | Resume percakapan saat refresh | Riwayat server-side | `openChat` memuat percakapan terakhir; tombol + = Percakapan baru (flag `sherly.forceNewChat`) |
+| Kelola Bank Suara di Pengaturan | Bank Rekaman Suara (R2): statistik, daftar, siapkan frasa umum, kosongkan | Panel **Bank Suara Sherly** di Pengaturan (Supabase Storage + tabel): statistik + total ukuran, putar/hapus per klip, "Siapkan 12 frasa umum", "Kosongkan Bank" — tersinkron semua perangkat (per akun) |
 
 ## 🔜 Tahap berikutnya (berurutan, diusulkan)
 
