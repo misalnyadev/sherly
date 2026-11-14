@@ -1,6 +1,13 @@
 // Text-to-speech via Google Gemini TTS (uses the same vault/env Gemini keys as chat).
 // Returns a complete WAV (PCM 16-bit mono, 24 kHz default) so browsers can play it directly.
-const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Kore';
+import { createHash } from 'node:crypto';
+
+export const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Kore';
+
+/** Hash stabil untuk cache: provider+model+voice+teks (bukan per akun — per akun dijaga RLS tabel). */
+export function ttsClipHash({ provider = 'gemini', model, voice, text }) {
+  return createHash('sha256').update([provider, model, voice, String(text || '')].join('|')).digest('hex').slice(0, 40);
+}
 // Candidate TTS models in priority order — set GEMINI_TTS_MODEL to pin a specific one.
 export const TTS_MODEL_CANDIDATES = [process.env.GEMINI_TTS_MODEL, 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'].filter(Boolean);
 
