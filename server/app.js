@@ -283,6 +283,13 @@ function speakableText(input) {
     .replace(/\[\[\s*NEXT\s*\]\]/gi, '. ')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/[*_`#>]+/g, '')
+    // Natural seperti HeyTalent: "wkwkwk" -> "haha", huruf berulang diringkas ("iyaaaa" -> "iyaa")
+    .replace(/\b(?:w+k+){2,}w*\b/gi, 'haha')
+    .replace(/\b(?:ha){3,}h?\b/gi, 'haha')
+    .replace(/\b(?:he){3,}h?\b/gi, 'hehe')
+    .replace(/\b(?:hi){3,}h?\b/gi, 'hihi')
+    .replace(/([aiueom])\1{2,}/gi, '$1$1')
+    .replace(/([bcdfghjklnpqrstvwxyz])\1{2,}/gi, '$1')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 1500);

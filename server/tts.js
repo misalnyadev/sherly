@@ -36,6 +36,26 @@ export function ttsClipHash({ provider = 'gemini', model, voice, style = '', tex
 // Candidate TTS models in priority order — set GEMINI_TTS_MODEL to pin a specific one.
 export const TTS_MODEL_CANDIDATES = [process.env.GEMINI_TTS_MODEL, 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'].filter(Boolean);
 
+/**
+ * Fade-out linear 25ms di ujung PCM 16-bit agar tidak ada "klik/kresek" saat audio berakhir.
+ * Juga dibuang kalau panjang ganjil (artefak decode).
+ */
+export function fadeOutTrailingPcm(pcm, sampleRate = 24000, fadeMs = 25) {
+  let buf = pcm;
+  if (buf.length % 2 !== 0) buf = buf.subarray(0, buf.length - 1);
+  const totalSamples = buf.length / 2;
+  const fadeSamples = Math.min(Math.floor((sampleRate * fadeMs) / 1000), Math.floor(totalSamples / 2));
+  if (fadeSamples <= 0) return buf;
+  const out = Buffer.from(buf); // copy
+  for (let i = 0; i < fadeSamples; i++) {
+    const gain = 1 - i / fadeSamples;
+    const idx = totalSamples - fadeSamples + i;
+    const cur = out.readInt16LE(idx * 2);
+    out.writeInt16LE(Math.round(cur * gain), idx * 2);
+  }
+  return out;
+}
+
 /** Wrap raw PCM (16-bit LE mono) in a RIFF/WAVE container. */
 export function pcmToWav(pcm, sampleRate = 24000) {
   const numChannels = 1, bitsPerSample = 16;
@@ -96,9 +116,12 @@ export async function synthesizeSpeech({ apiKey, text, voiceName = DEFAULT_VOICE
       const b64 = inline?.inlineData?.data || inline?.inline_data?.data;
       const mime = inline?.inlineData?.mimeType || inline?.inline_data?.mime_type || '';
       if (!b64) throw new Error('Gemini TTS tidak mengembalikan audio.');
-      const rateMatch = /rate=(\d+)/.exec(mime || '');
+      const rateMatch = /rate=(\d+)/i.exec(mime || '');
       const sampleRate = rateMatch ? Number(rateMatch[1]) : 24000;
-      const wav = pcmToWav(Buffer.from(b64, 'base64'), sampleRate);
+      const raw = Buffer.from(b64, 'base64');
+      // Gemini kadang langsung mengirim WAV lengkap — jangan dibungkus dua kali.
+      const alreadyWav = /wav/i.test(mime || '') || (raw.length > 12 && raw.toString('ascii', 0, 4) === 'RIFF');
+      const wav = alreadyWav ? raw : pcmToWav(fadeOutTrailingPcm(raw, sampleRate), sampleRate);
       return { wav, model, voice: voiceName, sampleRate };
     } catch (error) {
       lastError = error;
