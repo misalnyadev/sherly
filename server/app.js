@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { chatWithAI } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest } from './vault.js';
-import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
+import { synthesizeSpeech } from './tts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,7 +17,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 *
 const bucket = 'character-references';
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json({ limit: '256kb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 function requireUser(req, res, next) {
@@ -174,8 +175,19 @@ app.get('/api/ai/conversations/:id/messages', requireUser, requireAdmin, async (
 });
 app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { message, provider = 'auto', conversation_id: requestedId, timezone } = req.body || {};
-    if (typeof message !== 'string' || !message.trim() || message.length > 12000) return res.status(400).json({ error: 'Pesan wajib diisi dan maksimal 12.000 karakter.' });
+    const { message: rawMessage, provider = 'auto', conversation_id: requestedId, timezone, image: rawImage } = req.body || {};
+    // Validasi gambar opsional (Vision) — base64 hasil downscale klien
+    let image = null;
+    if (rawImage !== undefined && rawImage !== null) {
+      const mime = rawImage?.mime, data = rawImage?.data;
+      if (!['image/jpeg','image/png','image/webp'].includes(mime) || typeof data !== 'string' || !/^[A-Za-z0-9+/=\r\n]+$/.test(data) || data.length > 3_500_000) {
+        return res.status(400).json({ error: 'Gambar tidak valid. Gunakan JPG/PNG/WebP, maks ~2.5MB (dikonversi otomatis di browser).' });
+      }
+      image = { mime, data };
+    }
+    let message = typeof rawMessage === 'string' ? rawMessage.trim() : '';
+    if (!message && image) message = 'Tolong analisis gambar ini.';
+    if (!message || message.length > 12000) return res.status(400).json({ error: 'Pesan wajib diisi dan maksimal 12.000 karakter (atau lampirkan gambar).' });
     if (!['auto','gemini','groq','openrouter'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
     const userId = req.user.id;
     let conversationId = requestedId;
@@ -189,7 +201,8 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
       if (error) throw error;
       conversationId = created.id;
     }
-    const { error: saveUserError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'user', content: message.trim(), provider });
+    const storedUserContent = image ? `${message}\n[📷 gambar terlampir]` : message;
+    const { error: saveUserError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'user', content: storedUserContent, provider });
     if (saveUserError) throw saveUserError;
     let chatProfile = null;
     try {
@@ -198,8 +211,9 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     } catch (_pfError) { /* tabel belum dimigrasi / error sesaat — lanjut tanpa profil */ }
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
-    const messages = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
+    const fetched = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
+    const messages = fetched.length ? fetched : [{ role: 'user', content: message }]; // fallback bila histori kosong (mis. sinkronisasi tertunda)
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200, ...(image ? { image } : {}) }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
@@ -280,6 +294,40 @@ app.put('/api/profile', requireUser, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: error.message });
   }
   res.json({ profile: data });
+});
+
+// Text-to-speech (admin-only) — via Gemini TTS, memakai key vault/env Gemini. Mengembalikan audio/wav.
+app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Teks untuk suara tidak boleh kosong.' });
+    if (text.length > 4000) return res.status(400).json({ error: 'Teks terlalu panjang (maks 4.000 karakter).' });
+    const attempts = [];
+    if (vaultConfigured()) {
+      const usable = await getUsableKeys(req.supabase, 'gemini').catch(() => []);
+      for (const vk of usable) attempts.push({ apiKey: vk.apiKey, keyId: vk.keyId, keyName: vk.keyName, source: 'vault' });
+    }
+    if (!attempts.length && process.env.GEMINI_API_KEY) attempts.push({ apiKey: process.env.GEMINI_API_KEY, keyId: null, keyName: 'env-default', source: 'env' });
+    if (!attempts.length) return res.status(503).json({ error: 'Belum ada API key Gemini (vault maupun env) untuk TTS. Tambahkan key Gemini di Pengaturan → Provider & API Key.' });
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        const { wav, model, voice, sampleRate } = await synthesizeSpeech({ apiKey: attempt.apiKey, text });
+        if (attempt.keyId) await recordSuccess(req.supabase, attempt.keyId).catch(() => {});
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-TTS-Model', model);
+        res.setHeader('X-TTS-Voice', voice);
+        res.setHeader('X-TTS-SampleRate', String(sampleRate));
+        return res.send(wav);
+      } catch (error) {
+        lastError = error;
+        const msg = String(error?.message || 'Unknown error').slice(0, 500);
+        if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
+      }
+    }
+    return res.status(502).json({ error: 'Gemini TTS gagal merespons: ' + String(lastError?.message || 'error tidak diketahui').slice(0, 300) });
+  } catch (error) { res.status(502).json({ error: error.message || 'TTS request failed.' }); }
 });
 
 // AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
