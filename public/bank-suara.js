@@ -111,6 +111,74 @@
   }
   window.loadBankSuara = loadBankSuara;
 
+  // ---------- Upload massal dari VoiceBox lokal ----------
+  let pending = []; // { file, text }
+  function renderPending() {
+    const list = $('bankUploadList');
+    if (!list) return;
+    list.innerHTML = '';
+    pending.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'bank-upload-row';
+      const fname = document.createElement('span');
+      fname.className = 'bank-upload-fname'; fname.title = item.file.name; fname.textContent = item.file.name;
+      const input = document.createElement('input');
+      input.type = 'text'; input.value = item.text; input.maxLength = 140;
+      input.setAttribute('aria-label', 'Teks untuk ' + item.file.name);
+      input.addEventListener('input', () => { item.text = input.value; });
+      const rm = document.createElement('button');
+      rm.type = 'button'; rm.innerHTML = '✕'; rm.title = 'Hapus dari daftar';
+      rm.addEventListener('click', () => { pending.splice(i, 1); renderPending(); });
+      row.append(fname, input, rm);
+      list.appendChild(row);
+    });
+    const count = $('bankUploadCount');
+    if (count) count.textContent = pending.length ? `${pending.length} file siap diupload` : '';
+    const btn = $('bankUploadBtn');
+    if (btn) btn.disabled = pending.length === 0;
+  }
+  const defaultTextFor = (name) => String(name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!panel()) return;
+    $('bankUploadPickBtn')?.addEventListener('click', () => $('bankUploadInput')?.click());
+    $('bankUploadInput')?.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const file of files) pending.push({ file, text: defaultTextFor(file.name) });
+      e.target.value = '';
+      renderPending();
+    });
+    $('bankUploadBtn')?.addEventListener('click', async () => {
+      if (!pending.length) return;
+      const btn = $('bankUploadBtn'), progress = $('bankProgress');
+      const prefs = voicePrefs();
+      btn.disabled = true;
+      let uploaded = 0, skipped = 0, failed = 0;
+      const items = [...pending];
+      for (let i = 0; i < items.length; i++) {
+        progress.textContent = `Mengunggah ${i + 1}/${items.length} — ${items[i].file.name}...`;
+        try {
+          const fd = new FormData();
+          fd.append('audio', items[i].file, items[i].file.name);
+          fd.append('texts', JSON.stringify([items[i].text]));
+          fd.append('voice', prefs.voice);
+          fd.append('style', prefs.style);
+          const headers = await authHeaders(); // tanpa Content-Type — browser set multipart boundary
+          const r = await fetch('/api/ai/tts/bank/upload', { method: 'POST', headers, body: fd });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) { failed++; progress.textContent = `Mengunggah ${i + 1}/${items.length} — gagal: ${d.error || r.status}`; continue; }
+          uploaded += d.uploaded || 0; skipped += d.skipped || 0; failed += d.failed || 0;
+        } catch (err) { failed++; progress.textContent = `Mengunggah ${i + 1}/${items.length} — error: ${err.message}`; }
+      }
+      progress.textContent = `Selesai — ${uploaded} klip baru masuk bank, ${skipped} sudah ada, ${failed} gagal.`;
+      pending = [];
+      renderPending();
+      btn.disabled = false;
+      await loadBankSuara();
+      window.toast?.(`Bank Suara: ${uploaded} klip baru dari VoiceBox lokal.`);
+    });
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     if (!panel()) return;
     $('bankSuaraRefreshBtn')?.addEventListener('click', loadBankSuara);

@@ -112,6 +112,13 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .bank-clip{display:flex;align-items:center;gap:10px;background:#0e1626;border:1px solid #26314a;border-radius:12px;padding:9px 12px}.bank-clip-play{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid #2dd4bf55;background:#0d2b29;color:#5eead4;cursor:pointer;display:flex;align-items:center;justify-content:center}.bank-clip-play:hover{border-color:#2dd4bf}.bank-clip-play:disabled{opacity:.6}
 .bank-clip-body{min-width:0;flex:1}.bank-clip-text{font-size:13px;color:#eef1f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bank-clip-meta{font-size:11px;color:#7184a1;margin-top:2px}
 .bank-clip-del{flex:0 0 auto;background:none;border:0;color:#7a8ca6;cursor:pointer;padding:6px;border-radius:8px}.bank-clip-del:hover{color:#ff9ebd;background:#1b2436}
+.bank-upload{margin:14px 0 4px;padding:12px 14px;border:1px dashed #2dd4bf44;border-radius:12px;background:#0d2b29a6}
+.bank-upload-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.bank-upload-head h3{margin:0;font-size:14px;color:#99f6e4}.bank-upload-head span{font-size:11px;color:#7d9b96}
+.bank-upload-drop{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.bank-upload-note{font-size:11px;color:#7184a1;max-width:420px;line-height:1.5}
+.bank-upload-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:260px;overflow:auto}.bank-upload-row{display:flex;align-items:center;gap:8px;background:#101f1e;border:1px solid #1f3a38;border-radius:10px;padding:6px 8px}
+.bank-upload-row .bank-upload-fname{flex:0 0 130px;font-size:11px;color:#7d9b96;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bank-upload-row input{flex:1;min-width:0;padding:7px 9px;border-radius:8px;border:1px solid #26443f;background:#080f1b;color:#eafffa;outline:0;font:inherit;font-size:12px}.bank-upload-row input:focus{border-color:#2dd4bf}
+.bank-upload-row button{flex:0 0 auto;background:none;border:0;color:#7a8ca6;cursor:pointer;padding:5px;border-radius:6px}.bank-upload-row button:hover{color:#ff9ebd}
+.bank-upload-foot{display:flex;align-items:center;gap:12px;margin-top:10px}.bank-upload-count{font-size:12px;color:#99f6e4}
 .topbar .owner{cursor:pointer}
 .topbar .owner.is-guest b{color:#ffd6ef}
 .topbar .owner.is-guest small{color:#f5c5e5}
@@ -213,6 +220,12 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
    <div class="bank-suara-actions">
      <button type="button" class="pink-btn" id="bankPrepareBtn"><span aria-hidden="true">✨</span> Siapkan 12 frasa umum</button>
      <button type="button" class="outline-btn danger-btn" id="bankClearBtn">Kosongkan Bank</button>
+   </div>
+   <div class="bank-upload">
+     <div class="bank-upload-head"><h3>Upload dari VoiceBox lokal</h3><span>klip hasil kloning suara (VoiceBox/Piper/dll) → masuk Bank &amp; langsung dipakai otomatis, lintas perangkat</span></div>
+     <div class="bank-upload-drop"><button type="button" class="outline-btn" id="bankUploadPickBtn">Pilih file audio…</button><span class="bank-upload-note">wav/mp3/ogg/m4a · satu file diupload per permintaan · teks = nama file (bisa diedit) · pakai suara &amp; gaya aktif di panel Suara Sherly</span><input type="file" id="bankUploadInput" accept=".wav,.mp3,.ogg,.m4a,.webm,audio/*" multiple hidden></div>
+     <div class="bank-upload-list" id="bankUploadList"></div>
+     <div class="bank-upload-foot"><button type="button" class="pink-btn" id="bankUploadBtn" disabled><span aria-hidden="true">⬆️</span> Upload ke Bank Suara</button><span class="bank-upload-count" id="bankUploadCount"></span></div>
    </div>
    <p class="bank-suara-progress" id="bankProgress" role="status"></p>
    <div class="bank-suara-list" id="bankSuaraList"><p class="bank-suara-empty">Memuat Bank Suara...</p></div>
