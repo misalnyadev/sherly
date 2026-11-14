@@ -9,7 +9,7 @@ import { chatWithAI } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
-import { synthesizeSpeech } from './tts.js';
+import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -84,7 +84,7 @@ function safeProfileContext(profile) {
   if (role) lines.push(`Peran/Jabatan: ${role}`);
   if (company) lines.push(`Perusahaan/Brand: ${company}`);
   if (bio) lines.push(`Bio: ${bio}`);
-  lines.push('Sapa pengguna dengan namanya secara natural; gunakan konteks ini untuk memahami siapa lawan bicaramu. Jangan menyebut bahwa profil ini "terbaca dari sistem" kecuali ditanya.');
+  lines.push('Gunakan konteks ini untuk memahami siapa lawan bicaramu. Boleh menyapa namanya SESEKALI-SEKALI (mis. di awal percakapan), JANGAN di setiap pesan. Jangan menyebut bahwa profil ini "terbaca dari sistem" kecuali ditanya.');
   return lines.join('\n');
 }
 function buildTrustedContext(user, timezone, profile) {
@@ -213,11 +213,12 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     if (historyError) throw historyError;
     const fetched = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
     const messages = fetched.length ? fetched : [{ role: 'user', content: message }]; // fallback bila histori kosong (mis. sinkronisasi tertunda)
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200, ...(image ? { image } : {}) }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
-    const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1600, ...(image ? { image } : {}) }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
+    const assistantContent = Array.isArray(result.bubbles) ? result.bubbles.join('\n\n') : result.text; // disimpan sebagai teks; histori dipecah lagi per \n\n saat dirender
+    const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: assistantContent, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
-    res.json({ ok: true, conversation_id: conversationId, reply: result.text, provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
+    res.json({ ok: true, conversation_id: conversationId, reply: assistantContent, bubbles: result.bubbles || [result.text], provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
@@ -274,6 +275,18 @@ function sanitizeProfile(body) {
   return out;
 }
 const isMissingTable = (error) => /user_profiles/i.test(error?.message || '') && /schema cache|does not exist|relation/i.test(error?.message || '');
+const isMissingTtsTable = (error) => /sherly_tts_clips/i.test(error?.message || '') && /schema cache|does not exist|relation/i.test(error?.message || '');
+const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message || '') && /not found|does not exist|schema/i.test(error?.message || '');
+/** Bersihkan teks agar enak dibacakan (tanpa markdown/token internal). */
+function speakableText(input) {
+  return String(input || '')
+    .replace(/\[\[\s*NEXT\s*\]\]/gi, '. ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/[*_`#>]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1500);
+}
 
 app.get('/api/profile', requireUser, requireAdmin, async (req, res) => {
   const { data, error } = await req.supabase.from('user_profiles').select('*').eq('user_id', req.user.id).maybeSingle();
@@ -299,31 +312,85 @@ app.put('/api/profile', requireUser, requireAdmin, async (req, res) => {
 // Text-to-speech (admin-only) — via Gemini TTS, memakai key vault/env Gemini. Mengembalikan audio/wav.
 app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { text } = req.body || {};
+    const { text, voice: reqVoice, style: reqStyle } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Teks untuk suara tidak boleh kosong.' });
     if (text.length > 4000) return res.status(400).json({ error: 'Teks terlalu panjang (maks 4.000 karakter).' });
+    const clean = speakableText(text);
+    if (!clean) return res.status(400).json({ error: 'Tidak ada teks yang perlu dibacakan.' });
+    const voice = GEMINI_TTS_VOICE_IDS.has(reqVoice) ? reqVoice : DEFAULT_VOICE;
+    const style = sanitizeStyleHint(reqStyle);
+    const userId = req.user.id;
+
+    // Kumpulkan key Gemini (vault → env). Key vault diprioritaskan.
     const attempts = [];
     if (vaultConfigured()) {
       const usable = await getUsableKeys(req.supabase, 'gemini').catch(() => []);
       for (const vk of usable) attempts.push({ apiKey: vk.apiKey, keyId: vk.keyId, keyName: vk.keyName, source: 'vault' });
     }
-    if (!attempts.length && process.env.GEMINI_API_KEY) attempts.push({ apiKey: process.env.GEMINI_API_KEY, keyId: null, keyName: 'env-default', source: 'env' });
-    if (!attempts.length) return res.status(503).json({ error: 'Belum ada API key Gemini (vault maupun env) untuk TTS. Tambahkan key Gemini di Pengaturan → Provider & API Key.' });
-    let lastError = null;
-    for (const attempt of attempts) {
+    const hasEnv = Boolean(process.env.GEMINI_API_KEY);
+    if (!attempts.length && hasEnv) attempts.push({ apiKey: process.env.GEMINI_API_KEY, keyId: null, keyName: 'env-default', source: 'env' });
+
+    // ---- 1) Cek Bank Suara (Supabase Storage + tabel sherly_tts_clips) per model kandidat ----
+    let cacheReady = true;
+    for (const model of TTS_MODEL_CANDIDATES) {
+      const clipHash = ttsClipHash({ provider: 'gemini', model, voice, style, text: clean });
       try {
-        const { wav, model, voice, sampleRate } = await synthesizeSpeech({ apiKey: attempt.apiKey, text });
-        if (attempt.keyId) await recordSuccess(req.supabase, attempt.keyId).catch(() => {});
-        res.setHeader('Content-Type', 'audio/wav');
-        res.setHeader('Cache-Control', 'no-store');
+        const { data: row, error } = await req.supabase.from('sherly_tts_clips').select('storage_path,mime_type').eq('user_id', userId).eq('clip_hash', clipHash).maybeSingle();
+        if (error) { if (isMissingTtsTable(error)) { cacheReady = false; break; } throw error; }
+        if (!row) continue;
+        const { data: file, error: dlError } = await req.supabase.storage.from('tts-clips').download(row.storage_path);
+        if (dlError) { // indeks menunjuk file hilang — bersihkan indeks, lanjut sintesis
+          await req.supabase.from('sherly_tts_clips').delete().eq('user_id', userId).eq('clip_hash', clipHash).catch(() => {});
+          continue;
+        }
+        const buf = Buffer.from(await file.arrayBuffer());
+        res.setHeader('Content-Type', row.mime_type || 'audio/wav');
+        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+        res.setHeader('X-TTS-Source', 'cache');
         res.setHeader('X-TTS-Model', model);
         res.setHeader('X-TTS-Voice', voice);
-        res.setHeader('X-TTS-SampleRate', String(sampleRate));
-        return res.send(wav);
+        res.setHeader('X-TTS-Hash', clipHash);
+        if (style) res.setHeader('X-TTS-Style', encodeURIComponent(style));
+        return res.send(buf);
       } catch (error) {
-        lastError = error;
-        const msg = String(error?.message || 'Unknown error').slice(0, 500);
-        if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
+        if (isMissingTtsTable(error) || isMissingTtsBucket(error)) { cacheReady = false; break; }
+        // Error tak terduga saat cek cache — log diam-diam, lanjut sintesis agar chat tetap jalan.
+        break;
+      }
+    }
+
+    // ---- 2) Bank kosong / belum tersedia → sintesis via Gemini (coba tiap model kandidat) ----
+    if (!attempts.length) return res.status(503).json({ error: 'Belum ada API key Gemini (vault maupun env) untuk TTS. Tambahkan key Gemini di Pengaturan → Provider & API Key.' });
+    let lastError = null;
+    for (const model of TTS_MODEL_CANDIDATES) {
+      for (const attempt of attempts) {
+        try {
+          const { wav, voice: usedVoice, sampleRate } = await synthesizeSpeech({ apiKey: attempt.apiKey, text: clean, voiceName: voice, style, models: [model] });
+          const clipHash = ttsClipHash({ provider: 'gemini', model, voice: usedVoice, style, text: clean });
+          // ---- 3) Simpan ke Bank Suara (best-effort; kegagalan tidak menggagalkan respons) ----
+          if (cacheReady) {
+            try {
+              const storagePath = `${userId}/${clipHash}.wav`;
+              const { error: upError } = await req.supabase.storage.from('tts-clips').upload(storagePath, wav, { contentType: 'audio/wav', upsert: true });
+              if (!upError) {
+                await req.supabase.from('sherly_tts_clips').upsert({ user_id: userId, clip_hash: clipHash, storage_path: storagePath, provider: 'gemini', voice: usedVoice, model, style, text: clean, mime_type: 'audio/wav', bytes: wav.length }, { onConflict: 'user_id,clip_hash' });
+              }
+            } catch { /* bank belum dimigrasi / error sesaat — abaikan */ }
+          }
+          if (attempt.keyId) await recordSuccess(req.supabase, attempt.keyId).catch(() => {});
+          res.setHeader('Content-Type', 'audio/wav');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('X-TTS-Source', 'api');
+          res.setHeader('X-TTS-Model', model);
+          res.setHeader('X-TTS-Voice', usedVoice);
+          res.setHeader('X-TTS-SampleRate', String(sampleRate));
+          res.setHeader('X-TTS-Hash', clipHash);
+          return res.send(wav);
+        } catch (error) {
+          lastError = error;
+          const msg = String(error?.message || 'Unknown error').slice(0, 500);
+          if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
+        }
       }
     }
     return res.status(502).json({ error: 'Gemini TTS gagal merespons: ' + String(lastError?.message || 'error tidak diketahui').slice(0, 300) });

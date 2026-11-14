@@ -1,6 +1,38 @@
 // Text-to-speech via Google Gemini TTS (uses the same vault/env Gemini keys as chat).
 // Returns a complete WAV (PCM 16-bit mono, 24 kHz default) so browsers can play it directly.
-const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Kore';
+import { createHash } from 'node:crypto';
+
+export const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Zephyr';
+
+/** 14 prebuilt Gemini voices dengan deskripsi Indonesia (dipakai UI & validasi). */
+export const GEMINI_TTS_VOICES = [
+  { id: 'Kore', label: 'Kore · Tegas & hangat' },
+  { id: 'Aoede', label: 'Aoede · Ringan & santai' },
+  { id: 'Leda', label: 'Leda · Muda & ceria' },
+  { id: 'Zephyr', label: 'Zephyr · Cerah & semangat' },
+  { id: 'Sulafat', label: 'Sulafat · Lembut & ramah' },
+  { id: 'Callirrhoe', label: 'Callirrhoe · Kalem & mengalir' },
+  { id: 'Despina', label: 'Despina · Halus & akrab' },
+  { id: 'Puck', label: 'Puck · Riang & akrab' },
+  { id: 'Charon', label: 'Charon · Tenang & dalam' },
+  { id: 'Fenrir', label: 'Fenrir · Tegas & semangat' },
+  { id: 'Orus', label: 'Orus · Mantap & hangat' },
+  { id: 'Iapetus', label: 'Iapetus · Jernih & santai' },
+  { id: 'Enceladus', label: 'Enceladus · Lembut & dekat' },
+  { id: 'Umbriel', label: 'Umbriel · Kalem & tenang' },
+];
+export const GEMINI_TTS_VOICE_IDS = new Set(GEMINI_TTS_VOICES.map(v => v.id));
+export const MAX_STYLE_LEN = 180;
+/** Bersihkan style hint dari karakter berbahaya; batasi panjang. */
+export function sanitizeStyleHint(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/[:;]{2,}/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_STYLE_LEN);
+}
+
+/** Hash stabil untuk cache: provider+model+voice+style+teks. */
+export function ttsClipHash({ provider = 'gemini', model, voice, style = '', text }) {
+  return createHash('sha256').update([provider, model, voice, String(style || ''), String(text || '')].join('|')).digest('hex').slice(0, 40);
+}
 // Candidate TTS models in priority order — set GEMINI_TTS_MODEL to pin a specific one.
 export const TTS_MODEL_CANDIDATES = [process.env.GEMINI_TTS_MODEL, 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'].filter(Boolean);
 
@@ -31,14 +63,15 @@ export function pcmToWav(pcm, sampleRate = 24000) {
  * Synthesize `text` to audio. Resolves { wav: Buffer, model, voice }.
  * Throws with a descriptive Error on failure (caller decides fallback).
  */
-export async function synthesizeSpeech({ apiKey, text, voiceName = DEFAULT_VOICE, models = TTS_MODEL_CANDIDATES }) {
+export async function synthesizeSpeech({ apiKey, text, voiceName = DEFAULT_VOICE, style = '', models = TTS_MODEL_CANDIDATES }) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+  const styleHint = sanitizeStyleHint(style);
   if (!clean) throw new Error('Teks untuk suara kosong.');
   let lastError = null;
   for (const model of models) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const body = {
-      contents: [{ parts: [{ text: clean }] }],
+      contents: [{ parts: [{ text: styleHint ? `${styleHint}: ${clean}` : clean }] }],
       generationConfig: {
         responseModalities: ['AUDIO'],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
