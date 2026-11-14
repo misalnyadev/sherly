@@ -174,7 +174,7 @@ app.get('/api/ai/conversations/:id/messages', requireUser, requireAdmin, async (
 });
 app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { message, provider = 'auto', conversation_id: requestedId, timezone, profile } = req.body || {};
+    const { message, provider = 'auto', conversation_id: requestedId, timezone } = req.body || {};
     if (typeof message !== 'string' || !message.trim() || message.length > 12000) return res.status(400).json({ error: 'Pesan wajib diisi dan maksimal 12.000 karakter.' });
     if (!['auto','gemini','groq','openrouter'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
     const userId = req.user.id;
@@ -191,10 +191,15 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     }
     const { error: saveUserError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'user', content: message.trim(), provider });
     if (saveUserError) throw saveUserError;
+    let chatProfile = null;
+    try {
+      const { data: pf } = await req.supabase.from('user_profiles').select('display_name,full_name,role,company,bio').eq('user_id', userId).maybeSingle();
+      if (pf) chatProfile = { name: pf.display_name || pf.full_name, role: pf.role, company: pf.company, bio: pf.bio };
+    } catch (_pfError) { /* tabel belum dimigrasi / error sesaat — lanjut tanpa profil */ }
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
     const messages = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone), profile), { supabase: req.supabase, accessToken: req.accessToken });
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
@@ -239,6 +244,43 @@ function envFallbackKey(provider) {
   return { groq: process.env.GROQ_API_KEY, gemini: process.env.GEMINI_API_KEY, openrouter: process.env.OPENROUTER_API_KEY }[provider] || null;
 }
 
+
+// ---------- Profil Pengguna (persisten lintas perangkat) ----------
+const PROFILE_FIELDS = ['full_name','display_name','account_type','role','company','bio','email','phone','location','website','primary_contact','photo','photo_position'];
+const PROFILE_CAPS = { full_name:120, display_name:80, account_type:40, role:120, company:120, bio:600, email:120, phone:40, location:120, website:160, primary_contact:40, photo:400000, photo_position:20 };
+function sanitizeProfile(body) {
+  const out = {};
+  for (const field of PROFILE_FIELDS) {
+    let v = body?.[field];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== 'string') throw Object.assign(new Error(`Field ${field} tidak valid.`), { status: 400 });
+    out[field] = v.slice(0, PROFILE_CAPS[field]);
+  }
+  if (out.photo && !out.photo.startsWith('data:image/')) throw Object.assign(new Error('Foto harus berupa data URL gambar (data:image/...).'), { status: 400 });
+  return out;
+}
+const isMissingTable = (error) => /user_profiles/i.test(error?.message || '') && /schema cache|does not exist|relation/i.test(error?.message || '');
+
+app.get('/api/profile', requireUser, requireAdmin, async (req, res) => {
+  const { data, error } = await req.supabase.from('user_profiles').select('*').eq('user_id', req.user.id).maybeSingle();
+  if (error) {
+    if (isMissingTable(error)) return res.json({ profile: null, warning: 'Tabel user_profiles belum ada — jalankan migrasi supabase/user_profiles_migration.sql di Supabase SQL Editor. Untuk sementara profil disimpan lokal di browser.' });
+    return res.status(400).json({ error: error.message });
+  }
+  res.json({ profile: data || null });
+});
+app.put('/api/profile', requireUser, requireAdmin, async (req, res) => {
+  let clean;
+  try { clean = sanitizeProfile(req.body || {}); }
+  catch (error) { return res.status(error.status || 400).json({ error: error.message }); }
+  const payload = { user_id: req.user.id, ...clean };
+  const { data, error } = await req.supabase.from('user_profiles').upsert(payload, { onConflict: 'user_id' }).select('*').single();
+  if (error) {
+    if (isMissingTable(error)) return res.status(503).json({ error: 'Tabel user_profiles belum ada — jalankan migrasi supabase/user_profiles_migration.sql di Supabase SQL Editor.', fallback: true });
+    return res.status(400).json({ error: error.message });
+  }
+  res.json({ profile: data });
+});
 
 // AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
 app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {

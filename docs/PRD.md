@@ -369,7 +369,7 @@ Supabase: Auth, PostgreSQL, RLS, Storage, realtime (opsional).
 Creative Workspace modern: dark interface, layout modular, navigasi samping, dashboard ringkas, area kerja luas, komponen konsisten, responsif (desktop-first, mobile dapat dipakai).
 
 ### 15.2 Navigasi Utama (rancangan)
-1. Dashboard  2. Characters  3. Chat Sherly  4. Projects  5. AI Providers  6. Settings
+1. Dashboard  2. Characters  3. Chat Sherly  4. Projects  5. Pengaturan (berisi Provider & API Key + Profil Pengguna)
 (Menu admin tampil berdasarkan hak akses.)
 
 ### 15.3 As-built & Catatan Teknis
@@ -559,8 +559,10 @@ Pengujian menyeluruh (fitur, keamanan, multi-user, storage, AI fallback, konsist
 | D-13 | Kampanye bertahap (fase P1→P10); satu fase selesai & stabil dulu | awal | Kualitas & maintainability |
 | D-14 | Bahasa antarmuka: Bahasa Indonesia | awal | Target pengguna Indonesia |
 | D-15 | Sesi login persisten di `localStorage` (`sherly.session.v1`) + `/api/auth/refresh` (cek ulang role admin) | 2026-11-14 | Refresh/navigasi tidak boleh memicu login ulang; logout menghapus sesi |
-| D-16 | Profil Pengguna disimpan lokal di browser (`sherly.profile.v1`); hanya ringkasan (nama, peran, perusahaan, bio) dikirim ke `/api/ai/chat` sebagai konteks tepercaya | 2026-11-14 | Sherly mengenali lawan bicaranya tanpa menyimpan PII di server; PII kontak tidak pernah dikirim ke provider |
-| D-15 | `frontend monolitik` diterima sementara; modularisasi bertahap (bukan rewrite) | 2026-11-14 | Keseimbangan kecepatan vs kualitas |
+| D-16 | Profil Pengguna: snapshot lokal + ringkasan ke chat | 2026-11-14 | v1.4, digantikan D-18 |
+| D-17 | Menu pengaturan provider berada di dalam **Pengaturan** (AI Provider Manager); item sidebar terpisah dihapus | 2026-11-14 | Sesuai rencana layout awal; satu tempat untuk semua pengaturan |
+| D-18 | Profil Pengguna tersimpan di **database** (`user_profiles`, RLS per akun); localStorage hanya cache. Chat membaca profil dari DB; topbar menampilkan nama + jenis akun; klik chip akun → halaman Profil; tombol keluar di sudut kanan bawah Profil | 2026-11-14 | Identitas tetap sama di PC/HP mana pun saat login; tidak ada API key/PII terekspos ke frontend publik |
+| D-19 | `frontend monolitik` diterima sementara; modularisasi bertahap (bukan rewrite) | 2026-11-14 | Keseimbangan kecepatan vs kualitas |
 
 Perubahan keputusan produk **harus** diperbarui di tabel ini (append, jangan hapus).
 
