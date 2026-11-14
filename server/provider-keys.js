@@ -42,13 +42,15 @@ export async function listKeyMeta(supabase) {
   return (data || []).map(toMeta);
 }
 
-export async function createKey(supabase, { provider, key_name, api_key, priority }) {
+export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
   if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, atau openrouter.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key wajib diisi (maks 80 karakter).'), { status: 400 });
   const probe = await probeProviderKey(provider, api_key).catch(e => ({ ok: false, error: e.message }));
   const enc = encryptSecret(api_key);
+  if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
   const row = {
+    user_id,
     provider,
     key_name: name,
     ciphertext: enc.ciphertext,

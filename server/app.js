@@ -194,7 +194,9 @@ app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
 app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
   const { provider, key_name, api_key, priority } = req.body || {};
   if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
-  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority });
+  const { data: userData, error: userError } = await req.supabase.auth.getUser(req.accessToken);
+  if (userError || !userData?.user) throw Object.assign(new Error('Sesi login tidak valid. Silakan login kembali.'), { status: 401 });
+  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority, user_id: userData.user.id });
   return { key, probe };
 }));
 app.put('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => ({ key: await updateKey(req.supabase, req.params.id, req.body || {}) })));
