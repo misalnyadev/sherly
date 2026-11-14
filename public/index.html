@@ -7,9 +7,11 @@
 :root{--bg:#070b14;--panel:#0c1422;--panel2:#101b2c;--line:#1c2b40;--muted:#91a2b9;--text:#f4f5fb;--pink:#f044a8;--pink2:#ff72c5;--violet:#9b5de5;--cyan:#70c8ee;--green:#55d6a3;--shadow:0 16px 42px #0008}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 56% -20%,#25122c 0,transparent 38%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
 button,input{font:inherit}button{cursor:pointer;color:inherit}.app{display:grid;grid-template-columns:212px minmax(0,1fr);min-height:100vh}
-.sidebar{background:linear-gradient(180deg,#080e19,#070b13);border-right:1px solid var(--line);padding:20px 13px 18px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
-.brand{display:flex;justify-content:center;align-items:center;padding:0 7px 10px}.brand img{width:158px;height:auto;object-fit:contain;filter:drop-shadow(0 0 14px #f044a833)}
-.nav{display:grid;gap:6px}.nav button{border:1px solid transparent;background:transparent;border-radius:11px;padding:11px 12px;text-align:left;display:flex;align-items:center;gap:12px;color:#d3d9e6;transition:.18s}.nav button:hover{background:#171d2d;border-color:#29364a}.nav button.active{background:linear-gradient(100deg,#d82d91,#48205e);box-shadow:0 7px 24px #e7359c25;color:white}.ico{width:20px;text-align:center;font-size:17px;color:#ff79c9}.side-bottom{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}.dream{font-family:cursive;color:#ff65bd;font-size:20px;line-height:1.1;padding:12px 10px;transform:rotate(-7deg)}
+.sidebar{background:linear-gradient(180deg,#080e19,#070b13);border-right:1px solid var(--line);padding:14px 12px 10px;display:flex;flex-direction:column;gap:10px;position:sticky;top:0;height:100vh;overflow-y:auto;scrollbar-width:none}
+.sidebar::-webkit-scrollbar{display:none}
+.brand{display:flex;justify-content:center;align-items:center;padding:0 6px 2px}.brand img{width:124px;height:auto;object-fit:contain;filter:drop-shadow(0 0 14px #f044a833)}
+.nav{display:grid;gap:3px}.nav button{border:1px solid transparent;background:transparent;border-radius:9px;padding:7px 11px;font-size:13px;text-align:left;display:flex;align-items:center;gap:12px;color:#d3d9e6;transition:.18s}.nav button:hover{background:#171d2d;border-color:#29364a}.nav button.active{background:linear-gradient(100deg,#d82d91,#48205e);box-shadow:0 7px 24px #e7359c25;color:white}.ico{width:20px;text-align:center;font-size:17px;color:#ff79c9}.side-bottom{margin-top:auto;border-top:1px solid var(--line);padding-top:8px}.dream{display:none;font-family:cursive;color:#ff65bd;font-size:17px;line-height:1.1;padding:10px;transform:rotate(-7deg)}
+@media (min-height:930px){.dream{display:block}}
 main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;gap:18px;margin-bottom:17px}.search{flex:1;max-width:560px;position:relative}.search input{width:100%;background:#111c2d;border:1px solid #26364c;border-radius:24px;padding:12px 18px 12px 43px;color:white;outline:none}.search input:focus{border-color:#e84ba9;box-shadow:0 0 0 3px #e84ba91c}.search span{position:absolute;left:15px;top:9px;font-size:19px;color:#aab7c8}.top-actions{margin-left:auto;display:flex;align-items:center;gap:17px}.top-actions button{background:transparent;border:0;color:#dce4f1;font-size:19px;position:relative}.dot{position:absolute;background:#f044a8;border-radius:50%;width:7px;height:7px;right:0;top:1px}.owner{display:flex;align-items:center;gap:9px}.avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #e95aaf}.owner b{font-size:12px}.owner small{display:block;color:var(--muted);font-size:9px;letter-spacing:.1em}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px}.maincol,.rightcol{display:grid;align-content:start;gap:17px;min-width:0}
 .hero{height:244px;border:1px solid #39213f;border-radius:15px;overflow:hidden;position:relative;background:radial-gradient(ellipse at 18% 50%,#9b1c67 0,transparent 38%),linear-gradient(115deg,#190d20,#080d19 58%,#1c0d22);display:flex;align-items:center;padding:30px 6%;box-shadow:var(--shadow)}
@@ -84,6 +86,20 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .cap-empty h3{color:#ffd6ef;margin:0 0 8px;font-size:17px}
 .cap-empty p{max-width:520px;margin:6px auto;font-size:12px;line-height:1.6}
 .provider-caps{display:flex;gap:5px;flex-wrap:wrap;margin-left:6px}
+.profile-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr);gap:18px;margin-bottom:16px}
+@media(max-width:1000px){.profile-grid{grid-template-columns:1fr}}
+.profile-kicker{color:#ff72c5;font-size:10px;letter-spacing:.14em}
+.profile-card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+.profile-card-head h2{margin:2px 0 6px;font-size:19px}
+.profile-sub{color:var(--muted);font-size:12px;line-height:1.6;max-width:46ch;margin:0}
+.profile-avatar-wrap{flex:0 0 auto}
+.profile-avatar{width:120px;height:120px;border-radius:50%;object-fit:cover;object-position:50% 15%;border:3px solid #2b3a52;background:#101b2a}
+.profile-kontak-title{margin:2px 0 12px;font-size:15px;letter-spacing:.08em;color:#ffd6ef}
+.profile-card-side .form-field{margin-bottom:10px}
+.profile-actions{display:flex;gap:10px;flex-wrap:wrap}
+.blue-btn{background:#2f6df6;border:0;color:#fff;border-radius:10px;padding:10px 18px;font-weight:600;cursor:pointer}
+.blue-btn:hover{background:#3b7bff}
+@media(max-width:640px){.profile-card-head{flex-direction:column-reverse}.profile-avatar{width:88px;height:88px}}
 .modal-actions #probeKeyBtn{margin-right:auto}
 
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
@@ -169,6 +185,32 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
   </div>
 </section>
+<section id="profileView" class="page-view">
+  <div class="page-heading"><div><h1>Profil Pengguna</h1><p>Identitas &amp; kontak kerja sama — data ini dibaca Chat Sherly untuk mengenali lawan bicaranya, dan dipakai untuk portofolio, proposal, serta komunikasi dengan client.</p></div></div>
+  <div class="profile-grid">
+   <div class="panel profile-card-main">
+    <div class="profile-card-head"><div><small class="profile-kicker">PROFIL PENGGUNA</small><h2>Identitas &amp; Kontak Kerja Sama</h2><p class="profile-sub">Disimpan di browser ini — tidak dipublikasikan otomatis. Hanya ringkasan (nama, peran, perusahaan, bio) yang dikirim ke Chat Sherly saat Anda mengirim pesan.</p></div>
+     <div class="profile-avatar-wrap"><img id="pfAvatar" class="profile-avatar" alt="Foto profil"></div></div>
+    <div class="form-grid">
+      <div class="form-field"><label for="pfFullName">Nama lengkap</label><input id="pfFullName" maxlength="120" placeholder="Hana Syahira"></div>
+      <div class="form-field"><label for="pfDisplayName">Nama tampil</label><input id="pfDisplayName" maxlength="80" placeholder="Hansya"></div>
+      <div class="form-field"><label for="pfAccountType">Jenis akun</label><select id="pfAccountType"><option>Kreator</option><option>Client</option><option>Brand</option><option>Tim Internal</option></select></div>
+      <div class="form-field"><label for="pfRole">Peran / Jabatan</label><input id="pfRole" maxlength="120" placeholder="Owner"></div>
+      <div class="form-field full"><label for="pfCompany">Perusahaan / Brand</label><input id="pfCompany" maxlength="120" placeholder="AK Production"></div>
+      <div class="form-field full"><label for="pfBio">Bio singkat</label><textarea id="pfBio" maxlength="600" placeholder="Synthetic fictional persona · AI Influencer&#10;Built with SherlyStudio · Career developed in AK Production&#10;Stories and collaborations are creative works."></textarea></div>
+    </div>
+   </div>
+   <div class="panel profile-card-side">
+    <h3 class="profile-kontak-title">Kontak</h3>
+    <div class="form-field"><label for="pfEmail">Email</label><input id="pfEmail" type="email" maxlength="120" placeholder="nama@brand.com"></div>
+    <div class="form-field"><label for="pfPhone">WhatsApp / Telepon</label><input id="pfPhone" maxlength="40" placeholder="0812xxxxxxx"></div>
+    <div class="form-field"><label for="pfLocation">Lokasi</label><input id="pfLocation" maxlength="120" placeholder="Bogor, Jawa Barat, Indonesia"></div>
+    <div class="form-field"><label for="pfWebsite">Website / Portofolio</label><input id="pfWebsite" maxlength="160" placeholder="brand.com"></div>
+    <div class="form-field"><label for="pfPrimaryContact">Kontak utama</label><select id="pfPrimaryContact"><option>WhatsApp</option><option>Email</option><option>Telepon</option></select></div>
+   </div>
+  </div>
+  <div class="profile-actions"><button type="button" class="blue-btn" id="pfSaveBtn">Simpan Profil</button><button type="button" class="outline-btn" id="pfChangePhotoBtn">Ganti Foto</button><button type="button" class="outline-btn" id="pfArrangePhotoBtn">Atur Foto</button><button type="button" class="outline-btn danger-btn" id="pfRemovePhotoBtn">Hapus Foto</button><button type="button" class="outline-btn" id="pfOpenProvidersBtn">Buka Provider &amp; API Key</button><input type="file" id="pfPhotoInput" accept="image/png,image/jpeg,image/webp" hidden></div>
+</section>
 <div class="modal-backdrop" id="keyModal"><div class="modal"><h2 id="keyModalTitle">Tambah API Key</h2><p class="modal-sub">Key dienkripsi server-side sebelum disimpan. Klik <b>Tes koneksi</b> untuk menguji <b>kunci API-nya saja</b> (tanpa memakai model apa pun), atau langsung <b>Simpan Key</b> — server selalu menguji lebih dulu dan key yang gagal <b>tidak akan disimpan</b>. Pemilihan model chat dilakukan di kartu provider (tombol <b>Ambil daftar</b>) setelah key tersimpan. Hanya 4 digit terakhir yang bisa dilihat kembali.</p>
  <form id="keyForm"><input type="hidden" id="keyFormId"><div class="form-grid">
   <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option></select></div>
@@ -251,7 +293,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
-function go(page){currentPage=page;document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='AI Providers')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='AI Providers'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='AI Providers'&&sessionToken)window.loadAIProviders?.();if(page!=='Karakter'&&page!=='AI Providers'&&page!=='Beranda')toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){currentPage=page;document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='AI Providers'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='AI Providers'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='AI Providers'&&sessionToken)window.loadAIProviders?.();if(page==='Profil')window.loadProfile?.();if(!['Karakter','AI Providers','Profil','Beranda'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')toast('Pencarian: '+e.target.value)});
 
@@ -259,16 +301,21 @@ document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Ent
 // refresh_token is used to renew it. Storage is readable by any JS on this origin, same trade-off as Supabase JS defaults.
 const SESSION_KEY='sherly.session.v1';
 function readStoredSession(){try{const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');return s&&s.access_token?s:null}catch{return null}}
-function writeStoredSession(s){try{localStorage.setItem(SESSION_KEY,JSON.stringify(s))}catch{}}
+function writeStoredSession(s){try{localStorage.setItem(SESSION_KEY,JSON.stringify(s))}catch(e){if(typeof toast==='function')toast('Sesi tidak bisa disimpan di browser (penyimpanan penuh/diblokir) — Anda akan diminta login lagi setelah refresh.');}}
 function clearStoredSession(){try{localStorage.removeItem(SESSION_KEY)}catch{}}
 async function refreshStoredSession(){const s=readStoredSession();if(!s?.refresh_token){sessionToken=null;return null}try{const r=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.access_token){clearStoredSession();sessionToken=null;window.sherlyUser=null;return null}const next={access_token:d.access_token,refresh_token:d.refresh_token||s.refresh_token,expires_at:d.expires_at||null,user:d.user||s.user||null};writeStoredSession(next);sessionToken=next.access_token;window.sherlyUser=next.user||null;return next}catch{return null}}
 window.sherlyStoredToken=()=>readStoredSession();
+const PROFILE_KEY='sherly.profile.v1';
+window.sherlyReadProfile=()=>{try{return JSON.parse(localStorage.getItem(PROFILE_KEY)||'null')}catch{return null}};
+window.sherlyWriteProfile=(p)=>{try{localStorage.setItem(PROFILE_KEY,JSON.stringify(p));return true}catch(e){if(typeof toast==='function')toast('Profil tidak bisa disimpan — penyimpanan browser penuh/diblokir.');return false}};
+window.sherlyRemoveProfile=()=>{try{localStorage.removeItem(PROFILE_KEY)}catch{}};
+window.sherlyProfileSummary=()=>{const p=window.sherlyReadProfile();if(!p)return null;const c=(v,n)=>{const t=String(v||'').replace(/[\r\n]+/g,' ').trim().slice(0,n);return t||null};const s2={name:c(p.displayName,80)||c(p.fullName,80),role:c(p.role,120),company:c(p.company,120),bio:c(p.bio,600)};return (s2.name||s2.role||s2.company||s2.bio)?s2:null};
 window.sherlyGetAccessToken=async()=>{const s=readStoredSession();if(!s)return null;const now=Math.floor(Date.now()/1000);if(s.expires_at&&s.expires_at-now<60){const next=await refreshStoredSession();return next?.access_token||null}return s.access_token};
 const storedSession=readStoredSession();
 let sessionToken=storedSession?.access_token||null, characterCache=[];
 window.sherlyUser=storedSession?.user||null;
 window.sherlySetAuthSession=(s,user)=>{if(typeof s==='string')s={access_token:s,refresh_token:null,expires_at:null,user:user||null};sessionToken=s?.access_token||null;window.sherlyUser=s?.user||null;if(s?.access_token)writeStoredSession(s);if(currentPage==='Karakter'||currentPage==='AI Providers')go(currentPage)};
-window.sherlyClearAuthSession=()=>{sessionToken=null;window.sherlyUser=null;clearStoredSession();if(currentPage==='Karakter'||currentPage==='AI Providers')go(currentPage)};
+window.sherlyClearAuthSession=()=>{sessionToken=null;window.sherlyUser=null;clearStoredSession();if(['Karakter','AI Providers','Profil'].includes(currentPage))go('Beranda')};
 const api=async(url,options={})=>{const headers={...(options.headers||{})};const token=await window.sherlyGetAccessToken();if(token)headers.Authorization='Bearer '+token;let res=await fetch(url,{...options,headers});let data=await res.json().catch(()=>({}));if(res.status===401){const next=await refreshStoredSession();if(next?.access_token){headers.Authorization='Bearer '+next.access_token;res=await fetch(url,{...options,headers});data=await res.json().catch(()=>({}));}}if(!res.ok)throw new Error(data.error||'Request gagal ('+res.status+')');return data};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function showCharacterModal(item=null){const form=document.getElementById('characterForm');form.reset();document.getElementById('characterId').value=item?.id||'';document.getElementById('characterModalTitle').textContent=item?'Edit Karakter':'Tambah Karakter';document.getElementById('characterName').value=item?.name||'';document.getElementById('characterRole').value=item?.role||'Virtual Lifestyle Influencer';document.getElementById('characterAge').value=item?.age||24;document.getElementById('characterOrigin').value=item?.origin||'Indonesia';document.getElementById('characterNiche').value=(item?.niche||['Lifestyle','Beauty','Fashion','Travel']).join(', ');document.getElementById('characterLanguage').value=item?.language||'Bahasa Indonesia';document.getElementById('characterPlatforms').value=(item?.platforms||['Instagram','TikTok']).join(', ');document.getElementById('characterAppearance').value=item?.appearance||'';document.getElementById('characterPersonality').value=item?.personality||'';document.getElementById('characterPrompt').value=item?.identity_prompt||'';document.getElementById('characterMaster').checked=!!item?.is_master;document.getElementById('currentImageNote').textContent=item?.reference_image_url?'Foto referensi saat ini tersimpan. Upload file baru untuk menggantinya.':'Foto referensi opsional untuk karakter baru.';document.getElementById('characterModal').classList.add('open')}
@@ -280,6 +327,7 @@ document.getElementById('loginForm').addEventListener('submit',e=>{e.preventDefa
 document.getElementById('addCharacterBtn').onclick=()=>showCharacterModal();document.getElementById('cancelCharacter').onclick=closeCharacterModal;document.getElementById('characterModal').addEventListener('click',e=>{if(e.target.id==='characterModal')closeCharacterModal()});document.getElementById('refreshCharacters').onclick=loadCharacters;document.getElementById('characterSearch').addEventListener('input',renderCharacters);
 document.getElementById('characterForm').addEventListener('submit',async e=>{e.preventDefault();const btn=document.getElementById('saveCharacterBtn');btn.disabled=true;btn.textContent='Menyimpan...';try{const fd=new FormData();const id=document.getElementById('characterId').value;const data={name:document.getElementById('characterName').value.trim(),role:document.getElementById('characterRole').value.trim(),age:Number(document.getElementById('characterAge').value)||24,origin:document.getElementById('characterOrigin').value.trim(),niche:document.getElementById('characterNiche').value.split(',').map(x=>x.trim()).filter(Boolean),language:document.getElementById('characterLanguage').value.trim(),platforms:document.getElementById('characterPlatforms').value.split(',').map(x=>x.trim()).filter(Boolean),appearance:document.getElementById('characterAppearance').value,personality:document.getElementById('characterPersonality').value,identity_prompt:document.getElementById('characterPrompt').value,is_master:document.getElementById('characterMaster').checked};fd.append('data',JSON.stringify(data));const file=document.getElementById('characterImage').files[0];if(file)fd.append('referenceImage',file);const url=id?'/api/characters/'+id:'/api/characters';await api(url,{method:id?'PUT':'POST',body:fd});closeCharacterModal();toast('Karakter berhasil disimpan');await loadCharacters()}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Simpan Karakter'}});
 </script>
+<script src="/profile.js"></script>
 <script src="/chat-module.js"></script>
 <script src="/ai-providers.js"></script>
 </body>

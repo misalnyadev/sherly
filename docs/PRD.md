@@ -477,7 +477,7 @@ Pekerjaan: audit repo ✅ · audit FE/BE ✅ · login ✅ (verified live) · dep
 Sempurnakan CRUD karakter; multi-reference; detail page; struktur profil lengkap; Identity Lock v1; uji isolasi antar-user; audit storage signed URL. **Selesai bila:** user bisa kelola karakter + referensi stabil.
 
 ### PHASE 3 — CHAT SHERLY
-UI chat; conversation management (rename/delete); riwayat tersimpan (sudah ✅); konteks karakter; context management; (opsional) streaming & akses multi-user bila diputuskan. **Selesai bila:** chat stabil, riwayat tersimpan, workflow tidak mengganggu halaman utama.
+UI chat; conversation management (rename/delete); riwayat tersimpan (sudah ✅); konteks karakter; context management; konteks Profil Pengguna sebagai lawan bicara (v1.4, ✅); (opsional) streaming & akses multi-user bila diputuskan. **Selesai bila:** chat stabil, riwayat tersimpan, workflow tidak mengganggu halaman utama.
 
 ### PHASE 4 — AI PROVIDER MANAGER
 Provider manager module; Gemini/Groq/OpenRouter; model selection; auto routing ✅ (dasar); fallback ✅ (dasar); streaming; penanganan error provider; status koneksi real. **Selesai bila:** berbagai provider lewat satu sistem terpadu.
@@ -558,6 +558,8 @@ Pengujian menyeluruh (fitur, keamanan, multi-user, storage, AI fallback, konsist
 | D-12 | Admin-only sampai identitas multi-user diputuskan | awal | Single-owner, kurangi permukaan serangan |
 | D-13 | Kampanye bertahap (fase P1→P10); satu fase selesai & stabil dulu | awal | Kualitas & maintainability |
 | D-14 | Bahasa antarmuka: Bahasa Indonesia | awal | Target pengguna Indonesia |
+| D-15 | Sesi login persisten di `localStorage` (`sherly.session.v1`) + `/api/auth/refresh` (cek ulang role admin) | 2026-11-14 | Refresh/navigasi tidak boleh memicu login ulang; logout menghapus sesi |
+| D-16 | Profil Pengguna disimpan lokal di browser (`sherly.profile.v1`); hanya ringkasan (nama, peran, perusahaan, bio) dikirim ke `/api/ai/chat` sebagai konteks tepercaya | 2026-11-14 | Sherly mengenali lawan bicaranya tanpa menyimpan PII di server; PII kontak tidak pernah dikirim ke provider |
 | D-15 | `frontend monolitik` diterima sementara; modularisasi bertahap (bukan rewrite) | 2026-11-14 | Keseimbangan kecepatan vs kualitas |
 
 Perubahan keputusan produk **harus** diperbarui di tabel ini (append, jangan hapus).
