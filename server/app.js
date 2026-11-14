@@ -397,6 +397,66 @@ app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
   } catch (error) { res.status(502).json({ error: error.message || 'TTS request failed.' }); }
 });
 
+// ============ Bank Suara (TTS cache) — kelola rekaman yang tersimpan ============
+app.get('/api/ai/tts/bank', requireUser, requireAdmin, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { data, error, count } = await req.supabase.from('sherly_tts_clips').select('id,text,provider,voice,model,style,bytes,created_at', { count: 'exact' }).eq('user_id', userId).order('created_at', { ascending: false }).limit(300);
+    if (error) {
+      if (isMissingTtsTable(error)) return res.status(503).json({ error: 'Migrasi supabase/tts_clips_migration.sql belum dijalankan di Supabase.', needsMigration: true });
+      throw error;
+    }
+    const totalBytes = (data || []).reduce((sum, r) => sum + (Number(r.bytes) || 0), 0);
+    res.json({ clips: data || [], total: count ?? (data || []).length, bytes: totalBytes });
+  } catch (error) { res.status(502).json({ error: error.message || 'Gagal memuat Bank Suara.' }); }
+});
+
+app.get('/api/ai/tts/bank/:id/audio', requireUser, requireAdmin, async (req, res) => {
+  const userId = req.user.id;
+  if (!validUuid(req.params.id)) return res.status(400).json({ error: 'ID klip tidak valid.' });
+  try {
+    const { data: row, error } = await req.supabase.from('sherly_tts_clips').select('storage_path,mime_type').eq('id', req.params.id).eq('user_id', userId).maybeSingle();
+    if (error && isMissingTtsTable(error)) return res.status(503).json({ error: 'Migrasi supabase/tts_clips_migration.sql belum dijalankan.' });
+    if (!row) return res.status(404).json({ error: 'Klip tidak ditemukan.' });
+    const { data: file, error: dlError } = await req.supabase.storage.from('tts-clips').download(row.storage_path);
+    if (dlError) return res.status(404).json({ error: 'File audio klip sudah tidak ada di storage.' });
+    const buf = Buffer.from(await file.arrayBuffer());
+    res.setHeader('Content-Type', row.mime_type || 'audio/wav');
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.send(buf);
+  } catch (error) { res.status(502).json({ error: error.message || 'Gagal memutar klip.' }); }
+});
+
+app.delete('/api/ai/tts/bank/:id', requireUser, requireAdmin, async (req, res) => {
+  const userId = req.user.id;
+  if (!validUuid(req.params.id)) return res.status(400).json({ error: 'ID klip tidak valid.' });
+  try {
+    const { data: row, error } = await req.supabase.from('sherly_tts_clips').select('id,storage_path').eq('id', req.params.id).eq('user_id', userId).maybeSingle();
+    if (error && isMissingTtsTable(error)) return res.status(503).json({ error: 'Migrasi supabase/tts_clips_migration.sql belum dijalankan.' });
+    if (!row) return res.status(404).json({ error: 'Klip tidak ditemukan.' });
+    await req.supabase.storage.from('tts-clips').remove([row.storage_path]).catch(() => {});
+    const { error: delError } = await req.supabase.from('sherly_tts_clips').delete().eq('id', row.id).eq('user_id', userId);
+    if (delError) throw delError;
+    res.json({ ok: true });
+  } catch (error) { res.status(502).json({ error: error.message || 'Gagal menghapus klip.' }); }
+});
+
+app.delete('/api/ai/tts/bank', requireUser, requireAdmin, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const { data: rows, error } = await req.supabase.from('sherly_tts_clips').select('id,storage_path').eq('user_id', userId).limit(1000);
+    if (error) {
+      if (isMissingTtsTable(error)) return res.status(503).json({ error: 'Migrasi supabase/tts_clips_migration.sql belum dijalankan.' });
+      throw error;
+    }
+    const paths = (rows || []).map(r => r.storage_path).filter(Boolean);
+    if (paths.length) await req.supabase.storage.from('tts-clips').remove(paths).catch(() => {});
+    const { error: delError } = await req.supabase.from('sherly_tts_clips').delete().eq('user_id', userId);
+    if (delError) throw delError;
+    res.json({ ok: true, deleted: (rows || []).length });
+  } catch (error) { res.status(502).json({ error: error.message || 'Gagal mengosongkan Bank Suara.' }); }
+});
+
 // AI Key Vault (admin-only). Ciphertext never leaves the server; list endpoints return metadata only.
 app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const envFallback = envFallbackStatus();
