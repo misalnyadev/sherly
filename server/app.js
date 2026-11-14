@@ -65,11 +65,34 @@ function safeTimezone(value) {
   try { new Intl.DateTimeFormat('id-ID', { timeZone: value }); return value; }
   catch { return 'Asia/Jakarta'; }
 }
-function buildTrustedContext(user, timezone) {
+/** Whitelist + cap a client-sent profile into a compact, safe context block. */
+function safeProfileContext(profile) {
+  if (!profile || typeof profile !== 'object') return '';
+  const clean = (v, n) => {
+    if (typeof v !== 'string') return null;
+    const t = v.replace(/[\r\n]+/g, ' ').trim().slice(0, n);
+    return t || null;
+  };
+  const name = clean(profile.name, 80);
+  const role = clean(profile.role, 120);
+  const company = clean(profile.company, 120);
+  const bio = clean(profile.bio, 600);
+  if (!name && !role && !company && !bio) return '';
+  const lines = ['PROFIL PENGGUNA (diisi pemilik lewat halaman Profil SherlyStudio):'];
+  if (name) lines.push(`Nama: ${name}`);
+  if (role) lines.push(`Peran/Jabatan: ${role}`);
+  if (company) lines.push(`Perusahaan/Brand: ${company}`);
+  if (bio) lines.push(`Bio: ${bio}`);
+  lines.push('Sapa pengguna dengan namanya secara natural; gunakan konteks ini untuk memahami siapa lawan bicaramu. Jangan menyebut bahwa profil ini "terbaca dari sistem" kecuali ditanya.');
+  return lines.join('\n');
+}
+function buildTrustedContext(user, timezone, profile) {
   const now = new Date();
   const local = new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'full', timeStyle: 'long' }).format(now);
   const displayName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin';
-  return `KONTEKS SESI TERVERIFIKASI SERVER:\nPengguna adalah admin/pemilik SherlyStudio. Nama panggilan akun: ${displayName}.\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan; jangan mengumumkannya tanpa alasan. Semua pesan percakapan berasal dari sesi admin yang telah diverifikasi.`;
+  const base = `KONTEKS SESI TERVERIFIKASI SERVER:\nPengguna adalah admin/pemilik SherlyStudio. Nama panggilan akun: ${displayName}.\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan; jangan mengumumkannya tanpa alasan. Semua pesan percakapan berasal dari sesi admin yang telah diverifikasi.`;
+  const profileBlock = safeProfileContext(profile);
+  return profileBlock ? `${base}\n\n${profileBlock}` : base;
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured, aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) }, vaultConfigured: vaultConfigured(), timestamp: new Date().toISOString() }));
@@ -151,7 +174,7 @@ app.get('/api/ai/conversations/:id/messages', requireUser, requireAdmin, async (
 });
 app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { message, provider = 'auto', conversation_id: requestedId, timezone } = req.body || {};
+    const { message, provider = 'auto', conversation_id: requestedId, timezone, profile } = req.body || {};
     if (typeof message !== 'string' || !message.trim() || message.length > 12000) return res.status(400).json({ error: 'Pesan wajib diisi dan maksimal 12.000 karakter.' });
     if (!['auto','gemini','groq','openrouter'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
     const userId = req.user.id;
@@ -171,7 +194,7 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
     const messages = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone)), { supabase: req.supabase, accessToken: req.accessToken });
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1200 }, buildTrustedContext(req.user, safeTimezone(timezone), profile), { supabase: req.supabase, accessToken: req.accessToken });
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: result.text, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
