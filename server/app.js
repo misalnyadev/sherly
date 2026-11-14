@@ -82,7 +82,18 @@ app.post('/api/auth/login', async (req, res) => {
     const { data, error } = await createPublicClient().auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
     if (data.user.app_metadata?.role !== 'admin') return res.status(403).json({ error: 'Akun ini belum memiliki akses admin SherlyStudio.' });
-    res.json({ access_token: data.session.access_token, expires_at: data.session.expires_at, user: { id: data.user.id, email: data.user.email, role: data.user.app_metadata?.role || 'user' } });
+    res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at, user: { id: data.user.id, email: data.user.email, role: data.user.app_metadata?.role || 'user' } });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Supabase belum dikonfigurasi.' });
+    const { refresh_token } = req.body || {};
+    if (!refresh_token) return res.status(400).json({ error: 'refresh_token wajib diisi.' });
+    const { data, error } = await createPublicClient().auth.refreshSession({ refresh_token });
+    if (error || !data?.session) return res.status(401).json({ error: 'Sesi kedaluwarsa. Silakan login kembali.' });
+    if (data.user.app_metadata?.role !== 'admin') return res.status(403).json({ error: 'Akun ini belum memiliki akses admin SherlyStudio.' });
+    res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at, user: { id: data.user.id, email: data.user.email, role: data.user.app_metadata?.role || 'user' } });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.get('/api/auth/me', requireUser, requireAdmin, (req, res) => res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.app_metadata?.role } }));
