@@ -38,6 +38,6 @@ window.SHERLY_PERSONA = {
   kolaborasi: 'Penawaran kolaborasi & brand deal disambut hangat \u2014 kirim pesan lewat DM Instagram.',
   heyTalent: {
     pin: 'H3NFU9',
-    note: 'Mau ngobrol dengan Sherly sebagai talent di HeyTalent? Cari Sherly memakai PIN di atas \u2014 langsung tersambung.'
+    note: 'Mau ngobrol dengan Sherly sebagai talent \u2014 bahkan video call? Daftar di HeyTalent, invite dengan PIN di atas, dan langsung tersambung.'
   }
 };
