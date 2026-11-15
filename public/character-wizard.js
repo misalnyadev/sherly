@@ -112,6 +112,7 @@
       p.querySelectorAll('input,textarea,select,button').forEach((el) => { el.disabled = !on; });
     });
     if (String(n) === '1') syncGenDropdowns(); // refresh dropdown setelah sunting trait di tahap 2
+    if (String(n) === '3') refreshBoardPrompt(); // refresh prompt board setelah sunting identitas
     if (String(n) === '4') renderVoiceBox();
   }
 
@@ -140,7 +141,7 @@
       '<div class="trait-field"><label>' + esc(label) + '</label><textarea data-trait="' + k + '" rows="1" placeholder="…">' + esc(traits[k] || '') + '</textarea></div>'
     ).join('');
     grid.querySelectorAll('[data-trait]').forEach((t) => {
-      t.addEventListener('input', () => { traits[t.dataset.trait] = t.value; saveDraft(); refreshLock(); refreshGenPrompt(); });
+      t.addEventListener('input', () => { traits[t.dataset.trait] = t.value; saveDraft(); refreshLock(); refreshGenPrompt(); refreshBoardPrompt(); });
     });
   }
 
@@ -263,7 +264,7 @@
     else { sel.value = CUSTOM_OPT; xi.hidden = false; xi.value = val; }
   }
   function applyDropdownVal(cfg, v) {
-    if (cfg.store === 'trait') { traits[cfg.key] = v; refreshLock(); }
+    if (cfg.store === 'trait') { traits[cfg.key] = v; refreshLock(); refreshBoardPrompt(); }
     else if (cfg.store === 'gen') gen[cfg.key] = v;
     refreshGenPrompt();
     saveDraft();
@@ -408,26 +409,57 @@
   }
 
   // ---------- tahap 3: master board ----------
+  let boardPromptDirty = false;
+  function buildBoardPrompt() {
+    const mp = ($('characterPrompt')?.value || '').trim();
+    return mp || compileIdentityLock();
+  }
+  function refreshBoardPrompt(force) {
+    const ta = $('wizBoardPrompt'); if (!ta) return;
+    if (boardPromptDirty && !force) return;
+    ta.value = buildBoardPrompt();
+  }
   function renderBoardBox() {
-    const box = $('wizBoardBox'); if (!box) return;
-    const savedNote = editingId
-      ? (currentBoardUrl ? 'Board tersimpan ✓ — buat ulang bila perlu.' : 'Sheet 3 panel (full body · potret · macro) via Gemini + foto referensi.')
-      : 'Simpan karakter dulu bila ingin board langsung tersimpan; untuk karakter baru, board hasil generate akan ikut tersimpan saat Simpan Karakter.';
-    let html = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
-      + '<button type="button" class="pink-btn" id="wizBoardBtn">Buat Master Board</button>'
-      + '<span class="wiz-log">' + esc(savedNote) + '</span></div><span class="wiz-log" id="wizBoardLog"></span><div id="wizBoardOut"></div>';
-    if (currentBoardUrl) html += '<img src="' + esc(currentBoardUrl) + '" alt="Master board" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block;margin-top:10px">';
-    box.innerHTML = html;
-    $('wizBoardBtn')?.addEventListener('click', runBoard);
+    const saved = $('wizBoardSaved');
+    if (saved) saved.innerHTML = currentBoardUrl
+      ? '<img src="' + esc(currentBoardUrl) + '" alt="Master board tersimpan" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block">'
+      : '';
+    boardPromptDirty = false;
+    refreshBoardPrompt(true);
+  }
+  /** Tampilkan board baru (hasil AI / unggahan eksternal) + aksi simpan/unduh. */
+  function showBoardResult() {
+    const out = $('wizBoardOut'); if (!out || !pendingBoard) return;
+    const dataUrl = 'data:' + (pendingBoard.mime || 'image/png') + ';base64,' + pendingBoard.data;
+    out.innerHTML = '<img src="' + dataUrl + '" alt="Master board baru" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block;margin-top:10px">'
+      + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">'
+      + (editingId ? '<button type="button" class="pink-btn" id="wizBoardSave">Simpan Master Board</button>' : '<span class="wiz-log">Board akan tersimpan saat <b>Simpan Karakter</b> ✓</span>')
+      + '<a class="outline-btn" href="' + dataUrl + '" download="master-board.png" style="text-decoration:none;display:inline-flex;align-items:center">Unduh</a></div>';
+    $('wizBoardSave')?.addEventListener('click', saveBoardNow);
+  }
+  async function saveBoardNow() {
+    const sv = $('wizBoardSave'); if (!sv || !pendingBoard || !editingId) return;
+    try {
+      sv.disabled = true; sv.textContent = 'Menyimpan…';
+      const r = await apiJson('/api/characters/' + editingId + '/board', { image: pendingBoard });
+      currentBoardUrl = r.board_image_url || '';
+      const log = $('wizBoardLog'); if (log) log.textContent = 'Master board tersimpan ke karakter ✓';
+      window.toast?.('Master board tersimpan ✓');
+      renderBoardBox();
+    } catch (e) {
+      sv.disabled = false; sv.textContent = 'Simpan Master Board';
+      const log = $('wizBoardLog'); if (log) log.textContent = 'Gagal menyimpan: ' + (e.message || 'coba lagi.');
+      window.toast?.(e.message || 'Gagal menyimpan master board.');
+    }
   }
 
   async function runBoard() {
-    const btn = $('wizBoardBtn'); const log = $('wizBoardLog'); const out = $('wizBoardOut');
+    const btn = $('wizBoardBtn'); const log = $('wizBoardLog');
     if (!btn) return;
     btn.disabled = true; btn.textContent = 'Membuat board…';
     if (log) log.textContent = 'Gemini menyusun sheet referensi (±15–40 detik)…';
     try {
-      const prompt = ($('characterPrompt')?.value || '').trim() || compileIdentityLock();
+      const prompt = ($('wizBoardPrompt')?.value || '').trim() || buildBoardPrompt();
       const body = { prompt };
       if (editingId) body.characterId = editingId;
       else {
@@ -437,32 +469,13 @@
       const d = await apiJson('/api/ai/character-board', body);
       if (!d.image?.data) throw new Error('Generator tidak mengembalikan gambar.');
       pendingBoard = { mime: d.image.mime, data: d.image.data };
-      const dataUrl = 'data:' + (pendingBoard.mime || 'image/png') + ';base64,' + pendingBoard.data;
-      if (out) out.innerHTML = '<img src="' + dataUrl + '" alt="Master board baru" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block;margin-top:10px">'
-        + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
-        + (editingId ? '<button type="button" class="pink-btn" id="wizBoardSave">Simpan Master Board</button>' : '<span class="wiz-log">Board akan tersimpan saat <b>Simpan Karakter</b> ✓</span>')
-        + '<a class="outline-btn" href="' + dataUrl + '" download="master-board.png" style="text-decoration:none;display:inline-flex;align-items:center">Unduh</a></div>';
+      showBoardResult();
       if (log) log.textContent = 'Board jadi ✓ — periksa konsistensi wajahnya.';
-      $('wizBoardSave')?.addEventListener('click', async () => {
-        const sv = $('wizBoardSave');
-        try {
-          sv.disabled = true; sv.textContent = 'Menyimpan…';
-          const r = await apiJson('/api/characters/' + editingId + '/board', { image: pendingBoard });
-          currentBoardUrl = r.board_image_url || '';
-          if (log) log.textContent = 'Master board tersimpan ke karakter ✓';
-          window.toast?.('Master board tersimpan ✓');
-          renderBoardBox();
-        } catch (e) {
-          sv.disabled = false; sv.textContent = 'Simpan Master Board';
-          if (log) log.textContent = 'Gagal menyimpan: ' + (e.message || 'coba lagi.');
-          window.toast?.(e.message || 'Gagal menyimpan master board.');
-        }
-      });
     } catch (e) {
-      if (log) log.textContent = 'Gagal: ' + (e.message || 'generator master board gagal.');
+      if (log) log.textContent = 'Gagal: ' + (e.message || 'generator master board gagal.') + ' Atau salin prompt-nya, generate di aplikasi lain, lalu unggah hasilnya di sini.';
       window.toast?.(e.message || 'Generator master board gagal.');
     } finally {
-      btn.disabled = false; btn.textContent = 'Buat Master Board';
+      btn.disabled = false; btn.textContent = 'Buat Master Board (AI)';
     }
   }
 
@@ -723,20 +736,48 @@
       window.toast?.(err.message || 'Gagal membaca berkas.');
     }
   });
+  // Hasil board dari aplikasi luar: unggah langsung di tahap 3 (generate di Kie/Leonardo dll.).
+  bind('wizBoardBtn', runBoard);
+  bind('wizBoardCopy', async () => {
+    const p = ($('wizBoardPrompt')?.value || '').trim() || buildBoardPrompt();
+    try { await navigator.clipboard.writeText(p); window.toast?.('Prompt board tersalin ✓ — tempel di aplikasi gambar favoritmu.'); }
+    catch { window.toast?.('Gagal menyalin — salin manual dari kotak prompt.'); }
+  });
+  bind('wizBoardRebuild', () => { boardPromptDirty = false; refreshBoardPrompt(true); window.toast?.('Prompt board disusun ulang ✓'); });
+  $('wizBoardPrompt')?.addEventListener('input', () => { boardPromptDirty = true; });
+  bind('wizBoardUploadBtn', () => $('wizBoardUploadFile')?.click());
+  $('wizBoardUploadFile')?.addEventListener('change', async (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    const log = $('wizBoardLog');
+    if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { window.toast?.('Format harus PNG, JPG, atau WebP.'); return; }
+    if (f.size > 8 * 1024 * 1024) { window.toast?.('Ukuran maksimal 8 MB.'); return; }
+    try {
+      if (log) log.textContent = 'Membaca berkas…';
+      pendingBoard = await blobToResizedBase64(f, 1600);
+      showBoardResult();
+      if (log) log.textContent = 'Board dari aplikasi lain terunggah ✓' + (editingId ? ' — klik Simpan Master Board.' : ' — akan tersimpan saat Simpan Karakter.');
+      window.toast?.('Master board terunggah ✓');
+    } catch (err) {
+      if (log) log.textContent = 'Gagal membaca berkas.';
+      window.toast?.(err.message || 'Gagal membaca berkas.');
+    }
+  });
   bind('wizAnalyzeBtn', runAnalysis);
   bind('wizLockRefresh', () => { refreshLock(); window.toast?.('Kunci identitas disusun ulang dari detail.'); });
   bind('wizLockApply', () => {
     const ta = $('characterPrompt');
     if (!ta) return;
     ta.value = compileIdentityLock();
+    refreshBoardPrompt();
     window.toast?.('Kunci identitas dipakai sebagai Master Prompt ✓');
   });
   bind('wizVoiceBtn', runVoice);
   bind('wizBibleBtn', runBible);
   $('characterImage')?.addEventListener('change', refreshPhotoPreview);
-  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality', 'characterLanguage'].forEach((id) => {
+  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality', 'characterLanguage', 'characterPrompt'].forEach((id) => {
     const el = $(id); if (!el) return;
-    const fn = () => { refreshLock(); refreshGenPrompt(); };
+    const fn = () => { refreshLock(); refreshGenPrompt(); refreshBoardPrompt(); };
     el.addEventListener('input', fn);
     el.addEventListener('change', fn);
   });
