@@ -51,6 +51,14 @@
       if (window.__pfPhoto) { if (!DEFAULT_AVATAR.el) DEFAULT_AVATAR.el = el.getAttribute('src'); el.src = window.__pfPhoto; el.style.objectPosition = window.__pfPosition; }
       else if (DEFAULT_AVATAR.el) { el.src = DEFAULT_AVATAR.el; }
     });
+    // tab "Profil" di navbar kapsul HP: foto bulat profil user
+    document.querySelectorAll('.mobile-tabbar .tab-avatar').forEach((el) => {
+      const img = el.querySelector('img'), ico = el.querySelector('[data-icon]');
+      if (!img) return;
+      if (window.__pfPhoto) { img.src = window.__pfPhoto; img.style.objectPosition = window.__pfPosition; img.hidden = false; if (ico) ico.style.display = 'none'; }
+      else if (DEFAULT_AVATAR.main) { img.src = DEFAULT_AVATAR.main; img.style.objectPosition = '50% 12%'; img.hidden = false; if (ico) ico.style.display = 'none'; }
+      else { img.hidden = true; if (ico) ico.style.display = ''; }
+    });
   }
 
   function applyProfileUI() {

@@ -191,7 +191,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .mobile-tabbar button:active{transform:scale(.94)}
 .mobile-tabbar [data-icon] svg{width:22px;height:22px}
 .mobile-tabbar button.active{background:linear-gradient(100deg,#d82d9126,#b02d8026);color:#ffd6ef}
-.mobile-tabbar button.active [data-icon] svg{filter:drop-shadow(0 0 7px #ff75ca99)}
+.mobile-tabbar button.active [data-icon] svg{filter:drop-shadow(0 0 7px #ff75ca99)}.mobile-tabbar .tab-logo{width:24px;height:24px;object-fit:contain;display:block;border-radius:8px;filter:drop-shadow(0 2px 6px #00000073)}.mobile-tabbar button.active .tab-logo{filter:drop-shadow(0 0 9px #ff75c9b3),drop-shadow(0 2px 5px #0000008c)}.mobile-tabbar .tab-avatar{width:22px;height:22px;display:block}.mobile-tabbar .tab-avatar img{width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 12%;display:block;box-shadow:0 0 0 2px #e95aaf}.mobile-tabbar .tab-avatar img[hidden]{display:none}.mobile-tabbar button.active .tab-avatar img{box-shadow:0 0 0 2px #ff8fd4,0 0 10px #ff75ca80}
 @media(max-width:850px){.app,.app.collapsed{grid-template-columns:minmax(0,1fr)}.mobile-tabbar{display:grid}}
 </style></head>
 <body>
@@ -361,7 +361,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <section class="panel"><div class="section-head"><h2><span data-icon="bell"></span> Notifikasi Terbaru</h2><button class="link" onclick="toast('Semua notifikasi sudah dibaca')">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="notifications"><div class="notification"><span data-icon="user-round-check"></span><div>Karakter Sherly siap dikelola<small>Baru saja</small></div></div><div class="notification"><span data-icon="clapperboard"></span><div>Proyek Hey Sherly diperbarui<small>Hari ini</small></div></div><div class="notification"><span data-icon="images"></span><div>Aset baru ditambahkan ke Library<small>Hari ini</small></div></div></div></section>
  </aside>
  </div>
-</main></div><nav class="mobile-tabbar" aria-label="Menu utama"><button class="active" data-page="Beranda"><span data-icon="home"></span>Beranda</button><button data-page="Portfolio"><span data-icon="gallery"></span>Portfolio</button><button data-page="Karakter"><span data-icon="users"></span>Karakter</button><button data-page="Chat Sherly"><span data-icon="message"></span>Chat</button><button data-page="Profil"><span data-icon="user-round"></span>Profil</button></nav><div class="toast" id="toast"></div>
+</main></div><nav class="mobile-tabbar" aria-label="Menu utama"><button class="active" data-page="Beranda"><img class="tab-logo" src="assets/sherly-mark.png" alt="">Beranda</button><button data-page="Portfolio"><span data-icon="gallery"></span>Portfolio</button><button data-page="Karakter"><span data-icon="users"></span>Karakter</button><button data-page="Chat Sherly"><span data-icon="message"></span>Chat</button><button data-page="Profil"><span class="tab-avatar"><img alt="" hidden><span data-icon="user-round"></span></span>Profil</button></nav><div class="toast" id="toast"></div>
 <script>
 
 const ICONS={
