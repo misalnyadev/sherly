@@ -183,6 +183,8 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .cap-tab svg{width:14px;height:14px;flex:none}
 .cap-badge svg{width:11px;height:11px;flex:none}
 .cap-empty h3 svg{width:20px;height:20px;vertical-align:-4px;margin-right:4px}
+/* Cegah auto-zoom iOS Safari: kontrol form minimal 16px di perangkat layar sentuh (desktop tetap ramping) */
+@media (pointer:coarse),(hover:none){input,textarea,select{font-size:16px!important}}
 </style></head>
 <body>
 <div class="app">
