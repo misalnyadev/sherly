@@ -492,22 +492,23 @@ app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) 
     // D-103: pilih mesin — Gemini img2img (default, pakai foto referensi) atau Kie/kustom (txt2img, tanpa foto).
     const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
     const provider = customId ? 'custom' : (['kie', 'gemini'].includes(rawProvider) ? rawProvider : 'gemini');
-    // Prompt dari wizard D-103 sudah berupa sheet prompt lengkap — pakai apa adanya (resolveBoardPrompt).
+    // Prompt dari wizard D-103+ sudah berupa sheet prompt lengkap — pakai apa adanya (resolveBoardPrompt).
     const finalPrompt = resolveBoardPrompt(identity);
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
     let image, usedProvider = 'gemini', mode = 'img2img';
     if (provider === 'gemini') {
-      image = await generateImageWithGemini(finalPrompt, auth, { aspect: '3:4', reference });
+      // D-104: sheet engine AK Talent — landscape 16:9.
+      image = await generateImageWithGemini(finalPrompt, auth, { aspect: '16:9', reference });
     } else if (provider === 'kie') {
       mode = 'txt2img';
-      image = await generateImageWithKie(finalPrompt, '3:4', auth);
+      image = await generateImageWithKie(finalPrompt.slice(0, 1500), '16:9', auth);
       usedProvider = 'kie';
     } else {
       mode = 'txt2img';
       const customs = await listCustomProviders(req.supabase, req.user.id, true);
       const cp = customs.find((c) => c.id === customId);
       if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
-      image = await generateImageWithCustom(cp, finalPrompt, '3:4');
+      image = await generateImageWithCustom(cp, finalPrompt.slice(0, 1500), '16:9');
       usedProvider = cp.name;
     }
     res.json({ ok: true, provider: usedProvider, mode, image });

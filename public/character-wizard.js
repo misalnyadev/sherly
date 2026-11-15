@@ -18,6 +18,8 @@
   ];
   const DRAFT_KEY = 'sherly.charwizard.v1';
   const PACKAGE_FORMAT = 'character-package';
+  // D-105: gender & tinggi (form basics, ala AK Talent) disimpan di traits — bukan field vision.
+  const TRAIT_EXTRA = ['gender', 'height'];
 
   let traits = {};
   let bible = '';
@@ -92,7 +94,7 @@
     draftTimer = setTimeout(() => {
       try {
         const cleanT = {};
-        for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
+        for (const k of [...TRAIT_FIELDS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
         const cleanV = {};
         for (const k of ['name', 'style', 'script']) { const v = String(voice[k] || '').trim(); if (v) cleanV[k] = v; }
         const cleanG = {};
@@ -182,9 +184,13 @@
   function compileIdentityLock(opts = {}) {
     const b = collectBasics();
     const t = traits;
-    const join = (a, bb) => [a, bb].filter((x) => String(x || '').trim()).join(' — ');
+    // Format detail ala AK Talent: "Mata: besar (kelopak ganda)".
+    const join = (a, bb) => {
+      const x = String(a || '').trim(), y = String(bb || '').trim();
+      return x && y ? x + ' (' + y + ')' : (x || y);
+    };
     const line = (label, v) => (String(v || '').trim() ? label + ': ' + String(v).trim() + '. ' : '');
-    let s = 'IDENTITY LOCK — karakter ' + (b.name || 'ini') + (b.age ? ', usia visual ' + b.age + ' tahun' : '') + (b.origin ? ', asal ' + b.origin : '') + (b.role ? ', peran ' + b.role : '') + '. ';
+    let s = 'IDENTITY LOCK — karakter ' + (b.name || 'ini') + (b.age ? ', usia visual ' + b.age + ' tahun' : '') + (b.origin ? ', etnis ' + b.origin : '') + (t.gender ? ', gender ' + t.gender : '') + (t.height ? ', tinggi ' + t.height : '') + (b.role ? ', peran ' + b.role : '') + '. ';
     s += line('Bentuk wajah', t.faceShape);
     s += line('Warna kulit', t.skin);
     s += line('Mata', join(t.eyes, t.eyeDetail));
@@ -197,11 +203,11 @@
     s += line('Ciri khas', t.mark);
     s += line('Outfit', t.outfit);
     s += line('Gaya', t.style);
-    s += line('Aksesoris', t.accessories);
-    s += line('Tekstur kulit', t.skinTexture || 'pori-pori halus terlihat natural, tekstur kulit nyata, tanpa efek beauty filter berlebihan');
+    s += (String(t.accessories || '').trim() && !/^tidak ada$/i.test(t.accessories)) ? 'Aksesoris: ' + String(t.accessories).trim() + '. ' : '';
+    s += line('Tekstur kulit', t.skinTexture || 'pori-pori halus terlihat natural, tekstur kulit nyata tidak mulus plastik, tanpa efek beauty filter berlebihan');
     // skipVoice: prompt board (tahap 3) disusun sebelum tahap 4 — jangan sertakan profil suara.
     if (voice.name && !opts.skipVoice) s += 'Suara: voice Gemini "' + voice.name + '"' + (voice.style ? ', gaya ' + voice.style : '') + '. ';
-    s += 'Pertahankan wajah, rambut, kulit, dan proporsi tubuh ini persis sama di semua konten — jangan berubah menjadi orang lain. Foto realistis, anatomi wajar, pencahayaan konsisten.';
+    s += 'Pertahankan wajah ini persis sama, jangan berubah menjadi orang lain. Foto realistis, natural, anatomi wajar, pencahayaan konsisten.';
     if (b.appearance.trim()) s += '\nPenampilan umum: ' + b.appearance.trim();
     if (b.personality.trim()) s += '\nKepribadian: ' + b.personality.trim();
     return s;
@@ -244,9 +250,9 @@
     neon: { id: 'neon urban malam', en: 'neon urban night lighting' },
   };
   const GEN_GENDER = {
-    wanita: { id: 'perempuan', en: 'female' },
-    pria: { id: 'laki-laki', en: 'male' },
-    netral: { id: 'tampilan netral', en: 'androgynous look' },
+    Perempuan: { id: 'perempuan', en: 'female' },
+    'Laki-laki': { id: 'laki-laki', en: 'male' },
+    'Tampilan netral': { id: 'tampilan netral', en: 'androgynous look' },
   };
 
   // Dropdown preset (klik-klik cepat ala AK Talent) + opsi "Lainnya — tulis sendiri…".
@@ -254,6 +260,8 @@
   const GEN_DROPDOWNS = [
     { id: 'characterRole', store: 'dom', key: 'role', empty: '— pilih peran —', presets: ['Virtual Lifestyle Influencer', 'Beauty Influencer', 'Fashion Influencer', 'Gamer & Streamer', 'Penyanyi Virtual', 'Presenter Virtual', 'Model Virtual', 'Food Vlogger', 'Travel Content Creator', 'Kreator Edukasi'] },
     { id: 'characterOrigin', store: 'dom', key: 'origin', empty: '— pilih —', presets: ['Indonesia', 'Jepang', 'Korea Selatan', 'Tiongkok', 'Thailand', 'Malaysia', 'Filipina', 'India', 'Blasteran Asia–Eropa', 'Amerika', 'Eropa', 'Timur Tengah'] },
+    { id: 'characterGender', store: 'trait', key: 'gender', empty: '— pilih —', presets: ['Perempuan', 'Laki-laki', 'Tampilan netral'] },
+    { id: 'characterHeight', store: 'trait', key: 'height', empty: '— pilih —', presets: ['±150 cm', '±155 cm', '±160 cm', '±163 cm', '±165 cm', '±168 cm', '±170 cm', '±173 cm', '±175 cm', '±180 cm', '±185 cm'] },
     { id: 'characterLanguage', store: 'dom', key: 'language', empty: '— pilih —', presets: ['Bahasa Indonesia', 'English', 'Bilingual (ID + EN)', 'Bahasa Jawa', 'Bahasa Sunda'] },
     { id: 'wizGenHijab', store: 'trait', key: 'hijab', empty: 'Tanpa hijab', presets: ['pashmina simpel', 'hijab segi empat', 'hijab instan sporty', 'khimar / gamis', 'hijab perlente'] },
     { id: 'wizGenHair', store: 'trait', key: 'hair', empty: '— pilih —', presets: ['hitam panjang lurus', 'hitam panjang berlayer', 'hitam pendek bob', 'hitam keriting panjang', 'cokelat gelap panjang berlayer', 'cokelat honey brown panjang', 'pirang ash panjang', 'merah mahogany panjang', 'pendek undercut (pria)', 'comma hair (pria)', 'gondrong wavy (pria)'] },
@@ -326,9 +334,10 @@
     const real = look === 'photo' || look === 'semi';
     const bits = [];
     const who = [
-      gen.gender ? L(GEN_GENDER, gen.gender) : '',
+      t.gender ? L(GEN_GENDER, t.gender) : '',
       b.age ? (isEn() ? 'looks around ' + b.age + ' years old' : 'usia visual sekitar ' + b.age + ' tahun') : '',
       b.origin ? (isEn() ? b.origin + ' ethnicity' : 'beretnis ' + b.origin) : '',
+      t.height ? (isEn() ? 'about ' + t.height.replace(/^±\s*/, '') + ' tall' : 'tinggi ' + t.height) : '',
     ].filter(Boolean).join(', ');
     bits.push(L(GEN_LOOK, look) + (isEn() ? ' of a virtual character' : ' karakter virtual') + (b.name ? (isEn() ? ' named ' : ' bernama ') + b.name : '') + (who ? ' (' + who + ')' : '') + '.');
     const hijabOn = present(t.hijab) && !/^tidak ada$/i.test(t.hijab);
@@ -372,7 +381,7 @@
   }
   function renderGenForm() {
     syncGenDropdowns();
-    const vals = { wizGenGender: gen.gender || '', wizGenLook: gen.look || 'photo', wizGenLight: gen.light || 'window', wizGenLang: isEn() ? 'en' : 'id', wizGenNotes: gen.notes || '' };
+    const vals = { wizGenLook: gen.look || 'photo', wizGenLight: gen.light || 'window', wizGenLang: isEn() ? 'en' : 'id', wizGenNotes: gen.notes || '' };
     for (const [id, v] of Object.entries(vals)) { const el = $(id); if (el) el.value = String(v); }
     genPromptDirty = false;
     refreshGenPrompt(true);
@@ -429,13 +438,51 @@
 
   // ---------- tahap 3: master board ----------
   let boardPromptDirty = false;
-  // Instruksi sheet 3 panel — sama seperti boardPrompt() di server (sinkron manual).
-  const BOARD_SHEET_INSTRUCTIONS = '\n\nMASTER CHARACTER BOARD — buat satu lembar referensi karakter (character reference sheet) dengan tiga panel bergrid rapi:\n1) full body dari kepala sampai kaki, 2) potret setengah badan menghadap kamera, 3) close-up macro wajah.\nLatar polos netral yang seragam di semua panel, pencahayaan studio merata, tanpa teks, label, atau watermark.\nWajah, rambut, kulit, dan proporsi tubuh HARUS identik dan konsisten di ketiga panel — jangan menjadi orang lain.';
+  // Engine character-sheet — VERBATIM ala AK Talent (docs/referensi-aktalent.md).
+  // Struktur: preamble + STEP 0 (kunci identitas & lingkungan) -> "Karakter dasar:" + identitas
+  // -> STEP 1 (generate landscape 16:9) -> SHEET PROMPT (3 full-body + grid 4x3 = 12 foto).
+  const BOARD_ENGINE_PRE = `You are an automatic character-sheet engine. You receive ONE reference image of a character and produce ONE landscape character sheet showing the exact same person from many views. Do not ask the user any questions and do not offer choices. If no reference image is attached, ask once for it, then proceed.
+
+STEP 0 - IDENTITY AND ENVIRONMENT LOCK (silent)
+
+Study the reference image (and the original character prompt if provided). Keep these identical in every panel: face shape and bone structure, eye color and iris pattern, brows, nose, lip shape, skin tone and undertone, freckles / moles / marks and their positions, hair color, texture, length and style, facial hair, age, build, outfit, accessories, lighting style and color grade.
+
+Also lock the environment: identify the location, background elements, surfaces, lighting direction and color palette in the reference image. Every full-body and portrait panel must keep this same environment. Do not replace it with a studio backdrop.
+
+For views the reference does not show (back, side, full body), infer them consistently: the hair style continues logically (same braid, curl or cut pattern and length), the outfit continues, and the body matches the visible build. For the environment, continue the same location logically: the same surfaces, the same props, the same lighting, seen from the new angle.
+
+Karakter dasar (acuan identitas, Bahasa Indonesia — jadikan rujukan utama bersama foto referensi): `;
+  const BOARD_ENGINE_POST = `
+
+STEP 1 - GENERATE (automatic)
+
+Generate exactly ONE image: landscape 16:9, highest resolution available, containing the full set of panels below, arranged as specified. No text, labels, captions, numbers, watermarks or UI anywhere in the image.
+
+SHEET PROMPT
+
+"Single landscape (16:9) professional character reference sheet of the exact same person as the reference image, laid out as a clean editorial grid of photographs separated by thin even white gutters. Every panel shows the same person with identical face, skin tone, freckles and marks, hair, outfit and accessories, under the same lighting style and color grade. Every full-body and portrait panel keeps the same environment as the reference image.
+
+LEFT SECTION (about 45% of the width): three full-body photographs side by side at the same scale, head to feet visible, standing relaxed in the exact same environment as the reference image, with the same location, background, surfaces and lighting:
+
+1) full body front view,
+
+2) full body side profile view (clean profile of forehead, nose, lips and chin), with the background continuing naturally from the same location,
+
+3) full body back view (hair from behind with the exact same style and length, outfit seen from the back with realistic seams and fabric folds), with the background continuing naturally from the same location.
+
+RIGHT SECTION (about 55% of the width): a 4-column by 3-row grid of 12 photographs:
+
+Row 1, portraits (each in the same environment, softly blurred behind the person): head-and-shoulders front portrait; three-quarter portrait looking at the lens; side profile portrait with rim light on the face edge; back-of-head view showing hair from behind in full detail.
+
+Row 2, macro close-ups: eye macro (iris with a natural color gradient and soft limbal ring, sharp pupil, moist reflections, individual lashes with natural curl, individual eyebrow hairs, fine lines and pores around the eye); ear macro (skin translucency, pores, peach fuzz, rim-lit hair strands, earring with sharp specular highlights if the reference has one); hair macro (individual strands clearly defined, natural variation in thickness and direction, fine baby hairs at the hairline, scalp visible where the style allows); cheek macro (pores distinctly visible, freckles and marks as in the reference, fine peach fuzz, natural oils with glossy highlights on the cheekbone).
+
+Row 3, features and expressions: nose macro (fine evenly distributed hairs, visible pores, slight shine on the tip, realistic shadowing); lips macro, closed (natural lip texture and fine lines, slight color variation, soft edges, fine hair around the lips); natural genuine smile (teeth slightly visible, crinkles at the eye corners, lifted cheeks); open-mouth laugh showing natural slightly uneven teeth with translucent edges, gums, tongue and realistic moisture.
+
+All skin is unretouched and natural: pores distinctly visible with subtle variation, fine vellus hair (peach fuzz), tiny bumps, natural oils, fine skin grain, soft directional sheen. Natural proportions, five fingers per hand. Consistent professional editorial photography across all panels, shallow depth of field in the portraits and macro lenses in the close-ups, subtle film grain, no plastic smoothing, no beauty filter, no HDR look. Each panel is sharp, well exposed and cleanly framed with no overlap between panels."`;
   function buildBoardPrompt() {
     const mp = ($('characterPrompt')?.value || '').trim();
     const base = mp || compileIdentityLock({ skipVoice: true });
-    // Identitas dipotong dulu supaya instruksi sheet tidak terpotong.
-    return String(base).trim().slice(0, 1050) + BOARD_SHEET_INSTRUCTIONS;
+    return BOARD_ENGINE_PRE + String(base).trim().slice(0, 1600) + BOARD_ENGINE_POST;
   }
   function refreshBoardPrompt(force) {
     const ta = $('wizBoardPrompt'); if (!ta) return;
@@ -586,7 +633,13 @@
         if (d?.traits) traits = { ...d.traits, ...traits };
         if (d?.bible && !bible) bible = d.bible;
         if (d?.voice) voice = { ...voice, ...d.voice }; // draft mengisi field yang masih kosong
-        if (d?.gen) gen = { ...gen, ...d.gen };
+        if (d?.gen) {
+          gen = { ...gen, ...d.gen };
+          // Migrasi draft lama (≤D-103): gen.gender pindah ke traits.gender (D-105).
+          const og = String(gen.gender || '').trim();
+          if (og && !traits.gender) traits.gender = ({ wanita: 'Perempuan', pria: 'Laki-laki', netral: 'Tampilan netral' }[og] || og);
+          delete gen.gender;
+        }
       } catch {}
     }
     // Paket impor: gambar data URL jadi pending blob (tersimpan saat Simpan Karakter).
@@ -612,7 +665,7 @@
   };
   window.sherlyWizardCollect = () => {
     const cleanT = {};
-    for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v.slice(0, 300); }
+    for (const k of [...TRAIT_FIELDS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v.slice(0, 300); }
     const ta = $('wizBible'); if (ta) bible = ta.value;
     voice = { name: ($('wizVoiceName')?.value || '').trim(), style: ($('wizVoiceStyle')?.value || '').trim(), script: ($('wizVoiceScript')?.value || '').trim() };
     const cleanV = {};
@@ -731,7 +784,7 @@
   });
   // Dropdown preset (klik-klik cepat ala AK Talent) — opsi diisi dari GEN_DROPDOWNS.
   for (const cfg of GEN_DROPDOWNS) initGenDropdown(cfg);
-  const GEN_STATE_IDS = { wizGenGender: 'gender', wizGenLook: 'look', wizGenLight: 'light', wizGenNotes: 'notes', wizGenLang: 'lang' };
+  const GEN_STATE_IDS = { wizGenLook: 'look', wizGenLight: 'light', wizGenNotes: 'notes', wizGenLang: 'lang' };
   for (const [id, key] of Object.entries(GEN_STATE_IDS)) {
     const isText = id === 'wizGenNotes';
     $(id)?.addEventListener(isText ? 'input' : 'change', () => {

@@ -13,6 +13,14 @@ test('sanitizeTraits: whitelist kunci, buang kosong & non-string, kap panjang', 
   assert.equal(out.lips.length, 300);
 });
 
+test('sanitizeTraits: gender & tinggi (form basics, D-105) ikut tersimpan di traits', () => {
+  const out = sanitizeTraits({ gender: 'Perempuan', height: '±165 cm', faceShape: 'oval', hack: 'x' });
+  assert.equal(out.gender, 'Perempuan');
+  assert.equal(out.height, '±165 cm');
+  assert.equal(out.faceShape, 'oval');
+  assert.ok(!('hack' in out));
+});
+
 test('sanitizeTraits: input bukan objek -> objek kosong', () => {
   assert.deepEqual(sanitizeTraits(null), {});
   assert.deepEqual(sanitizeTraits('abc'), {});
@@ -54,6 +62,11 @@ test('boardPrompt: identitas + instruksi 3 panel, error saat kosong', () => {
 
 test('resolveBoardPrompt: prompt sheet lengkap dari klien dipakai apa adanya', () => {
   const full = 'IDENTITY LOCK — karakter Rara.\n\nMASTER CHARACTER BOARD — buat satu lembar referensi karakter dengan tiga panel bergrid rapi.';
+  assert.equal(resolveBoardPrompt(full), full);
+});
+
+test('resolveBoardPrompt: engine AK Talent (D-104) dipakai apa adanya', () => {
+  const full = 'You are an automatic character-sheet engine. You receive ONE reference image…\nSHEET PROMPT\n"Single landscape (16:9) professional character reference sheet…"';
   assert.equal(resolveBoardPrompt(full), full);
 });
 
