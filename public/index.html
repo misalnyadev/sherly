@@ -426,7 +426,13 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .wiz-photo img{width:132px;height:132px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;margin-top:10px}
 .wiz-gen{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
 .wiz-gen-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
-.wiz-gen select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font:13px Inter,sans-serif;flex:1;min-width:180px}
+.wiz-gen-row>select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font:13px Inter,sans-serif;flex:1;min-width:180px}
+.wiz-prompt{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.wiz-prompt-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.wiz-prompt-tools{display:flex;gap:6px;align-items:center}
+.wiz-prompt-tools select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 9px;font:12px Inter,sans-serif}
+.wiz-prompt-tools .outline-btn{padding:7px 10px;font-size:12px}
+.wiz-prompt textarea{width:100%;min-height:104px;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:10px 12px;font:13px Inter,sans-serif;line-height:1.55;resize:vertical}
 .wiz-voice audio{width:100%;margin-top:8px}
 @media(max-width:720px){.traits-grid{grid-template-columns:1fr}.wiz-step{font-size:9.5px;padding:8px 2px;gap:4px}.wiz-step .n{width:17px;height:17px;font-size:10px}.wiz-steps{gap:4px}}
 </style></head>
@@ -492,13 +498,38 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
    </div>
    <div class="wiz-photo" id="wizPhotoPreviewWrap" hidden><img id="wizPhotoPreview" alt="Foto karakter"></div>
    <div class="wiz-gen" id="wizGenBlock" hidden>
-    <span class="wiz-lock-label">Buat foto wajah baru dari profil (teks &rarr; gambar)</span>
+    <span class="wiz-lock-label">Form detail karakter — prompt foto tersusun otomatis dari isian ini</span>
+    <div class="form-grid" style="margin-top:8px">
+    <div class="form-field"><label>Jenis kelamin</label><select id="wizGenGender"><option value="">— pilih —</option><option value="wanita">Perempuan</option><option value="pria">Laki-laki</option><option value="netral">Tampilan netral</option></select></div>
+    <div class="form-field"><label>Gaya visual</label><select id="wizGenLook"><option value="photo">Foto hyper-realistis</option><option value="semi">Semi-realistis</option><option value="anime">Anime / manga</option><option value="3d">3D stylized</option><option value="illo">Ilustrasi digital</option></select></div>
+    <div class="form-field"><label>Hijab (opsional)</label><input id="wizGenHijab" maxlength="120" placeholder="mis. pashmina navy — kosongkan jika tanpa hijab"></div>
+    <div class="form-field"><label>Rambut</label><input id="wizGenHair" maxlength="120" placeholder="mis. hitam panjang berlayer, poni samping"></div>
+    <div class="form-field"><label>Mata</label><input id="wizGenEyes" maxlength="120" placeholder="mis. cokelat gelap"></div>
+    <div class="form-field"><label>Warna kulit</label><input id="wizGenSkin" maxlength="120" placeholder="mis. sawo matang cerah"></div>
+    <div class="form-field"><label>Bentuk wajah</label><input id="wizGenFace" maxlength="120" placeholder="mis. oval"></div>
+    <div class="form-field"><label>Bentuk tubuh</label><input id="wizGenBody" maxlength="120" placeholder="mis. hourglass, tinggi 165 cm"></div>
+    <div class="form-field"><label>Pakaian / outfit</label><input id="wizGenOutfit" maxlength="160" placeholder="mis. blazer krem &amp; atasan putih"></div>
+    <div class="form-field"><label>Aksesori</label><input id="wizGenAcc" maxlength="160" placeholder="mis. anting kecil emas"></div>
+    <div class="form-field"><label>Ekspresi</label><input id="wizGenExpr" maxlength="120" placeholder="mis. senyum hangat natural"></div>
+    <div class="form-field"><label>Pencahayaan</label><select id="wizGenLight"><option value="window">Cahaya jendela natural</option><option value="golden">Golden hour hangat</option><option value="studio">Studio softbox</option><option value="moody">Sinematik moody</option><option value="neon">Neon urban</option></select></div>
+    <div class="form-field"><label>Latar belakang</label><input id="wizGenBg" maxlength="160" placeholder="mis. kafe minimalis, sedikit blur"></div>
+    <div class="form-field full"><label>Catatan tambahan (opsional)</label><input id="wizGenNotes" maxlength="300" placeholder="mis. vibe soft girl, warna dominan putih-pink, tanpa tato"></div>
+    </div>
+    <div class="wiz-prompt">
+     <div class="wiz-prompt-head"><span class="wiz-lock-label">Prompt siap generate — bisa disunting langsung</span><span class="wiz-prompt-tools"><select id="wizGenLang"><option value="id">Prompt: Indonesia</option><option value="en">Prompt: English</option></select><button type="button" class="outline-btn" id="wizGenRebuild">Susun Ulang</button></span></div>
+     <textarea id="wizGenPrompt" rows="5" placeholder="Prompt akan tersusun otomatis dari form di atas — isi detail karakternya dulu ya."></textarea>
+    </div>
     <div class="wiz-gen-row">
       <select id="wizGenEngine"><option value="auto">Otomatis (Kie &rarr; Kustom &rarr; Gemini)</option><option value="kie">Kie AI</option><option value="gemini">Gemini</option></select>
-      <button type="button" class="pink-btn" id="wizGenFaceBtn">Generate Foto Karakter</button>
+      <button type="button" class="pink-btn" id="wizGenFaceBtn">Generate di Aplikasi</button>
       <button type="button" class="outline-btn" id="wizCopyFacePrompt">Salin Prompt</button>
     </div>
-    <span class="wiz-log" id="wizGenLog">Kredit habis? Salin prompt-nya, generate di platform lain, lalu unggah hasilnya lewat mode Unggah Foto.</span>
+    <div class="wiz-gen-row">
+      <button type="button" class="outline-btn" id="wizGenUploadBtn">Unggah Hasil dari Aplikasi Lain</button>
+      <span class="wiz-log">Kredit habis atau punya aplikasi favorit? Salin prompt-nya, generate di aplikasi luar, lalu unggah hasilnya di sini — tetap lanjut ke tahap 2 dan seterusnya.</span>
+    </div>
+    <input type="file" id="wizGenUploadFile" accept="image/png,image/jpeg,image/webp" hidden>
+    <span class="wiz-log" id="wizGenLog"></span>
    </div>
    <div class="wiz-nav"><span class="wiz-log">Foto dipakai analisis otomatis &amp; master board.</span><button type="button" class="pink-btn" id="wizNext1">Lanjut: Detail Fisik</button></div></div>
   <div class="wiz-pane" data-pane="2" hidden>

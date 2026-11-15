@@ -22,6 +22,10 @@
   let traits = {};
   let bible = '';
   let voice = { name: '', style: '', script: '' };
+  // Detail "Buat Karakter (AI)": field fisik (hijab/rambut/dll.) menulis langsung ke `traits`
+  // supaya konsisten dengan tahap 2-3; field khusus generate disimpan terpisah di `gen`.
+  let gen = { gender: '', look: 'photo', expr: '', bg: '', light: 'window', notes: '', lang: 'id' };
+  let genPromptDirty = false; // true bila user menyunting kotak prompt manual
   let editingId = '';
   let currentRefUrl = '';   // URL foto referensi tersimpan (mode edit)
   let currentBoardUrl = '';
@@ -91,7 +95,9 @@
         for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
         const cleanV = {};
         for (const k of ['name', 'style', 'script']) { const v = String(voice[k] || '').trim(); if (v) cleanV[k] = v; }
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ traits: cleanT, bible: String(bible || '').slice(0, 8000), voice: cleanV }));
+        const cleanG = {};
+        for (const k of ['gender', 'look', 'expr', 'bg', 'light', 'notes', 'lang']) { const v = String(gen[k] || '').trim(); if (v) cleanG[k] = v; }
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ traits: cleanT, bible: String(bible || '').slice(0, 8000), voice: cleanV, gen: cleanG }));
       } catch {}
     }, 400);
   }
@@ -115,6 +121,7 @@
     up.classList.toggle('on', mode === 'upload');
     gen.classList.toggle('on', mode === 'gen');
     $('wizGenBlock').hidden = mode !== 'gen';
+    if (mode === 'gen') refreshGenPrompt();
   }
 
   function refreshPhotoPreview() {
@@ -199,23 +206,109 @@
     return bits.join(' ').slice(0, 1450);
     function join2(a, b2) { return [a, b2].filter((x) => String(x || '').trim()).join(' — '); }
   }
+
+  // ---------- tahap 1: form detail karakter -> prompt siap generate ----------
+  const GEN_LOOK = {
+    photo: { id: 'foto potret wajah hyper-realistic', en: 'hyper-realistic portrait photograph' },
+    semi: { id: 'potret wajah semi-realistis', en: 'semi-realistic portrait' },
+    anime: { id: 'ilustrasi potret gaya anime', en: 'anime-style character portrait illustration' },
+    '3d': { id: 'render karakter 3D stylized', en: 'stylized 3D character render' },
+    illo: { id: 'ilustrasi digital yang detail', en: 'detailed digital illustration portrait' },
+  };
+  const GEN_LIGHT = {
+    window: { id: 'cahaya jendela natural yang lembut', en: 'soft natural window light' },
+    golden: { id: 'golden hour yang hangat', en: 'warm golden hour light' },
+    studio: { id: 'studio softbox yang bersih', en: 'clean studio softbox lighting' },
+    moody: { id: 'sinematik moody', en: 'cinematic moody lighting' },
+    neon: { id: 'neon urban malam', en: 'neon urban night lighting' },
+  };
+  const GEN_GENDER = {
+    wanita: { id: 'perempuan', en: 'female' },
+    pria: { id: 'laki-laki', en: 'male' },
+    netral: { id: 'tampilan netral', en: 'androgynous look' },
+  };
+  const isEn = () => gen.lang === 'en';
+  const present = (v) => String(v || '').trim();
+
+  /** Susun prompt txt2img dari form detail karakter (bahasa id/en, nilai isian tetap verbatim). */
+  function buildGenPrompt() {
+    const b = collectBasics();
+    const t = traits;
+    const L = (map, key) => (map[key] && (isEn() ? map[key].en : map[key].id)) || '';
+    const look = gen.look || 'photo';
+    const real = look === 'photo' || look === 'semi';
+    const bits = [];
+    const who = [
+      gen.gender ? L(GEN_GENDER, gen.gender) : '',
+      b.age ? (isEn() ? 'looks around ' + b.age + ' years old' : 'usia visual sekitar ' + b.age + ' tahun') : '',
+      b.origin ? (isEn() ? b.origin + ' ethnicity' : 'beretnis ' + b.origin) : '',
+    ].filter(Boolean).join(', ');
+    bits.push(L(GEN_LOOK, look) + (isEn() ? ' of a virtual character' : ' karakter virtual') + (b.name ? (isEn() ? ' named ' : ' bernama ') + b.name : '') + (who ? ' (' + who + ')' : '') + '.');
+    const hijabOn = present(t.hijab) && !/^tidak ada$/i.test(t.hijab);
+    const lookBits = [];
+    if (hijabOn) lookBits.push(isEn() ? 'wearing hijab (' + present(t.hijab) + ')' : 'berhijab (' + present(t.hijab) + ')');
+    else if (present(t.hair)) lookBits.push(isEn() ? present(t.hair) + ' hair' : 'rambut ' + present(t.hair));
+    if (present(t.eyes)) lookBits.push(isEn() ? present(t.eyes) + ' eyes' : 'mata ' + present(t.eyes));
+    if (present(t.skin)) lookBits.push(isEn() ? present(t.skin) + ' skin' : 'kulit ' + present(t.skin));
+    if (present(t.faceShape)) lookBits.push(isEn() ? present(t.faceShape) + ' face shape' : 'bentuk wajah ' + present(t.faceShape));
+    if (present(t.bodyType)) lookBits.push(isEn() ? present(t.bodyType) + ' body' : 'tubuh ' + present(t.bodyType));
+    if (present(t.outfit)) lookBits.push((isEn() ? 'wearing ' : 'memakai ') + present(t.outfit));
+    if (present(t.accessories)) lookBits.push((isEn() ? 'accessories: ' : 'aksesori: ') + present(t.accessories));
+    if (lookBits.length) bits.push((isEn() ? 'Appearance: ' : 'Penampilan: ') + lookBits.join(', ') + '.');
+    if (present(gen.expr)) bits.push((isEn() ? 'Expression: ' : 'Ekspresi: ') + present(gen.expr) + '.');
+    if (present(gen.bg)) bits.push((isEn() ? 'Background: ' : 'Latar: ') + present(gen.bg) + (real ? (isEn() ? ', softly blurred' : ', sedikit blur') : '') + '.');
+    bits.push((isEn() ? 'Lighting: ' : 'Pencahayaan: ') + L(GEN_LIGHT, gen.light || 'window') + '.');
+    if (present(gen.notes)) bits.push(present(gen.notes));
+    bits.push(real
+      ? (isEn()
+        ? 'Aesthetic Instagram-style close-up portrait, realistic skin texture with fine pores, natural look, no heavy beauty filter, no text, no watermark.'
+        : 'Potret close-up estetika ala Instagram, tekstur kulit realistis dengan pori-pori halus, tampilan natural, tanpa beauty filter berlebihan, tanpa teks/watermark.')
+      : (isEn()
+        ? 'Clean composition, high detail, consistent character design, no text, no watermark.'
+        : 'Komposisi bersih, detail tinggi, desain karakter konsisten, tanpa teks/watermark.'));
+    return bits.join(' ').replace(/\s+/g, ' ').trim().slice(0, 1450);
+  }
+
+  /** Isi ulang kotak prompt (kecuali user sudah menyuntingnya manual — kecuali dipaksa). */
+  function refreshGenPrompt(force) {
+    const ta = $('wizGenPrompt'); if (!ta) return;
+    if (genPromptDirty && !force) return;
+    ta.value = buildGenPrompt();
+  }
+
+  /** Isi form detail dari state (traits + gen) — dipanggil saat wizard dibuka. */
+  function renderGenForm() {
+    const vals = {
+      wizGenGender: gen.gender || '', wizGenLook: gen.look || 'photo', wizGenLight: gen.light || 'window',
+      wizGenLang: isEn() ? 'en' : 'id', wizGenExpr: gen.expr || '', wizGenBg: gen.bg || '', wizGenNotes: gen.notes || '',
+      wizGenHijab: traits.hijab || '', wizGenHair: traits.hair || '', wizGenEyes: traits.eyes || '', wizGenSkin: traits.skin || '',
+      wizGenFace: traits.faceShape || '', wizGenBody: traits.bodyType || '', wizGenOutfit: traits.outfit || '', wizGenAcc: traits.accessories || '',
+    };
+    for (const [id, v] of Object.entries(vals)) { const el = $(id); if (el) el.value = String(v); }
+    genPromptDirty = false;
+    refreshGenPrompt(true);
+  }
+
   async function runGenFace() {
     const btn = $('wizGenFaceBtn'); const log = $('wizGenLog');
     if (!btn) return;
     btn.disabled = true; btn.textContent = 'Membuat foto…';
-    if (log) log.textContent = 'Menyusun prompt & memanggil mesin gambar…';
+    if (log) log.textContent = 'Memanggil mesin gambar dengan prompt di atas…';
     try {
-      const d = await apiJson('/api/ai/image', { prompt: buildFacePrompt(), provider: $('wizGenEngine')?.value || 'auto', aspect: '4:5' });
+      const prompt = ($('wizGenPrompt')?.value || '').trim() || buildFacePrompt();
+      const d = await apiJson('/api/ai/image', { prompt, provider: $('wizGenEngine')?.value || 'auto', aspect: '4:5' });
       if (!d.image?.data) throw new Error('Mesin tidak mengembalikan gambar.');
       pendingRef = { mime: d.image.mime, data: d.image.data };
+      currentRefUrl = '';
+      const ci = $('characterImage'); if (ci) ci.value = '';
       refreshPhotoPreview();
       if (log) log.textContent = 'Foto jadi ✓ (via ' + (d.provider || 'AI') + ') — akan tersimpan sebagai foto referensi. Bisa di-generate ulang.';
       window.toast?.('Foto karakter jadi ✓');
     } catch (e) {
-      if (log) log.textContent = 'Gagal: ' + (e.message || 'generator gagal.');
+      if (log) log.textContent = 'Gagal: ' + (e.message || 'generator gagal.') + ' Kredit habis? Salin prompt-nya dan generate di aplikasi lain, lalu unggah hasilnya.';
       window.toast?.(e.message || 'Generator gagal.');
     } finally {
-      btn.disabled = false; btn.textContent = 'Generate Foto Karakter';
+      btn.disabled = false; btn.textContent = 'Generate di Aplikasi';
     }
   }
 
@@ -385,6 +478,7 @@
         if (d?.traits) traits = { ...d.traits, ...traits };
         if (d?.bible && !bible) bible = d.bible;
         if (d?.voice) voice = { ...d.voice, ...voice };
+        if (d?.gen) gen = { ...gen, ...d.gen };
       } catch {}
     }
     // Paket impor: gambar data URL jadi pending blob (tersimpan saat Simpan Karakter).
@@ -399,6 +493,7 @@
     const vs = $('wizVoiceScript'); if (vs && voice.script) vs.value = voice.script;
     const vst = $('wizVoiceStyle'); if (vst && voice.style) vst.value = voice.style;
     renderTraitsGrid();
+    renderGenForm();
     refreshLock();
     renderBoardBox();
     setPhotoMode('upload');
@@ -520,8 +615,47 @@
   bind('wizModeGen', () => setPhotoMode('gen'));
   bind('wizGenFaceBtn', runGenFace);
   bind('wizCopyFacePrompt', async () => {
-    try { await navigator.clipboard.writeText(buildFacePrompt()); window.toast?.('Prompt foto tersalin ✓'); }
-    catch { window.toast?.('Gagal menyalin — salin manual dari log.'); }
+    const p = ($('wizGenPrompt')?.value || '').trim() || buildFacePrompt();
+    try { await navigator.clipboard.writeText(p); window.toast?.('Prompt tersalin ✓ — tempel di aplikasi gambar favoritmu.'); }
+    catch { window.toast?.('Gagal menyalin — salin manual dari kotak prompt.'); }
+  });
+  // Form detail karakter: field fisik menulis ke traits (konsisten tahap 2-3), field khusus ke gen.
+  const GEN_TRAIT_IDS = { wizGenHijab: 'hijab', wizGenHair: 'hair', wizGenEyes: 'eyes', wizGenSkin: 'skin', wizGenFace: 'faceShape', wizGenBody: 'bodyType', wizGenOutfit: 'outfit', wizGenAcc: 'accessories' };
+  for (const [id, key] of Object.entries(GEN_TRAIT_IDS)) {
+    $(id)?.addEventListener('input', () => { traits[key] = $(id).value; refreshLock(); refreshGenPrompt(); saveDraft(); });
+  }
+  const GEN_STATE_IDS = { wizGenGender: 'gender', wizGenLook: 'look', wizGenExpr: 'expr', wizGenBg: 'bg', wizGenLight: 'light', wizGenNotes: 'notes', wizGenLang: 'lang' };
+  for (const [id, key] of Object.entries(GEN_STATE_IDS)) {
+    const isSelect = id === 'wizGenGender' || id === 'wizGenLook' || id === 'wizGenLight' || id === 'wizGenLang';
+    $(id)?.addEventListener(isSelect ? 'change' : 'input', () => {
+      gen[key] = $(id).value;
+      if (key === 'lang') genPromptDirty = false; // ganti bahasa = susun ulang
+      refreshGenPrompt();
+      saveDraft();
+    });
+  }
+  $('wizGenPrompt')?.addEventListener('input', () => { genPromptDirty = true; });
+  bind('wizGenRebuild', () => { genPromptDirty = false; refreshGenPrompt(true); window.toast?.('Prompt disusun ulang dari form ✓'); });
+  // Hasil generate dari aplikasi luar: unggah di mode Buat Karakter, tetap lanjut ke tahap 2 dst.
+  bind('wizGenUploadBtn', () => $('wizGenUploadFile')?.click());
+  $('wizGenUploadFile')?.addEventListener('change', async (e) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    const log = $('wizGenLog');
+    if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) { window.toast?.('Format harus PNG, JPG, atau WebP.'); return; }
+    if (f.size > 8 * 1024 * 1024) { window.toast?.('Ukuran maksimal 8 MB.'); return; }
+    try {
+      if (log) log.textContent = 'Membaca berkas…';
+      pendingRef = await blobToResizedBase64(f);
+      currentRefUrl = '';
+      const ci = $('characterImage'); if (ci) ci.value = '';
+      refreshPhotoPreview();
+      if (log) log.textContent = 'Hasil dari aplikasi lain terunggah ✓ — lanjut ke tahap 2 (analisis fisik) atau langsung Simpan Karakter.';
+      window.toast?.('Foto hasil eksternal dipakai ✓');
+    } catch (err) {
+      if (log) log.textContent = 'Gagal membaca berkas.';
+      window.toast?.(err.message || 'Gagal membaca berkas.');
+    }
   });
   bind('wizAnalyzeBtn', runAnalysis);
   bind('wizLockRefresh', () => { refreshLock(); window.toast?.('Kunci identitas disusun ulang dari detail.'); });
@@ -535,7 +669,7 @@
   bind('wizBibleBtn', runBible);
   $('characterImage')?.addEventListener('change', refreshPhotoPreview);
   ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality'].forEach((id) => {
-    $(id)?.addEventListener('input', refreshLock);
+    $(id)?.addEventListener('input', () => { refreshLock(); refreshGenPrompt(); });
   });
   $('importCharBtn')?.addEventListener('click', () => $('importCharFile')?.click());
   $('importCharFile')?.addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; importPackage(f); });
