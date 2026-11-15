@@ -11,6 +11,7 @@ import { supabaseConfigured, createPublicClient, createUserClient } from './supa
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
+import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -78,7 +79,11 @@ async function saveFormFile(req, userId, characterId, field, prefix) {
   if (!/^[a-z0-9]{2,5}$/i.test(ext)) ext = isAudio ? 'wav' : 'png';
   const objectPath = `${userId}/${characterId}/${prefix ? prefix + '-' : ''}${Date.now()}.${ext}`;
   const { error } = await req.supabase.storage.from(bucket).upload(objectPath, file.buffer, { contentType: file.mimetype, upsert: false });
-  if (error) throw Object.assign(new Error(error.message), { status: 400 });
+  if (error) {
+    // D-107: bucket membatasi allowed mime types -> beri langkah perbaikan, bukan error mentah.
+    const hint = storageUploadHint(error);
+    throw Object.assign(new Error(hint || error.message), { status: hint ? 503 : 400 });
+  }
   return objectPath;
 }
 function parseCharacter(req) {
@@ -548,7 +553,10 @@ app.post('/api/characters/:id/board', requireUser, async (req, res) => {
     const ext = image.mime === 'image/jpeg' ? 'jpg' : image.mime.split('/')[1];
     const objectPath = `${req.user.id}/${req.params.id}/board-${Date.now()}.${ext}`;
     const { error: upErr } = await req.supabase.storage.from(bucket).upload(objectPath, Buffer.from(image.data, 'base64'), { contentType: image.mime, upsert: false });
-    if (upErr) throw Object.assign(new Error(upErr.message), { status: 400 });
+    if (upErr) {
+      const mimeHint = storageUploadHint(upErr); // D-107: bucket membatasi tipe file
+      throw Object.assign(new Error(mimeHint || upErr.message), { status: mimeHint ? 503 : 400 });
+    }
     const { error: dbErr } = await req.supabase.from('characters').update({ board_path: objectPath }).eq('id', req.params.id);
     if (dbErr) {
       const hint = /board_path/i.test(String(dbErr.message || '')) ? ' Jalankan docs/supabase-character-wizard.sql dulu (kolom board_path belum ada).' : '';
@@ -816,7 +824,7 @@ app.post('/api/ai/tts/bank/upload', requireUser, requireAdmin, uploadAudio.array
       const ext = mime.includes('wav') || orig.endsWith('.wav') ? 'wav' : (mime.includes('mpeg') || mime.includes('mp3') || orig.endsWith('.mp3')) ? 'mp3' : (mime.includes('ogg') || orig.endsWith('.ogg')) ? 'ogg' : (orig.endsWith('.webm') ? 'webm' : 'm4a');
       const storagePath = `${userId}/${clipHash}.${ext}`;
       const { error: upError } = await req.supabase.storage.from('tts-clips').upload(storagePath, file.buffer, { contentType: file.mimetype || 'audio/wav', upsert: true });
-      if (upError) throw upError;
+      if (upError) throw new Error(storageUploadHint(upError) || upError.message); // D-107: hint bila mime diblokir bucket
       const row = { user_id: userId, clip_hash: clipHash, storage_path: storagePath, provider: 'gemini', voice, model, style, text, mime_type: file.mimetype || 'audio/wav', bytes: file.size };
       const { error: insError } = await req.supabase.from('sherly_tts_clips').upsert(row, { onConflict: 'user_id,clip_hash' });
       if (insError) throw insError;

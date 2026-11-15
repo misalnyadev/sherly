@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, sanitizeVoiceProfile, TRAIT_FIELDS, TRAIT_LABELS } = await import('../server/character-wizard.js');
+const { isMimeBlockedError, storageUploadHint } = await import('../server/storage-errors.js');
 
 test('sanitizeTraits: whitelist kunci, buang kosong & non-string, kap panjang', () => {
   const out = sanitizeTraits({
@@ -113,4 +114,17 @@ test('biblePrompt: memuat profil, traits, dan suara terkunci', () => {
 test('biblePrompt: data kacau tidak meledak', () => {
   const p = biblePrompt(null);
   assert.ok(p.includes('(tanpa nama)'));
+});
+
+test('storage-errors: deteksi error mime diblokir bucket Supabase + hint SQL (D-107)', () => {
+  const blocked = new Error('mime type audio/wav is not supported');
+  assert.ok(isMimeBlockedError(blocked));
+  assert.ok(isMimeBlockedError({ message: 'mime type image/png is not supported', statusCode: '415' }));
+  assert.ok(!isMimeBlockedError(new Error('Bucket not found')));
+  assert.ok(!isMimeBlockedError(new Error('The resource already exists')));
+  assert.ok(!isMimeBlockedError(null));
+  const hint = storageUploadHint(blocked);
+  assert.match(hint, /supabase-audio-mime\.sql/);
+  assert.match(hint, /SQL Editor/);
+  assert.equal(storageUploadHint(new Error('x')), null);
 });
