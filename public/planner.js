@@ -84,6 +84,12 @@
   }
 
   window.renderPlanner = function renderPlanner() { renderFilters(); renderList(); };
+  // Dibuka dari halaman Kalender: edit item (id) atau tambah baru dengan tanggal terisi.
+  window.sherlyPlannerOpen = function (id, dateISO) {
+    openModal(id || null);
+    if (!id && dateISO && $('plDate')) $('plDate').value = dateISO;
+    $('plTitle')?.focus();
+  };
 
   // ---------- Modal tambah / edit ----------
   function openModal(id) {
