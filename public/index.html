@@ -4,7 +4,13 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SherlyStudio — Creative Workspace</title>
 <link rel="icon" type="image/png" href="assets/sherly-mark.png">
-<meta name="theme-color" content="#070b14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#170f20">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SherlyStudio">
 <style>
 :root{--bg:#070b14;--panel:#0c1422;--panel2:#101b2c;--line:#1c2b40;--muted:#91a2b9;--text:#f4f5fb;--pink:#f044a8;--pink2:#ff72c5;--shadow:0 16px 42px #0008}
 @font-face{font-family:'Sacramento';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/sacramento-latin-400-normal.woff2') format('woff2')}
@@ -471,5 +477,6 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 })();
 </script>
 <script src="/bank-suara.js"></script>
+<script>if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});</script>
 </body>
 </html>
