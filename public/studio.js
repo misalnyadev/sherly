@@ -218,7 +218,9 @@
         if (el) { el.value = 'Bantu aku menyusun storyboard video' + (p ? ' tentang: ' + p : ' untuk konten Reels niche lifestyle & beauty') + ' \u2014 breakdown per scene, durasi tiap scene, dan shot list-nya ya.'; el.focus(); }
       }, 250);
     });
-    setMode('photo');
+    const initialMode = window.__sherlyStudioMode === 'video' ? 'video' : 'photo';
+    window.__sherlyStudioMode = null;
+    setMode(initialMode);
     renderGrid();
   };
 })();
