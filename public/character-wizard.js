@@ -111,6 +111,7 @@
       p.hidden = !on;
       p.querySelectorAll('input,textarea,select,button').forEach((el) => { el.disabled = !on; });
     });
+    if (String(n) === '1') syncGenDropdowns(); // refresh dropdown setelah sunting trait di tahap 2
     if (String(n) === '4') renderVoiceBox();
   }
 
@@ -139,19 +140,19 @@
       '<div class="trait-field"><label>' + esc(label) + '</label><textarea data-trait="' + k + '" rows="1" placeholder="…">' + esc(traits[k] || '') + '</textarea></div>'
     ).join('');
     grid.querySelectorAll('[data-trait]').forEach((t) => {
-      t.addEventListener('input', () => { traits[t.dataset.trait] = t.value; saveDraft(); refreshLock(); });
+      t.addEventListener('input', () => { traits[t.dataset.trait] = t.value; saveDraft(); refreshLock(); refreshGenPrompt(); });
     });
   }
 
   function collectBasics() {
     return {
       name: ($('characterName')?.value || '').trim(),
-      role: ($('characterRole')?.value || '').trim(),
+      role: fieldVal('characterRole'),
       age: $('characterAge')?.value || '',
-      origin: ($('characterOrigin')?.value || '').trim(),
+      origin: fieldVal('characterOrigin'),
       niche: ($('characterNiche')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
       platforms: ($('characterPlatforms')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
-      language: ($('characterLanguage')?.value || '').trim(),
+      language: fieldVal('characterLanguage'),
       appearance: $('characterAppearance')?.value || '',
       personality: $('characterPersonality')?.value || '',
       identity_prompt: $('characterPrompt')?.value || '',
@@ -227,6 +228,72 @@
     pria: { id: 'laki-laki', en: 'male' },
     netral: { id: 'tampilan netral', en: 'androgynous look' },
   };
+
+  // Dropdown preset (klik-klik cepat ala AK Talent) + opsi "Lainnya — tulis sendiri…".
+  // store: 'trait' (sinkron tahap 2-3) · 'gen' (khusus generate) · 'dom' (nilai di elemen form basics).
+  const GEN_DROPDOWNS = [
+    { id: 'characterRole', store: 'dom', key: 'role', empty: '— pilih peran —', presets: ['Virtual Lifestyle Influencer', 'Beauty Influencer', 'Fashion Influencer', 'Gamer & Streamer', 'Penyanyi Virtual', 'Presenter Virtual', 'Model Virtual', 'Food Vlogger', 'Travel Content Creator', 'Kreator Edukasi'] },
+    { id: 'characterOrigin', store: 'dom', key: 'origin', empty: '— pilih —', presets: ['Indonesia', 'Jepang', 'Korea Selatan', 'Tiongkok', 'Thailand', 'Malaysia', 'Filipina', 'India', 'Blasteran Asia–Eropa', 'Amerika', 'Eropa', 'Timur Tengah'] },
+    { id: 'characterLanguage', store: 'dom', key: 'language', empty: '— pilih —', presets: ['Bahasa Indonesia', 'English', 'Bilingual (ID + EN)', 'Bahasa Jawa', 'Bahasa Sunda'] },
+    { id: 'wizGenHijab', store: 'trait', key: 'hijab', empty: 'Tanpa hijab', presets: ['pashmina simpel', 'hijab segi empat', 'hijab instan sporty', 'khimar / gamis', 'hijab perlente'] },
+    { id: 'wizGenHair', store: 'trait', key: 'hair', empty: '— pilih —', presets: ['hitam panjang lurus', 'hitam panjang berlayer', 'hitam pendek bob', 'hitam keriting panjang', 'cokelat gelap panjang berlayer', 'cokelat honey brown panjang', 'pirang ash panjang', 'merah mahogany panjang', 'pendek undercut (pria)', 'comma hair (pria)', 'gondrong wavy (pria)'] },
+    { id: 'wizGenEyes', store: 'trait', key: 'eyes', empty: '— pilih —', presets: ['cokelat gelap', 'hitam pekat', 'cokelat terang', 'hazel', 'biru', 'hijau', 'kelabu'] },
+    { id: 'wizGenSkin', store: 'trait', key: 'skin', empty: '— pilih —', presets: ['putih cerah', 'sawo matang cerah', 'sawo matang', 'cokelat olive', 'cokelat gelap'] },
+    { id: 'wizGenFace', store: 'trait', key: 'faceShape', empty: '— pilih —', presets: ['oval', 'bulat', 'heart', 'kotak (square)', 'lonjong', 'V-sharp'] },
+    { id: 'wizGenBody', store: 'trait', key: 'bodyType', empty: '— pilih —', presets: ['langsing (slim)', 'hourglass', 'atletis', 'pear', 'rectangle', 'curvy plus size', 'tegap berotot (pria)'] },
+    { id: 'wizGenOutfit', store: 'trait', key: 'outfit', empty: '— pilih —', presets: ['kasual (kaos & jeans)', 'streetwear (hoodie & sneaker)', 'formal (blazer & kemeja)', 'dress elegan', 'modest (gamis longgar)', 'korean (knit & rok plisket)', 'batik modern', 'sporty (athleisure)'] },
+    { id: 'wizGenAcc', store: 'trait', key: 'accessories', empty: 'Tanpa aksesori', presets: ['anting kecil emas', 'kacamata frame tipis', 'kalung tipis silver', 'jam tangan minimalis', 'headphone', 'topi bucket'] },
+    { id: 'wizGenExpr', store: 'gen', key: 'expr', empty: '— pilih —', presets: ['senyum hangat natural', 'ceria tertawa', 'tenang & datar', 'playful smirk', 'serius fokus'] },
+    { id: 'wizGenBg', store: 'gen', key: 'bg', empty: '— pilih —', presets: ['studio bersih polos', 'kafe minimalis', 'kamar cozy hangat', 'taman hijau', 'jalan kota siang', 'pantai golden hour', 'dinding pastel', 'kantor modern'] },
+  ];
+  const CUSTOM_OPT = '__custom';
+
+  /** Nilai efektif sebuah field: preset terpilih, atau isi input "Lainnya". */
+  function fieldVal(id) {
+    const el = $(id); if (!el) return '';
+    if (el.tagName === 'SELECT' && el.value === CUSTOM_OPT) return String($(id + 'X')?.value || '').trim();
+    return String(el.value || '').trim();
+  }
+  function setDropdownVal(cfg, v) {
+    const sel = $(cfg.id), xi = $(cfg.id + 'X');
+    if (!sel) return;
+    const val = String(v || '').trim();
+    if (!xi) { sel.value = val; return; }
+    if (!val || cfg.presets.includes(val)) { sel.value = val; xi.hidden = true; xi.value = ''; }
+    else { sel.value = CUSTOM_OPT; xi.hidden = false; xi.value = val; }
+  }
+  function applyDropdownVal(cfg, v) {
+    if (cfg.store === 'trait') { traits[cfg.key] = v; refreshLock(); }
+    else if (cfg.store === 'gen') gen[cfg.key] = v;
+    refreshGenPrompt();
+    saveDraft();
+  }
+  function initGenDropdown(cfg) {
+    const sel = $(cfg.id), xi = $(cfg.id + 'X');
+    if (!sel || sel.tagName !== 'SELECT') return;
+    let html = '<option value="">' + esc(cfg.empty) + '</option>';
+    for (const p of cfg.presets) html += '<option value="' + esc(p) + '">' + esc(p) + '</option>';
+    html += '<option value="' + CUSTOM_OPT + '">Lainnya — tulis sendiri…</option>';
+    sel.innerHTML = html;
+    sel.addEventListener('change', () => {
+      if (sel.value === CUSTOM_OPT) {
+        if (xi) { xi.hidden = false; xi.focus(); }
+        applyDropdownVal(cfg, String(xi?.value || '').trim());
+      } else {
+        if (xi) { xi.hidden = true; xi.value = ''; }
+        applyDropdownVal(cfg, sel.value);
+      }
+    });
+    xi?.addEventListener('input', () => applyDropdownVal(cfg, xi.value));
+  }
+  window.sherlyFieldVal = fieldVal;
+  window.sherlyFieldSet = (id, v) => {
+    const cfg = GEN_DROPDOWNS.find((c) => c.id === id);
+    if (cfg) setDropdownVal(cfg, v);
+    else { const el = $(id); if (el) el.value = String(v ?? ''); }
+    refreshLock();
+    refreshGenPrompt();
+  };
   const isEn = () => gen.lang === 'en';
   const present = (v) => String(v || '').trim();
 
@@ -277,13 +344,15 @@
   }
 
   /** Isi form detail dari state (traits + gen) — dipanggil saat wizard dibuka. */
+  function syncGenDropdowns() {
+    for (const cfg of GEN_DROPDOWNS) {
+      if (cfg.store === 'dom') continue; // basics di-set showCharacterModal
+      setDropdownVal(cfg, cfg.store === 'gen' ? gen[cfg.key] : traits[cfg.key]);
+    }
+  }
   function renderGenForm() {
-    const vals = {
-      wizGenGender: gen.gender || '', wizGenLook: gen.look || 'photo', wizGenLight: gen.light || 'window',
-      wizGenLang: isEn() ? 'en' : 'id', wizGenExpr: gen.expr || '', wizGenBg: gen.bg || '', wizGenNotes: gen.notes || '',
-      wizGenHijab: traits.hijab || '', wizGenHair: traits.hair || '', wizGenEyes: traits.eyes || '', wizGenSkin: traits.skin || '',
-      wizGenFace: traits.faceShape || '', wizGenBody: traits.bodyType || '', wizGenOutfit: traits.outfit || '', wizGenAcc: traits.accessories || '',
-    };
+    syncGenDropdowns();
+    const vals = { wizGenGender: gen.gender || '', wizGenLook: gen.look || 'photo', wizGenLight: gen.light || 'window', wizGenLang: isEn() ? 'en' : 'id', wizGenNotes: gen.notes || '' };
     for (const [id, v] of Object.entries(vals)) { const el = $(id); if (el) el.value = String(v); }
     genPromptDirty = false;
     refreshGenPrompt(true);
@@ -619,15 +688,12 @@
     try { await navigator.clipboard.writeText(p); window.toast?.('Prompt tersalin ✓ — tempel di aplikasi gambar favoritmu.'); }
     catch { window.toast?.('Gagal menyalin — salin manual dari kotak prompt.'); }
   });
-  // Form detail karakter: field fisik menulis ke traits (konsisten tahap 2-3), field khusus ke gen.
-  const GEN_TRAIT_IDS = { wizGenHijab: 'hijab', wizGenHair: 'hair', wizGenEyes: 'eyes', wizGenSkin: 'skin', wizGenFace: 'faceShape', wizGenBody: 'bodyType', wizGenOutfit: 'outfit', wizGenAcc: 'accessories' };
-  for (const [id, key] of Object.entries(GEN_TRAIT_IDS)) {
-    $(id)?.addEventListener('input', () => { traits[key] = $(id).value; refreshLock(); refreshGenPrompt(); saveDraft(); });
-  }
-  const GEN_STATE_IDS = { wizGenGender: 'gender', wizGenLook: 'look', wizGenExpr: 'expr', wizGenBg: 'bg', wizGenLight: 'light', wizGenNotes: 'notes', wizGenLang: 'lang' };
+  // Dropdown preset (klik-klik cepat ala AK Talent) — opsi diisi dari GEN_DROPDOWNS.
+  for (const cfg of GEN_DROPDOWNS) initGenDropdown(cfg);
+  const GEN_STATE_IDS = { wizGenGender: 'gender', wizGenLook: 'look', wizGenLight: 'light', wizGenNotes: 'notes', wizGenLang: 'lang' };
   for (const [id, key] of Object.entries(GEN_STATE_IDS)) {
-    const isSelect = id === 'wizGenGender' || id === 'wizGenLook' || id === 'wizGenLight' || id === 'wizGenLang';
-    $(id)?.addEventListener(isSelect ? 'change' : 'input', () => {
+    const isText = id === 'wizGenNotes';
+    $(id)?.addEventListener(isText ? 'input' : 'change', () => {
       gen[key] = $(id).value;
       if (key === 'lang') genPromptDirty = false; // ganti bahasa = susun ulang
       refreshGenPrompt();
@@ -668,8 +734,11 @@
   bind('wizVoiceBtn', runVoice);
   bind('wizBibleBtn', runBible);
   $('characterImage')?.addEventListener('change', refreshPhotoPreview);
-  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality'].forEach((id) => {
-    $(id)?.addEventListener('input', () => { refreshLock(); refreshGenPrompt(); });
+  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality', 'characterLanguage'].forEach((id) => {
+    const el = $(id); if (!el) return;
+    const fn = () => { refreshLock(); refreshGenPrompt(); };
+    el.addEventListener('input', fn);
+    el.addEventListener('change', fn);
   });
   $('importCharBtn')?.addEventListener('click', () => $('importCharFile')?.click());
   $('importCharFile')?.addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; importPackage(f); });
