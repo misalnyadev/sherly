@@ -31,7 +31,7 @@
     const v = p.visual || {};
     const sections =
       '<div class="pe-grid">'
-      + '<div class="pe-card"><h3>' + icon('heart') + ' Kepribadian</h3>' + chips(p.traits) + '</div>'
+      + '<div class="pe-card"><h3>' + icon('user-round') + ' Kepribadian</h3>' + chips(p.traits) + '</div>'
       + '<div class="pe-card"><h3>' + icon('message') + ' Suara &amp; Gaya Bicara</h3>'
       + '<p><b>Gaya.</b> ' + esc(p.voice?.gaya || '') + '</p>'
       + '<p><b>Khas.</b> ' + esc(p.voice?.khas || '') + '</p>'
@@ -50,6 +50,7 @@
       + '<a class="pink-btn" href="' + esc(p.instagram || '#') + '" target="_blank" rel="noopener">' + icon('arrow-up-right') + ' DM ' + esc(p.handle || '') + '</a>'
       + '<button type="button" class="outline-btn" id="peChatBtn">' + icon('message') + ' Chat dengan Sherly</button>'
       + '<button type="button" class="outline-btn" id="peIdeBtn">' + icon('sparkles') + ' Minta ide konten</button>'
+      + '<button type="button" class="outline-btn" id="peCollabBtn">' + icon('message-circle') + ' Ajukan Brief Kolaborasi</button>'
       + '</div>'
       + '</div>'
       + '</div>';
@@ -58,6 +59,7 @@
 
     document.getElementById('pePortfolioBtn')?.addEventListener('click', () => window.go?.('Portfolio'));
     document.getElementById('peChatBtn')?.addEventListener('click', () => window.go?.('Chat Sherly'));
+    document.getElementById('peCollabBtn')?.addEventListener('click', () => window.go?.('Kolaborasi'));
     document.getElementById('peIdeBtn')?.addEventListener('click', () => {
       window.go?.('Chat Sherly');
       setTimeout(() => {

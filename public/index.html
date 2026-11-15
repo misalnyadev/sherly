@@ -286,6 +286,33 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .pe-cta a{text-decoration:none;display:inline-flex}
 .pe-cta [data-icon] svg{width:15px;height:15px}
 @media(max-width:560px){.pe-hero{flex-direction:column;text-align:center}.pe-chips,.pe-mood,.pe-cta{justify-content:center}}
+/* Kolaborasi */
+.co-hero{background:linear-gradient(115deg,#2a1226,#101b2a);border:1px solid #49334e;border-radius:18px;padding:28px 24px;margin-bottom:6px;text-align:center}
+.co-hero h2{margin:0 0 8px;font-size:22px}
+.co-hero p{margin:0 auto 16px;max-width:580px;color:#c7d2e4;font-size:13.5px;line-height:1.7}
+.co-h{font-size:17px;margin:22px 0 12px;display:flex;align-items:center;gap:9px}
+.co-h [data-icon] svg{width:19px;height:19px;stroke:#ff6fc3}
+.co-char,.co-svc{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;overflow:hidden;display:flex;flex-direction:column}
+.co-char:hover,.co-svc:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.co-cover{height:210px;background:#151323;position:relative}
+.co-cover img{width:100%;height:100%;object-fit:cover;object-position:center 18%;display:block}
+.co-status{position:absolute;top:10px;left:10px;background:#17372c;color:#7ee2ae;border-radius:30px;padding:4px 10px;font-size:10px;letter-spacing:.04em}
+.co-desc{color:#c7d2e4;font-size:12.5px;line-height:1.65;margin:6px 0 10px}
+.co-pick{align-self:flex-start;margin-top:auto}
+.co-custom{justify-content:center;padding:20px;text-align:center;align-items:center}
+.co-custom-ico{width:52px;height:52px;border-radius:14px;background:#311738;color:#ff78cb;display:grid;place-items:center;margin-bottom:12px}
+.co-custom-ico svg{width:24px;height:24px}
+.co-custom .pf-info{align-items:center;display:flex;flex-direction:column}
+.co-custom .co-pick{align-self:center}
+.co-svc{padding:20px}
+.co-svc-ico{width:46px;height:46px;border-radius:12px;background:#311738;color:#ff78cb;display:grid;place-items:center;margin-bottom:12px}
+.co-svc-ico svg{width:21px;height:21px}
+.co-form{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid #49334e;border-radius:18px;padding:22px}
+.co-note{color:var(--muted);font-size:11px;margin:10px 2px 0;line-height:1.6}
+.co-cta-inline{margin-top:18px;background:linear-gradient(115deg,#2a1226,#101b2a);border:1px solid #49334e;border-radius:15px;padding:18px 20px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.co-cta-inline b{display:block;margin-bottom:4px;font-size:14.5px}
+.co-cta-inline p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.6;max-width:520px}
+@media(max-width:560px){.co-hero{padding:22px 16px}.co-cover{height:170px}.co-pick{align-self:stretch;text-align:center}}
 </style></head>
 <body>
 <div class="app">
@@ -299,6 +326,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <button data-page="Editor" title="Editor"><span class="ico" data-icon="pencil"></span><span class="nav-label">Editor</span></button>
   <button data-page="Aset" title="Aset"><span class="ico" data-icon="images"></span><span class="nav-label">Aset</span></button>
   <button data-page="Portfolio" title="Portfolio"><span class="ico" data-icon="gallery"></span><span class="nav-label">Portfolio</span></button>
+  <button data-page="Kolaborasi" title="Kolaborasi"><span class="ico" data-icon="message-circle"></span><span class="nav-label">Kolaborasi</span></button>
   <button data-page="Planner" title="Planner"><span class="ico" data-icon="list-checks"></span><span class="nav-label">Planner</span></button>
   <button data-page="Kalender" title="Kalender"><span class="ico" data-icon="calendar"></span><span class="nav-label">Kalender</span></button>
   <button data-page="Cloud Publish" title="Cloud Publish"><span class="ico" data-icon="cloud"></span><span class="nav-label">Cloud Publish</span></button>
@@ -388,6 +416,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <div class="page-heading"><div><h1>Portfolio</h1><p>Karya pilihan SherlyStudio — foto, video, dan copy.</p></div></div>
   <div class="pf-filters" id="pfFilters"></div>
   <div class="pf-grid" id="pfGrid"></div>
+  <div class="co-cta-inline"><div><b>Butuh konten seperti ini untuk brand kamu?</b><p>Kerja sama dengan karakter SherlyStudio — atau minta karakter khusus dibuatkan untukmu.</p></div><button type="button" class="pink-btn" onclick="go('Kolaborasi')"><span data-icon="message-circle"></span> Ajukan Brief</button></div>
   <div class="pf-detail" id="pfDetail" role="dialog" aria-modal="true" aria-label="Detail karya"><div class="pf-detail-card" id="pfDetailCard"></div></div>
 </section>
 <section id="plannerView" class="page-view">
@@ -410,6 +439,10 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 <section id="personaView" class="page-view">
   <div class="page-heading"><div><h1>Persona</h1><p>Brand kit Sherly — identitas, suara, pilar konten, dan media kit kolaborasi.</p></div></div>
   <div id="personaRoot"></div>
+</section>
+<section id="collabView" class="page-view">
+  <div class="page-heading"><div><h1>Kolaborasi</h1><p>Kerja sama konten &amp; karakter — dari brief sampai tayang.</p></div></div>
+  <div id="collabRoot"></div>
 </section>
 <section id="profileView" class="page-view">
   <div class="page-heading"><div><h1>Profil Pengguna</h1><p>Identitas &amp; kontak kerja sama — data ini dibaca Chat Sherly untuk mengenali lawan bicaranya, dan dipakai untuk portofolio, proposal, serta komunikasi dengan client.</p></div></div>
@@ -533,7 +566,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
-function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -597,6 +630,8 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/planner.js"></script>
 <script src="/persona-data.js"></script>
 <script src="/persona.js"></script>
+<script src="/collab-data.js"></script>
+<script src="/collab.js"></script>
 <script>if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});</script>
 </body>
 </html>
