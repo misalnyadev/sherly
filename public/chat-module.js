@@ -81,12 +81,20 @@
   .ss-voice-modes{display:flex;gap:8px;margin:2px 0 12px}.ss-voice-mode{flex:1;padding:9px 10px;border-radius:10px;border:1.5px solid #344158;background:#131f31;color:#cdd6e4;cursor:pointer;font-size:12.5px}.ss-voice-mode.active{border-color:#e84ba9;background:#2a1226;color:#ffd0ec}
   .ss-device-block select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #344158;background:#080f1b;color:#fff;outline:0;font:inherit}.ss-device-block label{display:block;color:#b9c5d5;font-size:12px;margin:12px 0 6px}
   .ss-rate-row{display:flex;align-items:center;gap:10px}.ss-rate-row input[type=range]{flex:1;accent-color:#e84ba9}.ss-rate-row output{min-width:44px;text-align:right;color:#ffd6ef;font-size:13px}
+  .ss-chat-close{display:none;background:none;border:0;color:#cdd6e4;cursor:pointer;padding:6px;border-radius:10px;flex:0 0 auto}
+  .ss-chat-close:hover{color:#fff}
+  @media(max-width:850px){
+  .ss-chat-close{display:grid;place-items:center}
+  .ss-chat.open{position:fixed;inset:0;z-index:96;height:100vh!important;height:100dvh!important;min-height:0;border-radius:0;box-shadow:none}
+  main.ss-chat-active #ssChatRoot{height:0!important;overflow:visible}
+  }
   `;
   const styleEl = document.createElement('style'); styleEl.textContent = style; document.head.appendChild(styleEl);
   const root = document.createElement('div'); root.innerHTML = `
   <section class="ss-chat" id="ssSherlyChat" aria-label="Chat Sherly">
     <section class="ss-chat-main">
       <header class="ss-chat-toolbar">
+        <button type="button" class="ss-chat-close" id="ssChatClose" aria-label="Tutup chat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
         <div class="ss-chat-id">
           <button type="button" class="ss-ava-wrap" id="ssAvaBtn" title="Atur suara Sherly" aria-label="Atur suara Sherly"><img class="ss-ava" src="assets/sherly-portrait.png" alt="Sherly"></button>
           <div>
@@ -232,8 +240,8 @@
     if (Number.isFinite(avail) && avail > 240) root.style.height = Math.floor(avail) + 'px';
   }
   window.addEventListener('resize', sizeChat);
-  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
-  function closeChat(){ const root=$('ssChatRoot'); if(root) root.style.height=''; $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); }
+  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); window.dispatchEvent(new Event('sherly-chat-opened')); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
+  function closeChat(){ const root=$('ssChatRoot'); if(root) root.style.height=''; $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); window.dispatchEvent(new Event('sherly-chat-closed')); }
   function empty(){ $('ssMessages').innerHTML='<div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div>'; }
   function bubble(role,content,meta='',opts={}){const box=$('ssMessages');box.querySelector('.ss-chat-empty')?.remove();const row=document.createElement('div');row.className=`ss-row ${role}`;if(role==='assistant'){const img=document.createElement('img');img.className='ss-row-ava';img.src='assets/sherly-portrait.png';img.alt='Sherly';row.appendChild(img)}const el=document.createElement('div');el.className=`ss-bubble ${role}`;
     if(opts.imageDataUrl){const pic=document.createElement('img');pic.className='ss-chat-img';pic.src=opts.imageDataUrl;pic.alt='Gambar terlampir';el.appendChild(pic)}
@@ -367,6 +375,7 @@
     voicePanel.setAttribute('aria-hidden', 'false');
   }
   function closeVoicePanel(){ voicePanel.classList.remove('open'); voicePanel.setAttribute('aria-hidden', 'true'); }
+  $('ssChatClose')?.addEventListener('click', closeChat);
   $('ssAvaBtn').addEventListener('click', openVoicePanel);
   $('ssVoiceClose').addEventListener('click', closeVoicePanel);
   voicePanel.addEventListener('click', (e) => { if (e.target === voicePanel) closeVoicePanel(); });
