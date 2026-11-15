@@ -126,8 +126,8 @@ async function buildAttempts(provider, model, supabase) {
   return attempts;
 }
 
-async function callGemini(config, messages, temperature, maxTokens, trustedContext, image) {
-  const system = [sherlySystemPrompt, trustedContext].filter(Boolean).join('\n\n');
+async function callGemini(config, messages, temperature, maxTokens, trustedContext, image, systemOverride) {
+  const system = [systemOverride || sherlySystemPrompt, trustedContext].filter(Boolean).join('\n\n');
   const contents = withVisionParts(messages, image);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`;
   const response = await fetch(url, {
@@ -143,7 +143,7 @@ async function callGemini(config, messages, temperature, maxTokens, trustedConte
   return { text, model: config.model, usage: data.usageMetadata || null };
 }
 
-async function callOpenAICompatible(provider, config, messages, temperature, maxTokens, trustedContext, image) {
+async function callOpenAICompatible(provider, config, messages, temperature, maxTokens, trustedContext, image, systemOverride) {
   const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
   const headers = { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' };
   if (provider === 'openrouter') {
@@ -152,7 +152,7 @@ async function callOpenAICompatible(provider, config, messages, temperature, max
   }
   const response = await fetch(`${base}/chat/completions`, {
     method: 'POST', headers,
-    body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: [sherlySystemPrompt, trustedContext].filter(Boolean).join('\n\n') }, ...withVisionContent(messages, image)], temperature, max_tokens: maxTokens }),
+    body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: [systemOverride || sherlySystemPrompt, trustedContext].filter(Boolean).join('\n\n') }, ...withVisionContent(messages, image)], temperature, max_tokens: maxTokens }),
     signal: AbortSignal.timeout(60000),
   });
   const data = await response.json().catch(() => ({}));
@@ -162,10 +162,10 @@ async function callOpenAICompatible(provider, config, messages, temperature, max
   return { text: text.trim(), model: data.model || config.model, usage: data.usage || null };
 }
 
-async function callProvider(provider, config, messages, temperature, maxTokens, trustedContext, image) {
+async function callProvider(provider, config, messages, temperature, maxTokens, trustedContext, image, systemOverride) {
   return provider === 'gemini'
-    ? callGemini(config, messages, temperature, maxTokens, trustedContext, image)
-    : callOpenAICompatible(provider, config, messages, temperature, maxTokens, trustedContext, image);
+    ? callGemini(config, messages, temperature, maxTokens, trustedContext, image, systemOverride)
+    : callOpenAICompatible(provider, config, messages, temperature, maxTokens, trustedContext, image, systemOverride);
 }
 
 /**
@@ -260,26 +260,43 @@ export async function generateImageWithKie(prompt, aspect, auth = {}) {
   throw Object.assign(lastError || new Error('Generator Kie gagal.'), { status: 502 });
 }
 
-/** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback). */
-export async function generateImageWithGemini(prompt, auth = {}) {
+/** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback).
+ *  opts.aspect: rasio aspek ('4:5', dst — best effort via imageConfig, fallback tanpa aspek bila ditolak).
+ *  opts.reference: { mime, data } foto referensi (img2img) — inlineData ikut dikirim sebagai bagian konten. */
+export async function generateImageWithGemini(prompt, auth = {}, opts = {}) {
   const attempts = await buildAttempts('gemini', geminiImageModel(), auth.supabase);
   if (!attempts.length) {
     throw Object.assign(new Error('Kunci Gemini belum tersedia untuk generator gambar. Simpan kunci Gemini di vault (Pengaturan) atau set GEMINI_API_KEY.'), { status: 503 });
   }
+  const reference = opts.reference && typeof opts.reference.data === 'string' && opts.reference.data.length > 8 ? opts.reference : null;
+  const aspect = typeof opts.aspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(opts.aspect) ? opts.aspect : null;
   let lastError = null;
   for (const attempt of attempts) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(attempt.model)}:generateContent`;
-      const response = await fetch(url, {
+      const parts = [{ text: prompt }];
+      if (reference) parts.push({ inlineData: { mimeType: reference.mime || 'image/png', data: reference.data } });
+      const buildBody = (withAspect) => {
+        const generationConfig = { responseModalities: ['TEXT', 'IMAGE'] };
+        if (withAspect) generationConfig.imageConfig = { aspectRatio: aspect };
+        return { contents: [{ parts }], generationConfig };
+      };
+      const send = (payload) => fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': attempt.apiKey },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(90000),
       });
-      const data = await response.json().catch(() => ({}));
+      let response = await send(buildBody(Boolean(aspect)));
+      let data = await response.json().catch(() => ({}));
+      if (!response.ok && aspect && /imageConfig|aspect/i.test(String(data?.error?.message || ''))) {
+        // Model tidak kenal imageConfig — ulangi tanpa aspek.
+        response = await send(buildBody(false));
+        data = await response.json().catch(() => ({}));
+      }
       if (!response.ok) { lastError = new Error(data?.error?.message || `Gemini API error (${response.status})`); continue; }
-      const parts = data?.candidates?.[0]?.content?.parts || [];
-      const img = parts.find((part) => part?.inlineData?.data);
+      const outParts = data?.candidates?.[0]?.content?.parts || [];
+      const img = outParts.find((part) => part?.inlineData?.data);
       if (img) return { mime: img.inlineData.mimeType || 'image/png', data: img.inlineData.data, model: attempt.model, source: attempt.source };
       lastError = new Error('Model tidak mengembalikan gambar — coba ubah deskripsinya.');
     } catch (error) { lastError = error; }
@@ -298,6 +315,8 @@ export async function chatWithAI(input, trustedContext = '', options = {}) {
   const { provider, model, messages, temperature, maxTokens, image } = parsed.data;
   const supabase = options?.supabase || null;
   const accessToken = options?.accessToken || null;
+  // Override system prompt (dipakai /api/ai/vision untuk analisis foto, bukan persona Sherly).
+  const systemOverride = typeof options?.systemPrompt === 'string' && options.systemPrompt.trim() ? options.systemPrompt : null;
   // Vision: susun ulang agar provider dengan model vision-capable dicoba duluan.
   const providerOrder = image
     ? (provider === 'auto' ? ['gemini', 'openrouter', 'groq'] : [provider])
@@ -319,7 +338,7 @@ export async function chatWithAI(input, trustedContext = '', options = {}) {
       attempted += 1;
       const config = { key: attempt.apiKey, model: attempt.model };
       try {
-        const result = await callProvider(name, config, messages, temperature, maxTokens, trustedContext, image);
+        const result = await callProvider(name, config, messages, temperature, maxTokens, trustedContext, image, systemOverride);
         if (supabase && attempt.keyId) await recordSuccess(supabase, attempt.keyId);
         return { provider: name, requestedProvider: provider, fallbackUsed: failures.length > 0, keySource: attempt.source, keyName: attempt.keyName, failures, ...result, bubbles: splitIntoBubbles(result.text) };
       } catch (error) {
@@ -330,7 +349,7 @@ export async function chatWithAI(input, trustedContext = '', options = {}) {
           if (replacement && replacement !== config.model) {
             if (supabase) await saveProviderModel(supabase, name, replacement, accessToken).catch(() => {});
             try {
-              const healed = await callProvider(name, { ...config, model: replacement }, messages, temperature, maxTokens, trustedContext, image);
+              const healed = await callProvider(name, { ...config, model: replacement }, messages, temperature, maxTokens, trustedContext, image, systemOverride);
               if (supabase && attempt.keyId) await recordSuccess(supabase, attempt.keyId);
               failures.push({ provider: name, source: attempt.source, keyName: attempt.keyName, error: `Model '${config.model}' tidak tersedia; otomatis beralih ke '${replacement}'.`, healed: true });
               return { provider: name, requestedProvider: provider, fallbackUsed: true, keySource: attempt.source, keyName: attempt.keyName, modelSwitched: { from: config.model, to: replacement }, failures, ...healed, bubbles: splitIntoBubbles(healed.text) };
