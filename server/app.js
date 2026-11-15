@@ -5,7 +5,7 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chatWithAI } from './ai.js';
+import { chatWithAI, generateImageWithGemini } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
@@ -339,6 +339,18 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
+  }
+});
+
+app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const prompt = typeof (req.body || {}).prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
+    const image = await generateImageWithGemini(prompt, { supabase: req.supabase, accessToken: req.accessToken });
+    res.json({ ok: true, provider: 'gemini', image });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 502;
+    res.status(status).json({ ok: false, error: error.message || 'Generator gambar gagal.' });
   }
 });
 
