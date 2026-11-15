@@ -34,7 +34,7 @@
         + '<p class="co-desc">' + esc(c.desc || '') + '</p>'
         + '<div class="pf-tags">' + (c.tags || []).map((t) => '<span class="chip">' + esc(t) + '</span>').join('') + '</div>'
         + '<button type="button" class="outline-btn co-pick" data-name="' + esc(c.name) + '">' + icon('check') + ' Pilih ' + esc(c.name) + '</button>'
-        + (c.htPin ? '<p class="co-ht">' + icon('key') + ' Ngobrol versi talent di HeyTalent \u2014 PIN <b>' + esc(c.htPin) + '</b></p>' : '')
+        + (c.htPin ? '<p class="co-ht">' + icon('key') + ' Versi talent lengkap \u2014 chat sampai video call \u2014 di HeyTalent, invite PIN <b>' + esc(c.htPin) + '</b></p>' : '')
         + '</div></div>').join('')
       + '<div class="co-char co-custom"><div class="co-custom-ico">' + icon('sparkles') + '</div><div class="pf-info"><h3>Karakter Custom</h3>'
       + '<p class="co-desc">' + esc(cfg.customNote || '') + '</p>'
