@@ -5,7 +5,7 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom } from './ai.js';
+import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom, KIE_BOARD_MODEL } from './ai.js';
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
@@ -500,8 +500,9 @@ app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) 
       // D-104: sheet engine AK Talent — landscape 16:9.
       image = await generateImageWithGemini(finalPrompt, auth, { aspect: '16:9', reference });
     } else if (provider === 'kie') {
-      mode = 'txt2img';
-      image = await generateImageWithKie(finalPrompt.slice(0, 1500), '16:9', auth);
+      // D-106: Kie juga mendukung img2img (alur AK Talent) — board pakai model gpt-image-2-5-flare-image-to-image.
+      if (reference) image = await generateImageWithKie(finalPrompt, '16:9', auth, { reference, model: KIE_BOARD_MODEL });
+      else { mode = 'txt2img'; image = await generateImageWithKie(finalPrompt.slice(0, 1500), '16:9', auth); }
       usedProvider = 'kie';
     } else {
       mode = 'txt2img';

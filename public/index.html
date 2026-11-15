@@ -553,7 +553,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
      <textarea id="wizBoardPrompt" rows="8" placeholder="Prompt sheet akan tersusun otomatis dari detail tahap 1–2…"></textarea>
     </div>
     <div class="wiz-gen-row">
-     <select id="wizBoardEngine"><option value="gemini">Gemini — img2img (pakai foto tahap 1)</option><option value="kie">Kie AI — teks&rarr;gambar (tanpa foto)</option></select>
+     <select id="wizBoardEngine"><option value="kie">Kie AI — img2img (pakai foto tahap 1)</option><option value="gemini">Gemini — img2img (pakai foto tahap 1)</option></select>
      <button type="button" class="pink-btn" id="wizBoardBtn">Buat Master Board (AI)</button>
      <button type="button" class="outline-btn" id="wizBoardCopy">Salin Prompt</button>
     </div>
@@ -561,6 +561,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
      <button type="button" class="outline-btn" id="wizBoardUploadBtn">Unggah Hasil dari Aplikasi Lain</button>
      <span class="wiz-log">Salin prompt-nya, generate sheet di aplikasi luar, lalu unggah hasilnya di sini.</span>
     </div>
+    <input type="file" id="wizBoardUploadFile" accept="image/png,image/jpeg,image/webp" hidden>
     <span class="wiz-log" id="wizBoardLog"></span>
     <div id="wizBoardOut"></div>
     <div id="wizBoardSaved"></div>

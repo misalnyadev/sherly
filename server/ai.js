@@ -187,6 +187,70 @@ export function kieConfig() {
   };
 }
 
+// D-106: img2img via Kie — alur yang sama dengan AK Talent (upload referensi ->
+// jobs/createTask -> poll recordInfo -> unduh hasil). Model khusus board AK: gpt-image-2-5-flare-image-to-image.
+export const KIE_BOARD_MODEL = process.env.KIE_BOARD_MODEL || 'gpt-image-2-5-flare-image-to-image';
+const KIE_EDIT_MODEL = process.env.KIE_EDIT_MODEL || 'google/nano-banana-edit';
+
+/** Upload foto referensi (base64) ke Kie → URL publik untuk input.image_urls. */
+async function kieUploadReference(apiKey, mime, data) {
+  const dataUrl = 'data:' + (mime || 'image/png') + ';base64,' + data;
+  const res = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    body: JSON.stringify({ base64Data: dataUrl, uploadPath: 'images/base64', fileName: 'ref-' + Date.now() + '.jpg' }),
+    signal: AbortSignal.timeout(60000),
+  }).catch(() => null);
+  if (!res || !res.ok) throw new Error('Upload foto referensi ke Kie gagal.');
+  const d = await res.json().catch(() => ({}));
+  const u = d?.data?.downloadUrl || d?.data?.fileUrl || d?.data?.url || d?.downloadUrl || d?.url;
+  if (!u) throw new Error('Kie tidak mengembalikan URL upload referensi.');
+  return u;
+}
+
+/** Satu job img2img Kie (createTask + poll sampai selesai, maks ±55 dtk). */
+async function kieImageToImage(apiKey, base, prompt, reference, aspect, model) {
+  const refUrl = await kieUploadReference(apiKey, reference.mime, reference.data);
+  const ar = aspect || '16:9';
+  const input = { prompt, output_format: 'png', image_size: ar, aspect_ratio: ar, image_urls: [refUrl], input_urls: [refUrl] };
+  const res = await fetch(base + '/api/v1/jobs/createTask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    body: JSON.stringify({ model, input }),
+    signal: AbortSignal.timeout(30000),
+  }).catch(() => null);
+  if (!res || !res.ok) {
+    const t = res ? String(await res.text()).slice(0, 160) : 'tidak terjangkau';
+    throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
+  }
+  const data = await res.json().catch(() => ({}));
+  const taskId = data?.data?.taskId || data?.taskId;
+  if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task img2img.');
+  const deadline = Date.now() + 55000; // di bawah maxDuration 60 dtk Vercel
+  let delay = 3000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay + 1000, 6000);
+    const qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + encodeURIComponent(taskId), { headers: { Authorization: 'Bearer ' + apiKey }, signal: AbortSignal.timeout(20000) }).catch(() => null);
+    if (!qr || !qr.ok) continue;
+    const qd = await qr.json().catch(() => ({}));
+    const d = qd?.data || {};
+    const st = String(d.state || d.status || '').toLowerCase();
+    if (st === 'success' || st === 'completed') {
+      let rj = d.resultJson || d.result;
+      if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch {} }
+      const u = rj?.resultUrls?.[0] || d.resultUrls?.[0];
+      if (!u) throw new Error('Kie sukses tapi URL hasil kosong.');
+      const imgRes = await fetch(u, { signal: AbortSignal.timeout(30000) });
+      if (!imgRes.ok) throw new Error('Gagal mengunduh hasil Kie (' + imgRes.status + ').');
+      const buf = Buffer.from(await imgRes.arrayBuffer());
+      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model, source: 'kie' };
+    }
+    if (st === 'fail' || st === 'failed' || st === 'error') throw new Error('Kie img2img gagal: ' + (d.failMsg || d.failCode || '?'));
+  }
+  throw new Error('Kie img2img timeout (±55 dtk) — coba lagi atau pakai Gemini.');
+}
+
 async function kieAttempts(auth = {}) {
   const attempts = [];
   if (auth.supabase) {
@@ -231,15 +295,19 @@ export async function generateImageWithCustom(cfg, prompt, aspect) {
 
 /** Generate gambar via Kie AI. CATATAN: endpoint dibuat best-effort (docs tidak bisa diakses dari sandbox) —
  *  kalau respons Kie berbeda, kirim contoh responsnya ke chat untuk dikalibrasi. Env: KIE_API_KEY, KIE_API_BASE, KIE_IMAGE_MODEL. */
-export async function generateImageWithKie(prompt, aspect, auth = {}) {
+export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {}) {
   const attempts = await kieAttempts(auth);
   if (!attempts.length) {
     throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
   }
   const { base, imageModel } = kieConfig();
+  // D-106: img2img (foto referensi) via jobs API; txt2img tetap lewat /api/v1/generate.
+  const reference = opts.reference && typeof opts.reference.data === 'string' && opts.reference.data.length > 8 ? opts.reference : null;
+  const refModel = opts.model || KIE_EDIT_MODEL;
   let lastError = null;
   for (const attempt of attempts) {
     try {
+      if (reference) return await kieImageToImage(attempt.apiKey, base, prompt, reference, aspect, refModel);
       const response = await fetch(base + '/api/v1/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + attempt.apiKey },
