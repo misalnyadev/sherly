@@ -147,7 +147,7 @@
     }
     if (src) {
       img.src = src; img.hidden = false;
-      note.textContent = 'Dipakai Gemini sebagai basis image-to-image — wajah & detail tetap konsisten.';
+      note.textContent = 'Dipakai Kie AI / Gemini sebagai basis image-to-image — wajah & detail tetap konsisten.';
     } else {
       img.removeAttribute('src'); img.hidden = true;
       note.textContent = 'Belum ada foto — unggah / buat dulu di tahap 1, atau pakai mesin teks→gambar.';
@@ -530,11 +530,11 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
     if (log) log.textContent = 'Gemini menyusun sheet referensi (±15–40 detik)…';
     try {
       const prompt = ($('wizBoardPrompt')?.value || '').trim() || buildBoardPrompt();
-      const engine = $('wizBoardEngine')?.value || 'gemini';
+      const engine = $('wizBoardEngine')?.value || 'kie';
       const body = { prompt, provider: engine };
       if (editingId) body.characterId = editingId;
-      else if (engine === 'gemini') {
-        // Foto tahap 1 jadi basis img2img — hanya Gemini yang mendukung.
+      else if (engine === 'gemini' || engine === 'kie') {
+        // Foto tahap 1 jadi basis img2img — Kie (gpt-image flare i2i) & Gemini mendukung.
         const ref = await currentPhotoParts().catch(() => null);
         if (ref) body.reference = ref;
       }
