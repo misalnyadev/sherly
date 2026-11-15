@@ -256,6 +256,37 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .pl-status.draft{background:#3a2153;color:#e4ccf7}
 .pl-status.terjadwal{background:#b02d80;color:#fff}
 .pl-status.tayang{background:#17372c;color:#7ee2ae}
+/* Kalender */
+.cal-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.cal-title h2{margin:0 0 8px;font-size:18px}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:11.5px}
+.cal-legend span{display:inline-flex;align-items:center;gap:6px}
+.cal-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.cal-nav{display:flex;gap:8px;align-items:center}
+.cal-nav-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:#101b2a;color:#c7d2e4;display:grid;place-items:center;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+.cal-nav-btn:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.cal-nav-btn svg{width:16px;height:16px}
+.cal-today-btn{height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:#101b2a;color:#ffd0ec;font-size:12px;cursor:pointer;font-family:inherit}
+.cal-today-btn:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.cal-board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal-dow{text-align:center;font-size:10px;letter-spacing:.12em;color:var(--muted);padding:4px 0}
+.cal-cell{position:relative;min-height:96px;background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:12px;padding:22px 7px 7px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.cal-cell.muted{background:transparent;border-style:dashed;border-color:#1b2740;min-height:0;padding:0}
+.cal-cell.today{border-color:#e84ba9;box-shadow:0 0 0 3px #e84ba914}
+.cal-cell.today .cal-num{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff}
+.cal-num{position:absolute;top:6px;left:7px;font-size:11.5px;color:#c7d2e4;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:#182338}
+.cal-add{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:7px;border:0;background:transparent;color:#5b6b83;display:none;place-items:center;cursor:pointer}
+.cal-add svg{width:13px;height:13px}
+.cal-cell:hover .cal-add{display:grid}
+.cal-add:hover{color:#ff6fc3;background:#2a1226}
+.cal-chip{display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:#182338;border:0;border-radius:7px;padding:3px 6px;color:#c7d2e4;font-size:10.5px;font-family:inherit;cursor:pointer;white-space:nowrap;overflow:hidden}
+.cal-chip:hover{background:#2a1226;color:#ffd0ec}
+.cal-chip i{flex:none;width:6px;height:6px;border-radius:50%}
+.cal-chip span{overflow:hidden;text-overflow:ellipsis}
+.cal-more{font-size:9.5px;color:var(--muted);padding-left:6px}
+.cal-sum{color:var(--muted);font-size:12px;margin:14px 2px 0;line-height:1.7}
+@media(hover:none){.cal-add{display:grid;width:26px;height:26px;opacity:.55}}
+@media(max-width:560px){.cal-cell{min-height:64px;padding:24px 4px 4px}.cal-chip{font-size:9.5px;padding:2px 4px}.cal-legend{gap:10px}}
 .pl-actions{display:flex;gap:6px}
 .pl-actions button{background:transparent;border:1px solid #344158;color:#8fa1b7;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;transition:.18s}
 .pl-actions button:hover{border-color:#e84ba9;color:#ffd6ef}
@@ -446,6 +477,10 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <div class="page-heading"><div><h1>Persona</h1><p>Brand kit Sherly — identitas, suara, pilar konten, dan media kit kolaborasi.</p></div></div>
   <div id="personaRoot"></div>
 </section>
+<section id="calendarView" class="page-view">
+  <div class="page-heading"><div><h1>Kalender</h1><p>Peta jadwal konten sebulan penuh — dari ide sampai tayang.</p></div></div>
+  <div id="calendarRoot"></div>
+</section>
 <section id="collabView" class="page-view">
   <div class="page-heading"><div><h1>Kolaborasi</h1><p>Kerja sama konten &amp; karakter — dari brief sampai tayang.</p></div></div>
   <div id="collabRoot"></div>
@@ -516,7 +551,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
  </section>
  <aside class="rightcol">
   <section class="panel chat"><h3><span data-icon="message-circle"></span> Chat Sherly <span data-icon="arrow-up-right"></span></h3><span class="online">● Online</span><p>Hai, aku Sherly! Ada ide konten, butuh bantuan atau sekadar ngobrol santai? Yuk, cerita aja...</p><button class="primary" onclick="toast('Chat AI belum dihubungkan — ini masih prototype')">Mulai Chat &nbsp; <span data-icon="chevron-right"></span></button><img src="assets/sherly-panel.png" alt="Sherly — master character portrait"></section>
-  <section class="panel admin-only"><div class="section-head"><h2><span data-icon="sparkles"></span> Quick Tools</h2></div><div class="quick"><button onclick="go('Karakter')"><span data-icon="user-plus"></span>Buat Karakter</button><button onclick="go('Studio')"><span data-icon="image-plus"></span>Generate Gambar</button><button onclick="go('Studio')"><span data-icon="video"></span>Generate Video</button><button onclick="toast('Text-to-speech belum dihubungkan')"><span data-icon="audio-lines"></span>Teks ke Suara</button><button onclick="go('Planner')"><span data-icon="list-checks"></span>Planner Konten</button><button onclick="go('Persona')"><span data-icon="sparkles"></span>Persona Sherly</button></div></section>
+  <section class="panel admin-only"><div class="section-head"><h2><span data-icon="sparkles"></span> Quick Tools</h2></div><div class="quick"><button onclick="go('Karakter')"><span data-icon="user-plus"></span>Buat Karakter</button><button onclick="go('Studio')"><span data-icon="image-plus"></span>Generate Gambar</button><button onclick="go('Studio')"><span data-icon="video"></span>Generate Video</button><button onclick="toast('Text-to-speech belum dihubungkan')"><span data-icon="audio-lines"></span>Teks ke Suara</button><button onclick="go('Planner')"><span data-icon="list-checks"></span>Planner Konten</button><button onclick="go('Kalender')"><span data-icon="calendar-days"></span>Kalender Konten</button><button onclick="go('Persona')"><span data-icon="sparkles"></span>Persona Sherly</button></div></section>
   <section class="panel admin-only"><div class="section-head"><h2><span data-icon="calendar-days"></span> Kalender & Jadwal</h2><button class="link" data-page="Kalender">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="calendar-top"><b>November 2026</b><span class="calendar-arrows"><span data-icon="chevron-left"></span><span data-icon="chevron-right"></span></span></div><div class="days"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span class="selected">14</span><span>15</span></div><div class="events"><div class="event"><i></i><b>09:00</b><span>Meeting Content Plan</span><em>Planner</em></div><div class="event"><i></i><b>14:00</b><span>Shooting — Sherly</span><em>Studio</em></div><div class="event"><i></i><b>19:00</b><span>Edit Video</span><em>Editor</em></div></div></section>
   <section class="panel admin-only"><div class="section-head"><h2><span data-icon="bell"></span> Notifikasi Terbaru</h2><button class="link" onclick="toast('Semua notifikasi sudah dibaca')">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="notifications"><div class="notification"><span data-icon="user-round-check"></span><div>Karakter Sherly siap dikelola<small>Baru saja</small></div></div><div class="notification"><span data-icon="clapperboard"></span><div>Proyek Hey Sherly diperbarui<small>Hari ini</small></div></div><div class="notification"><span data-icon="images"></span><div>Aset baru ditambahkan ke Library<small>Hari ini</small></div></div></div></section>
  </aside>
@@ -574,7 +609,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
 const ADMIN_ONLY_PAGES=['Karakter','Studio','Editor','Aset','Planner','Kalender','Cloud Publish','Pengaturan','Profil'];
-function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');dashboard.style.display=page==='Beranda'?'grid':'none';if(ADMIN_ONLY_PAGES.includes(page)&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');if(pfv)pfv.classList.remove('active');if(plv)plv.classList.remove('active');if(pev)pev.classList.remove('active');if(cov)cov.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');dashboard.style.display=page==='Beranda'?'grid':'none';if(ADMIN_ONLY_PAGES.includes(page)&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');if(pfv)pfv.classList.remove('active');if(plv)plv.classList.remove('active');if(pev)pev.classList.remove('active');if(cov)cov.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi','Kalender'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -638,6 +673,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/portfolio-data.js"></script>
 <script src="/portfolio.js"></script>
 <script src="/planner.js"></script>
+<script src="/calendar.js"></script>
 <script src="/persona-data.js"></script>
 <script src="/persona.js"></script>
 <script src="/collab-data.js"></script>
