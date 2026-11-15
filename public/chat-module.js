@@ -78,7 +78,7 @@
   .ss-chat-hint{margin-top:6px;font-size:9.5px;color:#54637c}
   @media (pointer:coarse),(hover:none){.ss-chat-hint{display:none}}
   @media(max-width:700px){.ss-chat{min-height:480px;border-radius:12px}.ss-chat-toolbar{padding:10px 12px;gap:9px}.ss-chat-messages{padding:18px 12px}.ss-compose-wrap{padding:10px}.ss-row{max-width:94%}.ss-ava{width:36px;height:36px}.ss-suggest{flex-direction:column;align-items:stretch}}
-    .ss-auth{position:fixed;inset:0;z-index:100;background:#02050bdc;display:none;place-items:center;padding:20px;font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}.ss-auth.open{display:grid}.ss-auth-card{width:min(420px,100%);background:#101b2c;border:1px solid #344158;border-radius:18px;padding:26px;box-shadow:0 25px 80px #000b;color:#f4f5fb}.ss-auth-card h2{margin:0 0 7px}.ss-auth-card p{color:#91a2b9;line-height:1.6}.ss-auth-card label{display:block;color:#b9c5d5;font-size:12px;margin:14px 0 6px}.ss-auth-card input{width:100%;padding:12px;border-radius:9px;border:1px solid #344158;background:#080f1b;color:white;outline:0;box-sizing:border-box}.ss-auth-card input:focus{border-color:#e84ba9}.ss-auth-actions{display:flex;gap:9px;margin-top:18px}.ss-auth-actions button{flex:1}.ss-auth-primary{background:linear-gradient(100deg,#d82d91,#b02d80)!important;border:0!important;font-weight:500}.ss-auth-error{color:#ff9ebd;font-size:12px;min-height:18px;margin-top:10px}
+    .ss-auth{position:fixed;inset:0;z-index:100;background:#02050bdc;display:none;place-items:center;padding:20px;font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}.ss-auth.open{display:grid}.ss-auth-card{width:min(420px,100%);background:#101b2c;border:1px solid #344158;border-radius:18px;padding:26px;box-shadow:0 25px 80px #000b;color:#f4f5fb}.ss-auth-card h2{margin:0 0 7px}.ss-auth-card p{color:#91a2b9;line-height:1.6}.ss-auth-card label{display:block;color:#b9c5d5;font-size:12px;margin:14px 0 6px}.ss-auth-card input{width:100%;padding:12px;border-radius:9px;border:1px solid #344158;background:#080f1b;color:white;outline:0;box-sizing:border-box}.ss-auth-card input:focus{border-color:#e84ba9}.ss-auth-actions{display:flex;gap:9px;margin-top:18px}.ss-auth-actions button{flex:1}.ss-auth-primary{background:linear-gradient(100deg,#d82d91,#b02d80)!important;border:0!important;font-weight:500}.ss-auth-error{color:#ff9ebd;font-size:12px;min-height:18px;margin-top:10px}.ss-auth-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:2px 0 6px}.ss-auth-modes button{padding:10px 4px;border-radius:9px;border:1px solid #344158;background:#080f1b;color:#b9c5d5;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}.ss-auth-modes button.active{border-color:#e84ba9;color:#fff;background:#2a1226}.ss-auth-card select{width:100%;padding:12px;border-radius:9px;border:1px solid #344158;background:#080f1b;color:#fff;outline:0;box-sizing:border-box}.ss-auth-card select:focus{border-color:#e84ba9}.ss-auth-sub{color:#7f93ab;font-size:11.5px;line-height:1.6;margin:10px 0 0}
   @media(max-width:700px){.ss-chat{min-height:480px;grid-template-columns:minmax(0,1fr)}.ss-chat-toolbar{padding:12px}.ss-chat-id{padding:3px 11px 3px 3px;gap:8px}.ss-status-text{max-width:170px}.ss-chat-messages{padding:18px 13px}.ss-compose-wrap{padding:10px}.ss-bubble{max-width:94%}}
   .ss-ava-wrap{cursor:pointer;border-radius:50%;background:none;border:0;padding:0}.ss-ava-wrap:focus-visible{outline:2px solid #e84ba9;outline-offset:2px}
   .ss-newchat{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:1px solid #344158;background:#131f31;color:#cdd6e4;cursor:pointer;flex:0 0 auto}.ss-newchat:hover{border-color:#e84ba9;color:#fff}.ss-newchat svg{width:16px;height:16px}
@@ -119,7 +119,7 @@
     </section>
   </section>
   <div class="ss-voice" id="ssVoicePanel" role="dialog" aria-modal="true" aria-labelledby="ssVoiceTitle" aria-hidden="true"><form class="ss-voice-card" id="ssVoiceForm"><div class="ss-voice-head"><div><h2 id="ssVoiceTitle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff6fc3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:5px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Profil Sherly</h2><p>Atur AI provider &amp; suara Sherly — semua di satu tempat.</p></div><button type="button" class="ss-voice-close" id="ssVoiceClose" aria-label="Tutup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div><div class="ss-profile-box"><label class="ss-voice-label" for="ssProvider">AI Provider</label><select id="ssProvider" class="ss-voice-style" aria-label="Pilih AI provider"><option value="auto">✦ Otomatis (fallback cerdas)</option><option value="gemini">Gemini</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option></select><p class="ss-voice-note">Mesin AI yang menjawab chat — berlaku langsung tanpa perlu Simpan. “Otomatis” memakai provider terbaik yang tersedia &amp; fallback bila salah satu gagal.</p></div><div class="ss-voice-sep"></div><div class="ss-voice-modes" role="tablist" aria-label="Mesin suara"><button type="button" class="ss-voice-mode active" id="ssModeGemini" data-mode="gemini"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px"><path d="M20 16.2A4.8 4.8 0 0 0 18 7h-1.2A7 7 0 1 0 5 17h13a4 4 0 0 0 2-.8Z"/></svg>Gemini TTS · Bank Suara</button><button type="button" class="ss-voice-mode" id="ssModeDevice" data-mode="device"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Suara Perangkat (lokal, gratis)</button></div><div id="ssGeminiBlock"><div class="ss-voice-grid" id="ssVoiceGrid"></div><label class="ss-voice-label" for="ssVoiceStyle">Gaya bicara khas (opsional)</label><textarea id="ssVoiceStyle" class="ss-voice-style" rows="2" maxlength="180" placeholder="Indonesia dengan intonasi dan jeda nafas yang natural"></textarea><p class="ss-voice-note">Dipakai sebagai instruksi gaya saat Sherly bicara. Kosongkan = gaya default. Tersimpan di perangkat ini dan ikut dipakai Bank Suara.</p></div><div id="ssDeviceBlock" class="ss-device-block" hidden><label for="ssDeviceVoice">Suara perangkat (id-ID diutamakan — kualitas tergantung sistem HP/PC kamu)</label><select id="ssDeviceVoice"></select><label for="ssDeviceRate">Kecepatan bicara</label><div class="ss-rate-row"><input type="range" id="ssDeviceRate" min="0.7" max="1.3" step="0.05" value="1"><output id="ssDeviceRateOut">1.0×</output></div><p class="ss-voice-note">Suara perangkat dibacakan langsung oleh HP/PC — gratis, tanpa API, tanpa Bank Suara. Browser tidak bisa merekam suara bawaan, jadi tidak bisa disimpan ke Bank. Cocok kalau kuota/key habis.</p></div><div class="ss-voice-actions"><button type="button" class="ss-voice-test" id="ssVoiceTest">Tes</button><button type="submit" class="ss-voice-save">Simpan</button></div><p class="ss-voice-saved" id="ssVoiceSaved" role="status"></p></form></div>
-  <div class="ss-auth" id="ssLogin" role="dialog" aria-modal="true" aria-labelledby="ssLoginTitle"><form class="ss-auth-card" id="ssLoginForm"><h2 id="ssLoginTitle">Masuk ke SherlyStudio</h2><p>Gunakan akun admin SherlyStudio untuk mengakses Chat Sherly.</p><label for="ssEmail">Email</label><input id="ssEmail" type="email" autocomplete="username" required placeholder="email@domain.com"><label for="ssPassword">Password</label><input id="ssPassword" type="password" autocomplete="current-password" required placeholder="Password akun Supabase"><div class="ss-auth-error" id="ssLoginError" aria-live="polite"></div><div class="ss-auth-actions"><button type="button" id="ssCancelLogin">Batal</button><button class="ss-auth-primary" id="ssLoginSubmit" type="submit">Masuk</button></div></form></div>`;
+  <div class="ss-auth" id="ssLogin" role="dialog" aria-modal="true" aria-labelledby="ssLoginTitle"><form class="ss-auth-card" id="ssLoginForm"><h2 id="ssLoginTitle">Ngobrol dengan Sherly</h2><p id="ssLoginDesc">Masuk dulu yuk — Sherly pengen kenal kamu biar obrolannya nyambung.</p><div class="ss-auth-modes" role="tablist" aria-label="Cara masuk"><button type="button" class="active" data-mode="login">Masuk</button><button type="button" data-mode="register">Daftar Klien</button><button type="button" data-mode="guest">Tamu</button></div><div data-fields="login"><label for="ssEmail">Email</label><input id="ssEmail" type="email" autocomplete="username" placeholder="email@domain.com"><label for="ssPassword">Password</label><input id="ssPassword" type="password" autocomplete="current-password" placeholder="Password akun kamu"></div><div data-fields="register" hidden><label for="ssRegName">Nama lengkap</label><input id="ssRegName" type="text" autocomplete="name" placeholder="cth: Rani Puspita"><label for="ssRegNick">Panggilan</label><input id="ssRegNick" type="text" autocomplete="nickname" placeholder="cth: Rani"><label for="ssRegGender">Jenis kelamin</label><select id="ssRegGender"><option value="">— pilih —</option><option value="pria">Pria</option><option value="wanita">Wanita</option></select><label for="ssRegEmail">Email</label><input id="ssRegEmail" type="email" autocomplete="username" placeholder="email@domain.com"><label for="ssRegPassword">Password (min. 6 karakter)</label><input id="ssRegPassword" type="password" autocomplete="new-password" placeholder="Buat password baru"></div><div data-fields="guest" hidden><label for="ssGuestName">Nama</label><input id="ssGuestName" type="text" autocomplete="name" placeholder="cth: Bagas Pratama"><label for="ssGuestNick">Panggilan</label><input id="ssGuestNick" type="text" autocomplete="nickname" placeholder="cth: Bagas"><label for="ssGuestGender">Jenis kelamin</label><select id="ssGuestGender"><option value="">— pilih —</option><option value="pria">Pria</option><option value="wanita">Wanita</option></select><label for="ssGuestContact">Kontak (opsional)</label><input id="ssGuestContact" type="text" placeholder="No. WA / email — biar Sherly tetap bisa mengenalmu"><p class="ss-auth-sub">Tanpa akun — identitasmu tersimpan di perangkat ini, dan Sherly tetap ingat obrolan kalian di lain hari.</p></div><div class="ss-auth-error" id="ssLoginError" aria-live="polite"></div><div class="ss-auth-actions"><button type="button" id="ssCancelLogin">Batal</button><button class="ss-auth-primary" id="ssLoginSubmit" type="submit">Masuk</button></div></form></div>`;
   root.id = 'ssChatRoot';
   const mainEl = document.querySelector('main');
   const topbarEl = mainEl?.querySelector('.topbar');
@@ -131,8 +131,9 @@
     ownerEl.setAttribute('role', 'button');
     ownerEl.setAttribute('tabindex', '0');
     ownerEl.querySelector('[data-icon]')?.remove();
-    ownerEl.addEventListener('click', () => { if (hasToken()) window.go?.('Profil'); else openLogin(); });
-    ownerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (hasToken()) window.go?.('Profil'); else openLogin(); } });
+    const openAccountOrLogin = () => { const u = window.sherlyStoredToken?.()?.user; if (u?.role === 'admin') window.go?.('Profil'); else openLogin(); };
+    ownerEl.addEventListener('click', openAccountOrLogin);
+    ownerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccountOrLogin(); } });
   }
   const $ = id => document.getElementById(id);
   let token = window.sherlyStoredToken?.()?.access_token || null, conversationId = null, sending = false;
@@ -145,12 +146,22 @@
   function setProfile(user){
     const owner = document.querySelector('.topbar .owner');
     const b = owner?.querySelector('b'), small = owner?.querySelector('small');
-    const name = user ? (user.display_name || user.full_name || user.email?.split('@')[0] || 'Pengguna') : 'Tamu';
+    const name = user ? (user.display_name || user.nickname || user.full_name || user.email?.split('@')[0] || 'Pengguna') : 'Tamu';
     if (b) b.textContent = name;
-    if (small) small.textContent = user ? (user.role || 'ADMIN').toString().toUpperCase() : 'LOGIN · SHERLYSTUDIO';
+    const r = (user && user.role) || 'guest';
+    if (small) small.textContent = user ? (r === 'admin' ? 'ADMIN' : r === 'member' ? 'KLIEN · SHERLYSTUDIO' : 'TAMU · SHERLYSTUDIO') : 'LOGIN · SHERLYSTUDIO';
     owner?.classList.toggle('is-guest', !user);
   }
-  function openLogin(){ $('ssLogin').classList.add('open'); $('ssEmail').focus(); }
+  let authMode = 'login';
+  function setAuthMode(mode){
+    authMode = mode;
+    document.querySelectorAll('#ssLoginForm .ss-auth-modes button').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+    document.querySelectorAll('#ssLoginForm [data-fields]').forEach(f => { f.hidden = f.dataset.fields !== mode; });
+    $('ssLoginSubmit').textContent = mode === 'login' ? 'Masuk' : (mode === 'register' ? 'Daftar Akun Klien' : 'Lanjut sebagai Tamu');
+    $('ssLoginDesc').textContent = mode === 'login' ? 'Masuk dengan email & password — admin maupun klien SherlyStudio.' : (mode === 'register' ? 'Buat akun klien — biar Sherly mengingatmu di setiap obrolan.' : 'Isi buku tamu dulu — tanpa akun, cukup nama & panggilanmu.');
+    $('ssLoginError').textContent = '';
+  }
+  function openLogin(){ $('ssLogin').classList.add('open'); const first = $('ssLoginForm').querySelector('[data-fields]:not([hidden]) input, [data-fields]:not([hidden]) select'); (first || $('ssEmail'))?.focus(); }
   window.sherlyOpenLogin=openLogin;
   const savedSession = window.sherlyStoredToken?.(); if (savedSession?.access_token) { token = savedSession.access_token; setProfile(savedSession.user || { email: 'Admin', role: 'admin' }); window.sherlyApplyProfile?.(); }
   // ---------- Lampiran gambar/file untuk Vision ----------
@@ -250,7 +261,38 @@
   window.addEventListener('resize', sizeChat);
   function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); window.dispatchEvent(new Event('sherly-chat-opened')); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
   function closeChat(){ const root=$('ssChatRoot'); if(root) root.style.height=''; $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); window.dispatchEvent(new Event('sherly-chat-closed')); }
-  function empty(){ $('ssMessages').innerHTML='<div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div>'; }
+  function empty(){
+    const u = window.sherlyStoredToken?.()?.user || null;
+    const role = u?.role || 'guest';
+    const escX = (v) => String(v || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const nick = escX(u?.nickname || u?.display_name || (u?.email ? u.email.split('@')[0] : ''));
+    let head = '<h2>Halo, aku Sherly ✦</h2>';
+    let sub = 'Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?';
+    let buttons = [
+      ['Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty', 'Ide konten 30 hari'],
+      ['Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine', 'Caption + hashtag Reels'],
+      ['Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan', 'Strategi kolaborasi brand']
+    ];
+    if (role === 'member') {
+      head = '<h2>Halo ' + (nick || 'kembali') + '! ✦</h2>';
+      sub = 'Senang kamu kembali! Obrolan kita sebelumnya masih aku ingat. Ada kebutuhan konten hari ini?';
+      buttons = [
+        ['Aku mau bahas ide konten untuk brandku', 'Bahas ide konten'],
+        ['Boleh tanya progres brief terakhirku?', 'Progres brief'],
+        ['Rekomendasikan konten Reels yang lagi relevan ya', 'Rekomendasi Reels']
+      ];
+    } else if (role === 'guest' && u) {
+      head = '<h2>Halo ' + (nick || 'teman baru') + '! ✦</h2>';
+      sub = 'Senang berkenalan! Aku Sherly — content creator di balik SherlyStudio. Ada yang bisa aku bantu?';
+      buttons = [
+        ['Sherly, kenalan dulu dong, kamu siapa?', 'Kenalan dulu'],
+        ['SherlyStudio bisa bantu apa saja sih?', 'Layanan studio'],
+        ['Aku butuh konten untuk brandku, gimana caranya?', 'Butuh konten']
+      ];
+    }
+    const sug = buttons.map(([pr, lb]) => '<button type="button" data-prompt="' + pr + '">' + lb + '</button>').join('');
+    $('ssMessages').innerHTML = '<div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly">' + head + '<p>' + sub + '</p><div class="ss-suggest">' + sug + '</div></div>';
+  }
   function bubble(role,content,meta='',opts={}){const box=$('ssMessages');box.querySelector('.ss-chat-empty')?.remove();const row=document.createElement('div');row.className=`ss-row ${role}`;if(role==='assistant'){const img=document.createElement('img');img.className='ss-row-ava';img.src='assets/sherly-portrait.png';img.alt='Sherly';row.appendChild(img)}const el=document.createElement('div');el.className=`ss-bubble ${role}`;
     if(opts.imageDataUrl){const pic=document.createElement('img');pic.className='ss-chat-img';pic.src=opts.imageDataUrl;pic.alt='Gambar terlampir';el.appendChild(pic)}
     if(opts.fileName){const chip=document.createElement('span');chip.className='ss-filechip';chip.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>'; chip.append(opts.fileName);el.appendChild(chip)}
@@ -276,7 +318,43 @@
     } catch { /* biarkan empty state */ }
   }
   async function openConversation(id){conversationId=id;$('ssMessages').textContent='Memuat percakapan...';try{const r=await fetch(`/api/ai/conversations/${encodeURIComponent(id)}/messages`,{headers:{'Authorization':'Bearer '+((await window.sherlyGetAccessToken?.())||token||'')}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal membuka percakapan');empty();for(const m of d.messages||[]){const chunks=String(m.content||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);const parts=chunks.length?chunks:[String(m.content||'')];parts.forEach((t,i)=>{const last=i===parts.length-1;bubble(m.role,t,(last&&m.provider)?`${m.provider}${m.model?' · '+m.model:''}`:'')})}await loadConversations()}catch(e){empty();if(typeof window.toast==='function')window.toast(e.message);else alert(e.message)}}
-  async function login(e){e.preventDefault();const btn=$('ssLoginSubmit'),err=$('ssLoginError');btn.disabled=true;btn.textContent='Memeriksa...';err.textContent='';try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('ssEmail').value.trim(),password:$('ssPassword').value})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Login gagal');token=d.access_token;setProfile(d.user||{email:'Admin',role:'admin'});window.sherlySetAuthSession?.({access_token:d.access_token,refresh_token:d.refresh_token||null,expires_at:d.expires_at||null,user:d.user||null});window.sherlyApplyProfile?.();$('ssLogin').classList.remove('open');await loadConversations();$('ssChatInput').focus()}catch(e){err.textContent=e.message}finally{btn.disabled=false;btn.textContent='Masuk'}}
+  async function submitAuth(e){
+    e.preventDefault();
+    const btn = $('ssLoginSubmit'), err = $('ssLoginError');
+    const label = authMode === 'login' ? 'Masuk' : (authMode === 'register' ? 'Daftar Akun Klien' : 'Lanjut sebagai Tamu');
+    btn.disabled = true; btn.textContent = 'Memproses...'; err.textContent = '';
+    try {
+      let r, d;
+      if (authMode === 'register') {
+        const fullName = $('ssRegName').value.trim(), nick = $('ssRegNick').value.trim(), gender = $('ssRegGender').value, email = $('ssRegEmail').value.trim(), password = $('ssRegPassword').value;
+        if (!fullName || !gender || !email || !password) throw new Error('Lengkapi nama, jenis kelamin, email, dan password dulu ya.');
+        r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ full_name: fullName, nickname: nick, gender, email, password }) });
+        d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Pendaftaran gagal');
+        if (d.needs_confirmation) { err.textContent = 'Hampir selesai! Cek email kamu untuk verifikasi dulu, lalu kembali ke sini untuk masuk.'; return; }
+      } else if (authMode === 'guest') {
+        const fullName = $('ssGuestName').value.trim(), nick = $('ssGuestNick').value.trim(), gender = $('ssGuestGender').value, contact = $('ssGuestContact').value.trim();
+        if (!fullName || !gender) throw new Error('Nama dan jenis kelamin wajib diisi dulu ya.');
+        r = await fetch('/api/auth/guest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ full_name: fullName, nickname: nick, gender, contact }) });
+        d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Gagal masuk sebagai tamu');
+      } else {
+        r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('ssEmail').value.trim(), password: $('ssPassword').value }) });
+        d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Login gagal');
+      }
+      token = d.access_token;
+      setProfile(d.user || null);
+      window.sherlySetAuthSession?.({ access_token: d.access_token, refresh_token: d.refresh_token || null, expires_at: d.expires_at || null, user: d.user || null });
+      window.sherlyApplyRole?.();
+      window.sherlyApplyProfile?.();
+      $('ssLogin').classList.remove('open');
+      await loadConversations();
+      if (!conversationId) empty();
+      $('ssChatInput').focus();
+    } catch (e2) { err.textContent = e2.message; }
+    finally { btn.disabled = false; btn.textContent = label; }
+  }
   async function send(e){e.preventDefault();if(sending)return;if(!hasToken()){openLogin();return}const input=$('ssChatInput');let message=input.value.trim();const outgoingImage=pendingImage,outgoingFile=pendingFile;if(!message&&!outgoingImage){window.toast?.('Tulis pesan atau lampirkan gambar dulu ya.');return}if(outgoingFile){message=(message?message+'\n\n':'')+`[Lampiran file: ${outgoingFile.name}]\n\`\`\`\n${outgoingFile.text}\n\`\`\``}const displayText = message || 'Tolong analisis gambar ini.';sending=true;$('ssSend').disabled=true;input.value='';input.style.height='44px';clearAttachment();bubble('user',displayText,'',{imageDataUrl:outgoingImage?.dataUrl,fileName:outgoingFile?.name});const pending=bubble('assistant','Sherly sedang mengetik...','',{tts:false});try{const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Jakarta';const r=await fetch('/api/ai/chat',{method:'POST',headers:await authHeaders(),body:JSON.stringify({message,provider:$('ssProvider').value,conversation_id:conversationId,timezone,...(outgoingImage?{image:{mime:outgoingImage.mime,data:outgoingImage.data}}:{})})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Sherly gagal merespons');pending.remove();conversationId=d.conversation_id;try{localStorage.removeItem('sherly.forceNewChat')}catch{}const parts=(Array.isArray(d.bubbles)&&d.bubbles.length?d.bubbles:String(d.reply||'').split(/\n{2,}/)).map(x=>String(x).trim()).filter(Boolean);const metaStr=`${d.provider}${d.model?' · '+d.model:''}${d.fallback_used?' · fallback otomatis':''}`;parts.forEach((text,i)=>{const last=i===parts.length-1;window.setTimeout(()=>{bubble('assistant',text,last?metaStr:'',last?{tts:true}:{tts:false})}, Math.min(i*450,1800))});await loadConversations()}catch(e2){pending.querySelector('.ss-bubble-text').textContent=`Maaf, pesan belum berhasil diproses: ${e2.message}`}finally{sending=false;$('ssSend').disabled=false;input.focus()}}
   function logout(){
     token=null; conversationId=null;
@@ -284,7 +362,7 @@
     window.sherlyClearAuthSession?.();
     setProfile(null);
     window.sherlyApplyProfile?.();
-    $('ssPassword').value=''; $('ssLoginError').textContent='';
+    $('ssPassword').value=''; $('ssLoginError').textContent=''; setAuthMode('login');
     closeChat();
     if (typeof window.go === 'function') window.go('Beranda');
     if (typeof window.toast === 'function') window.toast('Anda sudah keluar akun.');
@@ -425,7 +503,7 @@
     }
   });
 
-  $('ssCancelLogin').addEventListener('click',()=>$('ssLogin').classList.remove('open'));$('ssLoginForm').addEventListener('submit',login);$('ssChatForm').addEventListener('submit',send);
+  $('ssCancelLogin').addEventListener('click',()=>$('ssLogin').classList.remove('open'));document.querySelectorAll('#ssLoginForm .ss-auth-modes button').forEach(btn=>btn.addEventListener('click',()=>setAuthMode(btn.dataset.mode)));$('ssLoginForm').addEventListener('submit',submitAuth);$('ssChatForm').addEventListener('submit',send);
 $('ssChatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('ssChatForm').requestSubmit()}});
   // Keep the application shell and sidebar visible. Chat occupies only the main workspace.
   document.querySelectorAll('.nav button[data-page]').forEach(b=>b.addEventListener('click',e=>{

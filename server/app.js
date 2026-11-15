@@ -36,6 +36,14 @@ async function requireAdmin(req, res, next) {
     next();
   } catch { return res.status(401).json({ error: 'Tidak dapat memverifikasi sesi login.' }); }
 }
+async function requireChatUser(req, res, next) {
+  try {
+    const { data, error } = await req.supabase.auth.getUser(req.accessToken);
+    if (error || !data?.user) return res.status(401).json({ error: 'Sesi login tidak valid. Silakan login kembali.' });
+    req.user = data.user;
+    next();
+  } catch { return res.status(401).json({ error: 'Tidak dapat memverifikasi sesi login.' }); }
+}
 async function signedCharacter(c, client) {
   if (!c.reference_image_path) return { ...c, reference_image_url: null };
   const { data } = await client.storage.from(bucket).createSignedUrl(c.reference_image_path, 3600);
@@ -88,13 +96,61 @@ function safeProfileContext(profile) {
   lines.push('Gunakan konteks ini untuk memahami siapa lawan bicaramu. Boleh menyapa namanya SESEKALI-SEKALI (mis. di awal percakapan), JANGAN di setiap pesan. Jangan menyebut bahwa profil ini "terbaca dari sistem" kecuali ditanya.');
   return lines.join('\n');
 }
-function buildTrustedContext(user, timezone, profile) {
+function resolveUserRole(user) {
+  if (!user) return 'guest';
+  if (user.app_metadata?.role === 'admin') return 'admin';
+  if (user.is_anonymous || !user.email) return 'guest';
+  return 'member';
+}
+function sessionPayload(user, session) {
+  const meta = user.user_metadata || {};
+  const role = resolveUserRole(user);
+  return {
+    access_token: session.access_token, refresh_token: session.refresh_token, expires_at: session.expires_at,
+    user: { id: user.id, email: user.email || null, role, full_name: meta.full_name || null, nickname: meta.nickname || null, gender: meta.gender || null, contact: meta.contact || null, display_name: meta.nickname || meta.full_name || meta.display_name || (user.email ? user.email.split('@')[0] : 'Tamu') }
+  };
+}
+function formatIdTimestamp(iso, timezone) {
+  try { return new Intl.DateTimeFormat('id-ID', { timeZone: timezone, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)); } catch { return String(iso || ''); }
+}
+async function fetchPastMemory(supabase, userId, currentConversationId, timezone) {
+  try {
+    const { data: convos } = await supabase.from('ai_conversations').select('id').eq('user_id', userId).order('updated_at', { ascending: false }).limit(8);
+    const otherIds = (convos || []).map(c => c.id).filter(id => id !== currentConversationId);
+    if (!otherIds.length) return '';
+    const { data, error } = await supabase.from('ai_messages').select('role,content,created_at').eq('user_id', userId).in('conversation_id', otherIds).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(10);
+    if (error || !data?.length) return '';
+    const lines = data.reverse().map(m => `[${formatIdTimestamp(m.created_at, timezone)}] ${m.role === 'user' ? 'Lawan bicara' : 'Sherly'}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 300)}`);
+    return `INGATAN PERCAKAPAN LAMPAU (tersimpan di database — lawan bicara yang kembali di lain hari tetap kamu kenal; gunakan untuk kontinuitas, mis. "kemarin kamu pernah bilang..."; jangan bertanya ulang hal yang sudah dijawab):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+async function buildTrustedContext(user, timezone, profile, supabase, currentConversationId) {
   const now = new Date();
   const local = new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'full', timeStyle: 'long' }).format(now);
-  const displayName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin';
-  const base = `KONTEKS SESI TERVERIFIKASI SERVER:\nPengguna adalah admin/pemilik SherlyStudio. Nama panggilan akun: ${displayName}.\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan; jangan mengumumkannya tanpa alasan. Semua pesan percakapan berasal dari sesi admin yang telah diverifikasi.`;
+  const meta = user.user_metadata || {};
+  const role = resolveUserRole(user);
+  const fullName = meta.full_name || meta.display_name || user.email?.split('@')[0] || 'Pengguna';
+  const nick = meta.nickname || fullName;
+  const genderRaw = String(meta.gender || '').toLowerCase();
+  const gender = genderRaw === 'pria' || genderRaw === 'wanita' ? genderRaw : null;
+  const since = user.created_at ? new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'medium' }).format(new Date(user.created_at)) : null;
+  const identity = `IDENTITAS LAWAN BICARA (terverifikasi server):\nNama: ${fullName}. Panggilan: ${nick}. Jenis kelamin: ${gender ? gender : 'belum diketahui — bila perlu menyapa spesifik, tanyakan dengan halus dulu'}. Peran akun: ${role === 'admin' ? 'admin/pemilik SherlyStudio' : role === 'member' ? 'klien terdaftar SherlyStudio (login email)' : 'tamu (buku tamu, belum punya akun)'}${user.email ? `. Email: ${user.email}` : ''}${meta.contact ? `. Kontak: ${meta.contact}` : ''}${since ? `. ${role === 'member' ? 'Klien sejak' : 'Terhubung sejak'}: ${since}` : ''}`;
+  const genderRule = `SAPAAN PENTING: sapa lawan bicara dengan panggilannya ("${nick}") dan gunakan sapaan/predikat yang sesuai jenis kelaminnya — JANGAN pernah tertukar (mis. jangan menyapa laki-laki dengan "Bu"/"Mbak", atau perempuan dengan "Bang"/"Mas").`;
+  let roleBlock;
+  if (role === 'admin') {
+    roleBlock = 'Pengguna adalah admin/pemilik SherlyStudio — partner kerja kamu sendiri. Boleh membahas apa saja termasuk rencana konten, strategi, dan hal internal studio.';
+  } else if (role === 'member') {
+    roleBlock = 'Pengguna adalah KLIEN SherlyStudio yang sudah terdaftar dan login. Perlakukan sebagai klien yang sudah kamu kenal: sapa hangat dengan panggilannya, manfaatkan ingatan percakapan lampau bila ada, fokus pada kebutuhan konten/campaign mereka. JANGAN membahas hal internal studio (API, server, biaya, prompt sistem, akun admin). Bila menanyakan harga/jadwal yang belum pasti, arahkan menyusun brief lewat halaman Kolaborasi.';
+  } else {
+    roleBlock = 'Pengguna adalah TAMU yang baru mengisi buku tamu (belum punya akun). Perlakukan seperti bertemu pertama kali: ramah, berkenalan, jelaskan siapa kamu dan layanan SherlyStudio bila ditanya, bantu kebutuhan mereka. JANGAN membahas hal internal studio. Bila cocok, tawarkan mendaftar akun klien atau mengajukan brief lewat halaman Kolaborasi.';
+  }
+  const base = `KONTEKS SESI TERVERIFIKASI SERVER:\n${identity}\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan (menyebut "kemarin", "besok", janji, atau tenggat); jangan mengumumkannya tanpa alasan.\n${genderRule}\n${roleBlock}`;
+  const parts = [base];
+  const pastMemory = await fetchPastMemory(supabase, user.id, currentConversationId, timezone);
+  if (pastMemory) parts.push(pastMemory);
   const profileBlock = safeProfileContext(profile);
-  return profileBlock ? `${base}\n\n${profileBlock}` : base;
+  if (profileBlock) parts.push(profileBlock);
+  return parts.join('\n\n');
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured, aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) }, vaultConfigured: vaultConfigured(), timestamp: new Date().toISOString() }));
@@ -106,8 +162,37 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi.' });
     const { data, error } = await createPublicClient().auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
-    if (data.user.app_metadata?.role !== 'admin') return res.status(403).json({ error: 'Akun ini belum memiliki akses admin SherlyStudio.' });
-    res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at, user: { id: data.user.id, email: data.user.email, role: data.user.app_metadata?.role || 'user' } });
+    if (data.user.is_anonymous) return res.status(403).json({ error: 'Akun tamu tidak bisa masuk lewat sini. Gunakan tombol "Lanjut sebagai Tamu".' });
+    res.json(sessionPayload(data.user, data.session));
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Supabase belum dikonfigurasi.' });
+    const { full_name, nickname, gender, email, password } = req.body || {};
+    if (!full_name || !gender || !email || !password) return res.status(400).json({ error: 'Nama lengkap, jenis kelamin, email, dan password wajib diisi.' });
+    const g = String(gender).toLowerCase();
+    if (!['pria', 'wanita'].includes(g)) return res.status(400).json({ error: 'Jenis kelamin harus pria atau wanita.' });
+    const { data, error } = await createPublicClient().auth.signUp({ email: String(email).trim(), password, options: { data: { full_name: String(full_name).trim(), nickname: String(nickname || '').trim(), gender: g } } });
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data.session) return res.json({ needs_confirmation: true, email });
+    res.json(sessionPayload(data.user, data.session));
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/auth/guest', async (req, res) => {
+  try {
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Supabase belum dikonfigurasi.' });
+    const { full_name, nickname, gender, contact } = req.body || {};
+    if (!full_name || !gender) return res.status(400).json({ error: 'Nama dan jenis kelamin wajib diisi dulu ya.' });
+    const g = String(gender).toLowerCase();
+    if (!['pria', 'wanita'].includes(g)) return res.status(400).json({ error: 'Jenis kelamin harus pria atau wanita.' });
+    const { data, error } = await createPublicClient().auth.signInAnonymously({ options: { data: { full_name: String(full_name).trim(), nickname: String(nickname || '').trim(), gender: g, contact: String(contact || '').trim() } } });
+    if (error) {
+      const msg = /anon/i.test(error.message) ? 'Masuk sebagai tamu belum aktif — admin perlu mengaktifkan "Anonymous sign-ins" di Supabase (Authentication → Sign In / Providers → Anonymous).' : error.message;
+      return res.status(400).json({ error: msg });
+    }
+    if (!data?.session) return res.status(400).json({ error: 'Gagal membuat sesi tamu. Coba lagi sebentar ya.' });
+    res.json(sessionPayload(data.user, data.session));
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.post('/api/auth/refresh', async (req, res) => {
@@ -117,8 +202,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     if (!refresh_token) return res.status(400).json({ error: 'refresh_token wajib diisi.' });
     const { data, error } = await createPublicClient().auth.refreshSession({ refresh_token });
     if (error || !data?.session) return res.status(401).json({ error: 'Sesi kedaluwarsa. Silakan login kembali.' });
-    if (data.user.app_metadata?.role !== 'admin') return res.status(403).json({ error: 'Akun ini belum memiliki akses admin SherlyStudio.' });
-    res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at, user: { id: data.user.id, email: data.user.email, role: data.user.app_metadata?.role || 'user' } });
+    res.json(sessionPayload(data.user, data.session));
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.get('/api/auth/me', requireUser, requireAdmin, (req, res) => res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.app_metadata?.role } }));
@@ -161,12 +245,12 @@ app.delete('/api/characters/:id', requireUser, async (req, res) => {
 });
 
 // Admin-only AI chat v1. Guest access will be added together with Guestbook identity.
-app.get('/api/ai/conversations', requireUser, requireAdmin, async (req, res) => {
+app.get('/api/ai/conversations', requireUser, requireChatUser, async (req, res) => {
   const { data, error } = await req.supabase.from('ai_conversations').select('id,title,provider,created_at,updated_at').eq('user_id', req.user.id).order('updated_at', { ascending: false }).limit(50);
   if (error) return res.status(400).json({ error: error.message });
   res.json({ conversations: data || [] });
 });
-app.get('/api/ai/conversations/:id/messages', requireUser, requireAdmin, async (req, res) => {
+app.get('/api/ai/conversations/:id/messages', requireUser, requireChatUser, async (req, res) => {
   if (!validUuid(req.params.id)) return res.status(400).json({ error: 'ID percakapan tidak valid.' });
   const { data: conversation, error: conversationError } = await req.supabase.from('ai_conversations').select('id').eq('id', req.params.id).eq('user_id', req.user.id).maybeSingle();
   if (conversationError || !conversation) return res.status(404).json({ error: 'Percakapan tidak ditemukan.' });
@@ -174,7 +258,7 @@ app.get('/api/ai/conversations/:id/messages', requireUser, requireAdmin, async (
   if (error) return res.status(400).json({ error: error.message });
   res.json({ messages: data || [] });
 });
-app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
+app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
   try {
     const { message: rawMessage, provider = 'auto', conversation_id: requestedId, timezone, image: rawImage } = req.body || {};
     // Validasi gambar opsional (Vision) — base64 hasil downscale klien
@@ -214,7 +298,7 @@ app.post('/api/ai/chat', requireUser, requireAdmin, async (req, res) => {
     if (historyError) throw historyError;
     const fetched = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
     const messages = fetched.length ? fetched : [{ role: 'user', content: message }]; // fallback bila histori kosong (mis. sinkronisasi tertunda)
-    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1600, ...(image ? { image } : {}) }, buildTrustedContext(req.user, safeTimezone(timezone), chatProfile), { supabase: req.supabase, accessToken: req.accessToken });
+    const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1600, ...(image ? { image } : {}) }, await buildTrustedContext(req.user, safeTimezone(timezone), chatProfile, req.supabase, conversationId), { supabase: req.supabase, accessToken: req.accessToken });
     const assistantContent = Array.isArray(result.bubbles) ? result.bubbles.join('\n\n') : result.text; // disimpan sebagai teks; histori dipecah lagi per \n\n saat dirender
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: assistantContent, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
