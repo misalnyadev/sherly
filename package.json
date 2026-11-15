@@ -11,12 +11,13 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@supabase/supabase-js": "^2.57.0",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
-    "zod": "^4.1.5",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "zod": "^4.1.5"
   },
   "engines": {
     "node": ">=20"
