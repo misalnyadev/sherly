@@ -21,6 +21,10 @@ export const TRAIT_LABELS = {
 
 const TRAIT_MAX = 300;
 
+// D-105 (paritas AK Talent): gender & tinggi disimpan di traits jsonb (tanpa kolom baru),
+// tapi BUKAN bagian analisis vision (tetap 17 field) — keduanya field form basics.
+const TRAIT_EXTRA = ['gender', 'height'];
+
 /** System prompt khusus analisis visual — dipakai sebagai override system prompt chatWithAI. */
 export const VISION_SYSTEM_PROMPT = [
   'Kamu adalah asisten analisis visual untuk studio kreatif SherlyStudio.',
@@ -33,7 +37,7 @@ export const VISION_SYSTEM_PROMPT = [
 export function sanitizeTraits(input) {
   const out = {};
   if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
-  for (const key of TRAIT_FIELDS) {
+  for (const key of [...TRAIT_FIELDS, ...TRAIT_EXTRA]) {
     const raw = input[key];
     if (typeof raw !== 'string') continue;
     const val = raw.replace(/[\r\n\t]+/g, ' ').trim().slice(0, TRAIT_MAX);

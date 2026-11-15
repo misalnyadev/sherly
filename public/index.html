@@ -495,7 +495,9 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
    <div class="form-field"><label>Nama karakter *</label><input id="characterName" required maxlength="80" value="Sherly" placeholder="Sherly"></div>
    <div class="form-field"><label>Peran</label><select id="characterRole"></select><input id="characterRoleX" hidden maxlength="80" placeholder="Tulis sendiri…"></div>
    <div class="form-field"><label>Usia</label><input id="characterAge" type="number" min="18" max="99" value="24"></div>
-   <div class="form-field"><label>Asal / latar</label><select id="characterOrigin"></select><input id="characterOriginX" hidden maxlength="80" placeholder="Tulis sendiri…"></div>
+   <div class="form-field"><label>Jenis kelamin</label><select id="characterGender"></select><input id="characterGenderX" hidden maxlength="40" placeholder="Tulis sendiri…"></div>
+   <div class="form-field"><label>Tinggi badan</label><select id="characterHeight"></select><input id="characterHeightX" hidden maxlength="40" placeholder="mis. 166 cm"></div>
+   <div class="form-field"><label>Asal / etnis</label><select id="characterOrigin"></select><input id="characterOriginX" hidden maxlength="80" placeholder="Tulis sendiri…"></div>
    <div class="form-field full"><label>Niche (pisahkan dengan koma)</label><input id="characterNiche" value="Lifestyle, Beauty, Fashion, Travel"></div>
    <div class="form-field"><label>Bahasa konten</label><select id="characterLanguage"></select><input id="characterLanguageX" hidden maxlength="60" placeholder="Tulis sendiri…"></div>
    <div class="form-field"><label>Platform</label><input id="characterPlatforms" value="Instagram, TikTok"></div>
@@ -506,7 +508,6 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
    <div class="wiz-gen" id="wizGenBlock" hidden>
     <span class="wiz-lock-label">Form detail karakter — tinggal pilih dari daftar (klik-klik), prompt tersusun otomatis</span>
     <div class="form-grid" style="margin-top:8px">
-    <div class="form-field"><label>Jenis kelamin</label><select id="wizGenGender"><option value="">— pilih —</option><option value="wanita">Perempuan</option><option value="pria">Laki-laki</option><option value="netral">Tampilan netral</option></select></div>
     <div class="form-field"><label>Gaya visual</label><select id="wizGenLook"><option value="photo">Foto hyper-realistis</option><option value="semi">Semi-realistis</option><option value="anime">Anime / manga</option><option value="3d">3D stylized</option><option value="illo">Ilustrasi digital</option></select></div>
     <div class="form-field"><label>Hijab</label><select id="wizGenHijab"></select><input id="wizGenHijabX" hidden maxlength="120" placeholder="Tulis sendiri…"></div>
     <div class="form-field"><label>Rambut</label><select id="wizGenHair"></select><input id="wizGenHairX" hidden maxlength="120" placeholder="Tulis sendiri…"></div>

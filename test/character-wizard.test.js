@@ -13,6 +13,14 @@ test('sanitizeTraits: whitelist kunci, buang kosong & non-string, kap panjang', 
   assert.equal(out.lips.length, 300);
 });
 
+test('sanitizeTraits: gender & tinggi (form basics, D-105) ikut tersimpan di traits', () => {
+  const out = sanitizeTraits({ gender: 'Perempuan', height: '±165 cm', faceShape: 'oval', hack: 'x' });
+  assert.equal(out.gender, 'Perempuan');
+  assert.equal(out.height, '±165 cm');
+  assert.equal(out.faceShape, 'oval');
+  assert.ok(!('hack' in out));
+});
+
 test('sanitizeTraits: input bukan objek -> objek kosong', () => {
   assert.deepEqual(sanitizeTraits(null), {});
   assert.deepEqual(sanitizeTraits('abc'), {});

@@ -141,3 +141,20 @@ Row 3, features and expressions: nose macro (fine evenly distributed hairs, visi
 
 All skin is unretouched and natural: pores distinctly visible with subtle variation, fine vellus hair (peach fuzz), tiny bumps, natural oils, fine skin grain, soft directional sheen. Natural proportions, five fingers per hand. Consistent professional editorial photography across all panels, shallow depth of field in the portraits and macro lenses in the close-ups, subtle film grain, no plastic smoothing, no beauty filter, no HDR look. Each panel is sharp, well exposed and cleanly framed with no overlap between panels."
 ```
+
+---
+
+## LOKASI SOURCE AK TALENT (penting, 15 Nov 2026)
+
+**Repo: `misalnyadev/portfolio` (branch `main`, file `index.html` ±1.1 MB — akun GitHub yang sama dengan sherly).**
+Ambil isinya via Blobs API (raw.githubusercontent.com diblokir sandbox):
+`gh api repos/misalnyadev/portfolio/git/trees/main?recursive=1` → sha index.html → `gh api repos/misalnyadev/portfolio/git/blobs/<sha> --jq .content | base64 -d`
+Repo ini = sumber kebenaran paritas SherlyStudio ↔ AK Talent (jangan lagi andalkan teks tempelan).
+
+### Audit paritas (D-105, dibaca langsung dari source)
+- ✅ **Board engine** (`buildBoardPrompt`): implementasi D-104 kita sudah verbatim sama.
+- ✅ **Lock basics**: AK `IDENTITY LOCK — karakter X, usia visual N, etnis E, gender G, tinggi T` → D-105 kita samakan (gender + tinggi kini field basics, disimpan di traits jsonb, vision tetap 17 field).
+- ⏳ **Ditunda (disepakati bertahap)**:
+  - **Potong board jadi 15 aset** (`BOARD_LABELS`: 3 full body + 4 portrait + 4 macro + 4 fitur/ekspresi → `bodyAssets`/`expressionAssets`) — menunggu konsumennya (mode Studio baru / editor timeline), saat ini SherlyStudio belum punya pemakai aset potongan.
+  - **Profil chip "Detail tampilan karakter"** (`PF_SECTIONS`/`PF_OPTS`, gender-aware: field pria/wanita/hijab bergantian) + **kamus `pfEn`** (terjemahan preset ID→EN saat prompt English) — pengganti yang lebih kaya untuk form wajah kita; kandidit adopsi saat revamp tahap 1.
+  - Field basics tambahan AK: NEGARA ASAL (`country`), KETURUNAN (`descent`), PROFESI (≈ peran kita), KEPRIBADIAN awal, `photoDirection`/`lighting` untuk foto wajah.
