@@ -29,3 +29,11 @@ comment on column characters.voice is 'Profil suara karakter: { name: voice Gemi
 comment on column characters.voice_path is 'Path sampel suara karakter di bucket character-references.';
 
 -- Tidak ada kebijakan RLS baru: kolom mengikuti kebijakan per-user yang sudah ada di tabel characters.
+
+-- ===== D-107: bucket character-references =====
+-- Bucket dibuat manual di dashboard. Pastikan pengaturan Allowed MIME types-nya
+-- TIDAK membatasi (kosongkan), agar sampel suara (WAV/MP3/OGG/M4A/WebM) bisa diunggah.
+-- Jalankan sekali (aman berulang) — sama dengan docs/supabase-audio-mime.sql:
+update storage.buckets
+   set allowed_mime_types = null
+ where id in ('character-references', 'tts-clips');
