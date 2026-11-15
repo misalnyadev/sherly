@@ -28,6 +28,7 @@
   };
   const DURATIONS = ['5 detik', '10 detik'];
   let engines = [['auto', 'Otomatis (Kie \u2192 Kustom \u2192 Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']];
+  let characters = []; // karakter user (Kunci identitas + foto referensi)
   const SUGGESTIONS = [
     'Flatlay skincare pagi di meja kayu, cahaya jendela lembut, nuansa cream',
     'Sudut cafe cozy di Bogor, secangkir kopi latte dan buku terbuka',
@@ -35,7 +36,7 @@
     'Meja kerja kreator rapi dengan kamera film dan moodboard'
   ];
 
-  const state = { mode: 'photo', aspect: '4:5', style: 'lifestyle', duration: '5 detik', engine: 'auto' };
+  const state = { mode: 'photo', aspect: '4:5', style: 'lifestyle', duration: '5 detik', engine: 'auto', charId: '', useIdentity: true, useRef: false };
   let history = [];
   let popOpen = null;
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
@@ -73,7 +74,7 @@
       + '<img src="' + dataUrl + '" alt="' + esc(String(it.prompt).slice(0, 80)) + '" loading="lazy">'
       + '<div class="st-card-body">'
       + '<p>' + esc(it.prompt) + '</p>'
-      + '<span class="st-card-meta">' + esc(it.aspect || '') + ' · ' + esc(it.style ? (STYLES[it.style] || {}).label || '' : '') + (it.provider ? ' · ' + esc(it.provider === 'kie' ? 'Kie AI' : it.provider === 'gemini' ? 'Gemini' : it.provider) : '') + (it.model ? ' · ' + esc(String(it.model).split('/').pop()) : '') + '</span>'
+      + '<span class="st-card-meta">' + esc(it.aspect || '') + ' · ' + esc(it.style ? (STYLES[it.style] || {}).label || '' : '') + (it.charName ? ' · ' + esc(it.charName) : '') + (it.provider ? ' · ' + esc(it.provider === 'kie' ? 'Kie AI' : it.provider === 'gemini' ? 'Gemini' : it.provider) : '') + (it.model ? ' · ' + esc(String(it.model).split('/').pop()) : '') + '</span>'
       + '<div class="st-card-actions">'
       + '<a class="st-act" href="' + dataUrl + '" download="sherly-studio-' + esc(it.id) + '.' + ext + '">' + icon('cloud-upload') + ' Unduh</a>'
       + '<button type="button" class="st-act" data-act="planner">' + icon('list-checks') + ' Ke Planner</button>'
@@ -123,10 +124,22 @@
     if (s) s.querySelector('b').textContent = styleLabel();
     if (d) d.querySelector('b').textContent = state.duration;
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || [null, 'Otomatis'])[1];
+    const cp = $('stCharPill'); if (cp) cp.querySelector('b').textContent = (characters.find((x) => x.id === state.charId) || { name: 'Tanpa' }).name || 'Tanpa';
+    const rn = $('stRefNote');
+    if (rn) {
+      const refOn = state.useRef && !!state.charId && state.mode === 'photo';
+      rn.classList.toggle('st-hidden', !refOn);
+      if (refOn) {
+        const forced = state.engine === 'kie' || String(state.engine).startsWith('custom:');
+        rn.innerHTML = forced
+          ? icon('eye') + ' <b>Foto referensi hanya didukung Gemini</b> — request ini otomatis memakai Gemini.'
+          : icon('eye') + ' Gambar dibuat <b>dengan wajah karakter</b> (foto referensi + Gemini).';
+      }
+    }
   }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'char'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
   }
@@ -138,8 +151,20 @@
     if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     if (which === 'dur') items = DURATIONS.map((v) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + v + '</button>').join('');
     if (which === 'engine') items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">' + esc(l) + '</button>').join('');
+    if (which === 'char') items = ['<button type="button" data-v="" class="' + (state.charId ? '' : 'on') + '">Tanpa karakter</button>']
+      .concat(characters.map((c) => '<button type="button" data-v="' + esc(c.id) + '" class="' + (state.charId === c.id ? 'on' : '') + '">' + esc(c.name || '(tanpa nama)') + (c.is_master ? ' · MASTER' : '') + '</button>'))
+      .concat(['<div class="st-pop-sep"></div>',
+        '<button type="button" data-t="identity" class="st-toggle ' + (state.useIdentity ? 'on' : '') + '">Kunci identitas: ' + (state.useIdentity ? 'AKTIF' : 'MATI') + '</button>',
+        '<button type="button" data-t="ref" class="st-toggle ' + (state.useRef ? 'on' : '') + '">Foto referensi (Gemini): ' + (state.useRef ? 'AKTIF' : 'MATI') + '</button>'])
+      .join('');
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      if (which === 'char' && b.dataset.t) {
+        if (b.dataset.t === 'identity') state.useIdentity = !state.useIdentity;
+        if (b.dataset.t === 'ref') state.useRef = !state.useRef;
+        buildPop('char'); updatePillLabels(); return;
+      }
+      if (which === 'char') state.charId = b.dataset.v || '';
       if (which === 'aspect') state.aspect = b.dataset.v;
       if (which === 'style') state.style = b.dataset.v;
       if (which === 'dur') state.duration = b.dataset.v;
@@ -159,10 +184,15 @@
     skel.innerHTML = '<div class="st-skel-img"></div><div class="st-card-body"><p>Memproses \u201c' + esc(raw.slice(0, 46)) + '\u2026\u201d</p></div>';
     if (grid) { grid.querySelector('.st-empty')?.remove(); grid.prepend(skel); }
     try {
-      const r = await fetch('/api/ai/image', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ prompt: composedPrompt(raw), provider: state.engine, aspect: state.aspect }) });
+      const ch = characters.find((x) => x.id === state.charId);
+      let prompt = composedPrompt(raw);
+      if (ch && state.useIdentity && ch.identity_prompt) prompt = String(ch.identity_prompt).trim().slice(0, 900) + '\n\n---\nADEGAN YANG DIMINTA: ' + prompt;
+      const reqBody = { prompt, provider: state.engine, aspect: state.aspect };
+      if (ch && state.useRef && state.mode === 'photo' && ch.reference_image_url) reqBody.referenceCharacterId = ch.id;
+      const r = await fetch('/api/ai/image', { method: 'POST', headers: await authHeaders(), body: JSON.stringify(reqBody) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Generator gambar gagal.');
-      history.unshift({ id: 'g' + Date.now(), prompt: raw, aspect: state.aspect, style: state.style, provider: d.provider, mime: d.image?.mime, data: d.image?.data, model: d.image?.model, createdAt: new Date().toISOString() });
+      history.unshift({ id: 'g' + Date.now(), prompt: raw, aspect: state.aspect, style: state.style, charName: (ch && state.useIdentity) ? (ch.name || '') : '', provider: d.provider, mime: d.image?.mime, data: d.image?.data, model: d.image?.model, createdAt: new Date().toISOString() });
       saveHistory(); renderGrid();
       window.toast?.('Gambar jadi \u2728');
     } catch (e) {
@@ -188,14 +218,23 @@
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('clapperboard') + ' Mesin <b>Otomatis</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-engine"></div></div>'
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' Aspek <b>4:5</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-aspect"></div></div>'
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' Gaya <b>Lifestyle</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-style"></div></div>'
+      + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stCharPill">' + icon('user-round') + ' Karakter <b>Tanpa</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-char"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('play') + ' Durasi <b>5 detik</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
       + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
       + '</div>'
+      + '<div class="st-note st-hidden" id="stRefNote"></div>'
       + '<div class="st-note st-hidden" id="stVideoNote">' + icon('film') + '<div><b>Generator video menyusul.</b> Mesin video (mis. Veo) belum terpasang di environment \u2014 untuk sekarang, susun storyboard &amp; brief videonya bareng Sherly; hasil foto dari tab sebelah bisa jadi referensi frame-mu.</div><button type="button" class="outline-btn" id="stStoryboardBtn">' + icon('message-circle') + ' Minta Sherly susun storyboard</button></div>'
       + '</div>'
       + '<div class="st-grid" id="stGrid"></div>';
 
+    // Karakter user (Kunci identitas + foto referensi) — default: master / pertama.
+    fetch('/api/characters', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
+      characters = Array.isArray(d?.characters) ? d.characters : [];
+      if (characters.length && !characters.find((c) => c.id === state.charId)) state.charId = (characters.find((c) => c.is_master) || characters[0]).id;
+      if (!characters.length) state.charId = '';
+      updatePillLabels();
+    }).catch(() => {});
     // Provider kustom dari Pengaturan otomatis jadi pilihan Mesin.
     fetch('/api/custom-providers', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
       const list = Array.isArray(d?.providers) ? d.providers : [];
@@ -206,6 +245,7 @@
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
+    $('stCharPill')?.addEventListener('click', () => { buildPop('char'); togglePop('char'); });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     const ta = $('stPrompt');
     ta?.addEventListener('input', () => { const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200'; });

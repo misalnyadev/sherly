@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom } from './ai.js';
+import { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, VISION_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
@@ -45,9 +46,16 @@ async function requireChatUser(req, res, next) {
   } catch { return res.status(401).json({ error: 'Tidak dapat memverifikasi sesi login.' }); }
 }
 async function signedCharacter(c, client) {
-  if (!c.reference_image_path) return { ...c, reference_image_url: null };
-  const { data } = await client.storage.from(bucket).createSignedUrl(c.reference_image_path, 3600);
-  return { ...c, reference_image_url: data?.signedUrl || null };
+  const out = { ...c, reference_image_url: null, board_image_url: null };
+  if (c.reference_image_path) {
+    const { data } = await client.storage.from(bucket).createSignedUrl(c.reference_image_path, 3600);
+    out.reference_image_url = data?.signedUrl || null;
+  }
+  if (c.board_path) {
+    const { data } = await client.storage.from(bucket).createSignedUrl(c.board_path, 3600);
+    out.board_image_url = data?.signedUrl || null;
+  }
+  return out;
 }
 async function saveReferenceImage(req, userId, characterId) {
   if (!req.file) return null;
@@ -67,6 +75,7 @@ function parseCharacter(req) {
     identity_prompt: d.identity_prompt, is_master: Boolean(d.is_master), status: 'active',
     age: Number(d.age) || 24, origin: d.origin || 'Indonesia', language: d.language || 'Bahasa Indonesia',
     platforms: Array.isArray(d.platforms) ? d.platforms : [], appearance: d.appearance || '', personality: d.personality || '',
+    traits: sanitizeTraits(d.traits),
   };
 }
 function validUuid(value) { return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
@@ -246,7 +255,12 @@ app.post('/api/characters', requireUser, upload.single('referenceImage'), async 
     const userId = userData.user.id; const payload = parseCharacter(req); const id = randomUUID();
     if (payload.is_master) { const { error } = await req.supabase.from('characters').update({ is_master: false }).eq('user_id', userId).eq('is_master', true); if (error) throw error; }
     const imagePath = await saveReferenceImage(req, userId, id);
-    const { data, error } = await req.supabase.from('characters').insert({ id, user_id: userId, ...payload, reference_image_path: imagePath }).select('*').single();
+    let { data, error } = await req.supabase.from('characters').insert({ id, user_id: userId, ...payload, reference_image_path: imagePath }).select('*').single();
+    if (error && payload.traits && Object.keys(payload.traits).length && /traits/i.test(String(error.message || ''))) {
+      // Kolom traits belum ada (docs/supabase-character-wizard.sql belum dijalankan) — simpan tanpa traits dulu.
+      const noTraits = { ...payload }; delete noTraits.traits;
+      ({ data, error } = await req.supabase.from('characters').insert({ id, user_id: userId, ...noTraits, reference_image_path: imagePath }).select('*').single());
+    }
     if (error) throw error;
     res.status(201).json({ character: await signedCharacter(data, req.supabase) });
   } catch (error) { res.status(error.status || 400).json({ error: error.message || 'Gagal menyimpan karakter.' }); }
@@ -258,7 +272,11 @@ app.put('/api/characters/:id', requireUser, upload.single('referenceImage'), asy
     const userId = userData.user.id; const payload = parseCharacter(req);
     if (payload.is_master) { const { error } = await req.supabase.from('characters').update({ is_master: false }).eq('user_id', userId).eq('is_master', true).neq('id', req.params.id); if (error) throw error; }
     if (req.file) payload.reference_image_path = await saveReferenceImage(req, userId, req.params.id);
-    const { data, error } = await req.supabase.from('characters').update(payload).eq('id', req.params.id).select('*').single();
+    let { data, error } = await req.supabase.from('characters').update(payload).eq('id', req.params.id).select('*').single();
+    if (error && payload.traits && Object.keys(payload.traits).length && /traits/i.test(String(error.message || ''))) {
+      const noTraits = { ...payload }; delete noTraits.traits;
+      ({ data, error } = await req.supabase.from('characters').update(noTraits).eq('id', req.params.id).select('*').single());
+    }
     if (error) throw error;
     res.json({ character: await signedCharacter(data, req.supabase) });
   } catch (error) { res.status(error.status || 400).json({ error: error.message || 'Gagal memperbarui karakter.' }); }
@@ -344,22 +362,44 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
 
 app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect } = req.body || {};
+    const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect, reference: rawReference, referenceCharacterId: rawRefCharId } = req.body || {};
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
     const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
     const provider = customId ? 'custom' : (['auto', 'gemini', 'kie'].includes(rawProvider) ? rawProvider : 'auto');
     const aspect = typeof rawAspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(rawAspect) ? rawAspect : '1:1';
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    // D-98: foto referensi (karakter) untuk img2img — di-resolve jadi { mime, data }.
+    let reference = null;
+    if (rawReference && typeof rawReference.data === 'string' && rawReference.data.length > 8) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(rawReference.mime)) return res.status(400).json({ ok: false, error: 'Format foto referensi harus JPG, PNG, atau WebP.' });
+      if (rawReference.data.length > 3_500_000) return res.status(400).json({ ok: false, error: 'Foto referensi terlalu besar (maks ±2.5 MB setelah dikompres).' });
+      reference = { mime: rawReference.mime, data: rawReference.data };
+    } else if (typeof rawRefCharId === 'string' && validUuid(rawRefCharId)) {
+      const { data: ch } = await req.supabase.from('characters').select('user_id,reference_image_path').eq('id', rawRefCharId).maybeSingle();
+      if (!ch || ch.user_id !== req.user.id) return res.status(404).json({ ok: false, error: 'Karakter tidak ditemukan.' });
+      if (ch.reference_image_path) {
+        const { data: blob, error: dlErr } = await req.supabase.storage.from(bucket).download(ch.reference_image_path);
+        if (dlErr || !blob) return res.status(400).json({ ok: false, error: 'Gagal membaca foto referensi karakter: ' + (dlErr?.message || 'file tidak ditemukan.') });
+        const buf = Buffer.from(await blob.arrayBuffer());
+        const mime = /\.jpe?g$/i.test(ch.reference_image_path) ? 'image/jpeg' : /\.webp$/i.test(ch.reference_image_path) ? 'image/webp' : 'image/png';
+        reference = { mime, data: buf.toString('base64') };
+      }
+    }
     let image, usedProvider = 'gemini', fallbackUsed = false;
-    if (customId) {
+    if (reference) {
+      // D-98: img2img dengan foto referensi hanya didukung Gemini — mesin lain dialihkan otomatis.
+      if (provider !== 'gemini') fallbackUsed = true;
+      image = await generateImageWithGemini(prompt, auth, { aspect, reference }); usedProvider = 'gemini';
+    }
+    else if (customId) {
       const customs = await listCustomProviders(req.supabase, req.user.id, true);
       const cp = customs.find((c) => c.id === customId);
       if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
       image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name;
     }
     else if (provider === 'kie') { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
-    else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; }
+    else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; }
     else {
       // Otomatis: Kie dulu (mesin produksi) -> provider kustom -> Gemini.
       try { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
@@ -371,7 +411,7 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
             try { image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name; done = true; break; } catch {}
           }
         } catch {}
-        if (!done) { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; fallbackUsed = true; }
+        if (!done) { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; fallbackUsed = true; }
       }
     }
     res.json({ ok: true, provider: usedProvider, fallback_used: fallbackUsed, image });
@@ -379,6 +419,70 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'Generator gambar gagal.' });
   }
+});
+
+// D-98: analisis foto wajah -> traits terstruktur (wizard Karakter, langkah 2).
+app.post('/api/ai/vision', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { image } = req.body || {};
+    if (!image || typeof image.data !== 'string' || image.data.length < 8) return res.status(400).json({ ok: false, error: 'Foto wajah wajib dikirim.' });
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(image.mime)) return res.status(400).json({ ok: false, error: 'Format foto harus JPG, PNG, atau WebP.' });
+    if (image.data.length > 3_500_000) return res.status(400).json({ ok: false, error: 'Foto terlalu besar — biarkan aplikasi mengompresnya (maks 1280px).' });
+    const result = await chatWithAI(
+      { provider: 'auto', messages: [{ role: 'user', content: visionTraitsPrompt() }], temperature: 0.2, maxTokens: 1600, image: { mime: image.mime, data: image.data } },
+      '', { supabase: req.supabase, accessToken: req.accessToken, systemPrompt: VISION_SYSTEM_PROMPT },
+    );
+    res.json({ ok: true, traits: parseVisionTraits(result.text), provider: result.provider });
+  } catch (error) {
+    res.status(Number.isInteger(error.status) ? error.status : 502).json({ ok: false, error: error.message || 'Analisis foto gagal.' });
+  }
+});
+
+// D-98: generate Master Board (sheet referensi 3 panel) dari karakter tersimpan.
+app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { characterId } = req.body || {};
+    if (!validUuid(characterId)) return res.status(400).json({ ok: false, error: 'ID karakter tidak valid.' });
+    const { data: ch } = await req.supabase.from('characters').select('user_id,identity_prompt,reference_image_path').eq('id', characterId).maybeSingle();
+    if (!ch || ch.user_id !== req.user.id) return res.status(404).json({ ok: false, error: 'Karakter tidak ditemukan.' });
+    let reference = null;
+    if (ch.reference_image_path) {
+      const { data: blob, error: dlErr } = await req.supabase.storage.from(bucket).download(ch.reference_image_path);
+      if (!dlErr && blob) {
+        const buf = Buffer.from(await blob.arrayBuffer());
+        const mime = /\.jpe?g$/i.test(ch.reference_image_path) ? 'image/jpeg' : /\.webp$/i.test(ch.reference_image_path) ? 'image/webp' : 'image/png';
+        reference = { mime, data: buf.toString('base64') };
+      }
+    }
+    const image = await generateImageWithGemini(boardPrompt(ch.identity_prompt), { supabase: req.supabase, accessToken: req.accessToken }, { aspect: '3:4', reference });
+    res.json({ ok: true, image });
+  } catch (error) {
+    res.status(Number.isInteger(error.status) ? error.status : 502).json({ ok: false, error: error.message || 'Generator master board gagal.' });
+  }
+});
+
+// D-98: simpan hasil Master Board ke Storage + kolom characters.board_path.
+app.post('/api/characters/:id/board', requireUser, async (req, res) => {
+  try {
+    const { image } = req.body || {};
+    if (!image || typeof image.data !== 'string' || image.data.length < 8) return res.status(400).json({ error: 'Gambar master board wajib dikirim.' });
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(image.mime)) return res.status(400).json({ error: 'Format gambar harus JPG, PNG, atau WebP.' });
+    if (image.data.length > 4_000_000) return res.status(400).json({ error: 'Gambar master board terlalu besar.' });
+    const { data: ch } = await req.supabase.from('characters').select('user_id,board_path').eq('id', req.params.id).maybeSingle();
+    if (!ch || ch.user_id !== req.user.id) return res.status(404).json({ error: 'Karakter tidak ditemukan.' });
+    const ext = image.mime === 'image/jpeg' ? 'jpg' : image.mime.split('/')[1];
+    const objectPath = `${req.user.id}/${req.params.id}/board-${Date.now()}.${ext}`;
+    const { error: upErr } = await req.supabase.storage.from(bucket).upload(objectPath, Buffer.from(image.data, 'base64'), { contentType: image.mime, upsert: false });
+    if (upErr) throw Object.assign(new Error(upErr.message), { status: 400 });
+    const { error: dbErr } = await req.supabase.from('characters').update({ board_path: objectPath }).eq('id', req.params.id);
+    if (dbErr) {
+      const hint = /board_path/i.test(String(dbErr.message || '')) ? ' Jalankan docs/supabase-character-wizard.sql dulu (kolom board_path belum ada).' : '';
+      throw Object.assign(new Error((dbErr.message || 'Gagal menyimpan master board.') + hint), { status: 400 });
+    }
+    if (ch.board_path && ch.board_path !== objectPath) await req.supabase.storage.from(bucket).remove([ch.board_path]);
+    const { data } = await req.supabase.storage.from(bucket).createSignedUrl(objectPath, 3600);
+    res.json({ ok: true, board_image_url: data?.signedUrl || null });
+  } catch (error) { res.status(error.status || 400).json({ error: error.message || 'Gagal menyimpan master board.' }); }
 });
 
 const requireVault = (_req, res, next) => {
