@@ -88,3 +88,70 @@ export function boardPrompt(identityPrompt) {
     'Wajah, rambut, kulit, dan proporsi tubuh HARUS identik dan konsisten di ketiga panel — jangan menjadi orang lain.',
   ].join('\n');
 }
+
+// ===== D-99: suara karakter (TTS) + bible =====
+
+/** Whitelist profil suara karakter dari klien (dipakai juga oleh biblePrompt). */
+export function sanitizeVoiceProfile(input) {
+  const out = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  const name = typeof input.name === 'string' ? input.name.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 40) : '';
+  if (name) out.name = name;
+  const style = typeof input.style === 'string' ? input.style.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 180) : '';
+  if (style) out.style = style;
+  const script = typeof input.script === 'string' ? input.script.trim().slice(0, 600) : '';
+  if (script) out.script = script;
+  return out;
+}
+
+/** System prompt penulis bible — dipakai sebagai override system prompt chatWithAI. */
+export const BIBLE_SYSTEM_PROMPT = [
+  'Kamu adalah penulis Character Bible untuk studio kreatif.',
+  'Tugasmu: merangkum data karakter yang diberikan menjadi SATU dokumen referensi yang ringkas, faktual, dan mudah dipakai ulang untuk menjaga konsistensi karakter di semua konten.',
+  'Gunakan HANYA data yang diberikan — jangan mengarang fakta baru (usia, ciri fisik, riwayat) yang tidak ada di data. Boleh merapikan bahasa, tidak boleh mengubah makna.',
+  'Balas dalam Bahasa Indonesia dengan format Markdown ringkas sesuai struktur yang diminta, tanpa kalimat pembuka/penutup tambahan.',
+].join(' ');
+
+/** Susun instruksi pembuatan Character Bible dari data wizard (profil + traits + suara). */
+export function biblePrompt(data) {
+  const d = data || {};
+  const str = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const b = {
+    name: str(d.name, 80), role: str(d.role, 120), age: str(d.age, 8), origin: str(d.origin, 80),
+    appearance: str(d.appearance, 900), personality: str(d.personality, 900), identity: str(d.identity_prompt, 1500),
+    niche: Array.isArray(d.niche) ? d.niche.filter((x) => typeof x === 'string').slice(0, 8).map((x) => x.trim()).filter(Boolean) : [],
+    platforms: Array.isArray(d.platforms) ? d.platforms.filter((x) => typeof x === 'string').slice(0, 6).map((x) => x.trim()).filter(Boolean) : [],
+    language: str(d.language, 40),
+  };
+  const traits = sanitizeTraits(d.traits);
+  const voice = sanitizeVoiceProfile(d.voice);
+  const lines = ['Susun CHARACTER BIBLE untuk karakter berikut.'];
+  lines.push('\nDATA KARAKTER:');
+  lines.push('- Nama: ' + (b.name || '(tanpa nama)'));
+  if (b.role) lines.push('- Peran: ' + b.role);
+  if (b.age) lines.push('- Usia visual: ' + b.age + ' tahun');
+  if (b.origin) lines.push('- Asal: ' + b.origin);
+  if (b.language) lines.push('- Bahasa konten: ' + b.language);
+  if (b.niche.length) lines.push('- Niche: ' + b.niche.join(', '));
+  if (b.platforms.length) lines.push('- Platform: ' + b.platforms.join(', '));
+  if (b.appearance) lines.push('- Penampilan umum: ' + b.appearance);
+  if (b.personality) lines.push('- Kepribadian: ' + b.personality);
+  const traitKeys = Object.keys(traits);
+  if (traitKeys.length) {
+    lines.push('- Detail fisik terstruktur:');
+    for (const k of traitKeys) lines.push('  · ' + (TRAIT_LABELS[k] || k) + ': ' + traits[k]);
+  }
+  if (b.identity) lines.push('- Kunci identitas (master prompt): ' + b.identity);
+  if (voice.name || voice.style || voice.script) {
+    lines.push('- Suara karakter (sudah dikunci): voice Gemini "' + (voice.name || '-') + '", gaya: ' + (voice.style || '-') + (voice.script ? ', contoh naskah: "' + voice.script + '"' : ''));
+  }
+  lines.push('\nFORMAT KELUARAN (Markdown, Bahasa Indonesia):');
+  lines.push('# <Nama> — <ringkasan 1 kalimat>');
+  lines.push('## Identitas & Penampilan');
+  lines.push('## Kepribadian & Gaya Bicara');
+  lines.push('## Suara' + (voice.name ? ' (voice: ' + voice.name + ')' : ''));
+  lines.push('## Kunci Konsistensi (aturan wajah, rambut, kulit, proporsi tubuh yang wajib sama di semua konten)');
+  lines.push("## Do & Don't Konten");
+  lines.push('\nPadat dan langsung isi; maksimal ±600 kata. Setiap bagian wajib berisi.');
+  return lines.join('\n');
+}

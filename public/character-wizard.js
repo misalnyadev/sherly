@@ -1,10 +1,9 @@
-// ===== Karakter Wizard v2 — analisis foto (vision), kunci identitas, master board =====
-// Adopsi pola wizard AK Talent untuk modal karakter SherlyStudio.
-// Dipanggil dari index.html:
-//   window.sherlyWizardOpen(item)  — saat modal karakter dibuka (render grid traits, board, langkah)
-//   window.sherlyWizardCollect()   — saat simpan (kembalikan {traits})
-//   window.sherlyWizardClear()     — hapus draft lokal setelah tersimpan
-//   window.sherlyCardCompleteness(c) — baris "Lengkap x/5" untuk kartu galeri karakter
+// ===== Karakter Wizard v3 (5 tahap) — ala AK Talent di atas arsitektur SherlyStudio =====
+// Tahap: 1 Foto (unggah / BUAT via AI txt2img) · 2 Detail Fisik (vision) · 3 Identitas & Master
+// Board (img2img) · 4 Suara (Gemini TTS) · 5 Bible (dirangkum AI, suara ikut terkunci).
+// API untuk index.html: sherlyWizardOpen(item) · sherlyWizardCollect() · sherlyWizardFiles()
+// · sherlyWizardClear() · sherlyCardCompleteness(c) · sherlyExportCharacter(id)
+// Ekspor/impor paket .json = jembatan karakter antar aplikasi (AK Talent dkk).
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -18,11 +17,18 @@
     ['accessories', 'Aksesoris'], ['skinTexture', 'Tekstur kulit close-up'],
   ];
   const DRAFT_KEY = 'sherly.charwizard.v1';
+  const PACKAGE_FORMAT = 'character-package';
+
   let traits = {};
+  let bible = '';
+  let voice = { name: '', style: '', script: '' };
   let editingId = '';
-  let currentRefUrl = '';
+  let currentRefUrl = '';   // URL foto referensi tersimpan (mode edit)
   let currentBoardUrl = '';
-  let lastBoard = null; // { mime, data } hasil generate terakhir (belum disimpan)
+  let currentVoiceUrl = '';
+  let pendingRef = null;    // { mime, data } foto hasil generate / impor (belum tersimpan)
+  let pendingBoard = null;  // { mime, data } board hasil generate / impor
+  let pendingVoice = null;  // Blob suara hasil TTS / impor
   let draftTimer = null;
 
   const apiJson = async (url, body) => {
@@ -32,8 +38,12 @@
     if (!r.ok) throw new Error(d.error || 'Request gagal (' + r.status + ')');
     return d;
   };
+  const authHeaders = async () => {
+    const t = (await window.sherlyGetAccessToken?.()) || '';
+    return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+  };
 
-  // ---------- util gambar ----------
+  // ---------- util gambar/audio ----------
   function blobToResizedBase64(blob, max = 1280) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);
@@ -55,14 +65,20 @@
       img.src = url;
     });
   }
-  async function currentPhotoBase64() {
+  async function urlToBase64(url, max = 1280) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Gagal membaca berkas tersimpan.');
+    return await blobToResizedBase64(await r.blob(), max);
+  }
+  const b64ToBlob = (mime, data) => new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], { type: mime || 'image/png' });
+  async function dataUrlToBlob(dataUrl) { const r = await fetch(dataUrl); return await r.blob(); }
+
+  /** Sumber foto saat ini: file terpilih > hasil generate/impor > foto tersimpan. */
+  async function currentPhotoParts() {
     const file = $('characterImage')?.files?.[0];
     if (file) return await blobToResizedBase64(file);
-    if (currentRefUrl) {
-      const r = await fetch(currentRefUrl);
-      if (!r.ok) throw new Error('Gagal membaca foto referensi tersimpan.');
-      return await blobToResizedBase64(await r.blob());
-    }
+    if (pendingRef) return { mime: pendingRef.mime, data: pendingRef.data };
+    if (currentRefUrl) return await urlToBase64(currentRefUrl);
     return null;
   }
 
@@ -71,9 +87,11 @@
     clearTimeout(draftTimer);
     draftTimer = setTimeout(() => {
       try {
-        const clean = {};
-        for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) clean[k] = v; }
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ traits: clean }));
+        const cleanT = {};
+        for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
+        const cleanV = {};
+        for (const k of ['name', 'style', 'script']) { const v = String(voice[k] || '').trim(); if (v) cleanV[k] = v; }
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ traits: cleanT, bible: String(bible || '').slice(0, 8000), voice: cleanV }));
       } catch {}
     }, 400);
   }
@@ -85,9 +103,26 @@
     document.querySelectorAll('#characterModal .wiz-pane').forEach((p) => {
       const on = p.dataset.pane === String(n);
       p.hidden = !on;
-      // Input di pane tersembunyi di-disable agar validasi form tidak nyangkut di field tak terlihat.
       p.querySelectorAll('input,textarea,select,button').forEach((el) => { el.disabled = !on; });
     });
+    if (String(n) === '4') renderVoiceBox();
+  }
+
+  // ---------- mode foto (unggah / buat) ----------
+  function setPhotoMode(mode) {
+    const up = $('wizModeUpload'), gen = $('wizModeGen');
+    if (!up || !gen) return;
+    up.classList.toggle('on', mode === 'upload');
+    gen.classList.toggle('on', mode === 'gen');
+    $('wizGenBlock').hidden = mode !== 'gen';
+  }
+
+  function refreshPhotoPreview() {
+    const wrap = $('wizPhotoPreviewWrap'), img = $('wizPhotoPreview');
+    if (!wrap || !img) return;
+    const file = $('characterImage')?.files?.[0];
+    const src = file ? URL.createObjectURL(file) : (pendingRef ? 'data:' + (pendingRef.mime || 'image/png') + ';base64,' + pendingRef.data : (currentRefUrl || ''));
+    if (src) { img.src = src; wrap.hidden = false; } else wrap.hidden = true;
   }
 
   // ---------- traits grid ----------
@@ -107,8 +142,12 @@
       role: ($('characterRole')?.value || '').trim(),
       age: $('characterAge')?.value || '',
       origin: ($('characterOrigin')?.value || '').trim(),
+      niche: ($('characterNiche')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
+      platforms: ($('characterPlatforms')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
+      language: ($('characterLanguage')?.value || '').trim(),
       appearance: $('characterAppearance')?.value || '',
       personality: $('characterPersonality')?.value || '',
+      identity_prompt: $('characterPrompt')?.value || '',
     };
   }
 
@@ -133,6 +172,7 @@
     s += line('Gaya', t.style);
     s += line('Aksesoris', t.accessories);
     s += line('Tekstur kulit', t.skinTexture || 'pori-pori halus terlihat natural, tekstur kulit nyata, tanpa efek beauty filter berlebihan');
+    if (voice.name) s += 'Suara: voice Gemini "' + voice.name + '"' + (voice.style ? ', gaya ' + voice.style : '') + '. ';
     s += 'Pertahankan wajah, rambut, kulit, dan proporsi tubuh ini persis sama di semua konten — jangan berubah menjadi orang lain. Foto realistis, anatomi wajar, pencahayaan konsisten.';
     if (b.appearance.trim()) s += '\nPenampilan umum: ' + b.appearance.trim();
     if (b.personality.trim()) s += '\nKepribadian: ' + b.personality.trim();
@@ -142,17 +182,53 @@
     const el = $('wizLockPreview'); if (el) el.textContent = compileIdentityLock();
   }
 
-  // ---------- analisis foto ----------
+  // ---------- tahap 1: buat karakter (txt2img) ----------
+  function buildFacePrompt() {
+    const b = collectBasics();
+    const t = traits;
+    const bits = [];
+    bits.push('Foto potret wajah hyper-realistic karakter virtual' + (b.name ? ' bernama ' + b.name : '') + (b.age ? ', usia visual sekitar ' + b.age + ' tahun' : '') + (b.origin ? ', beretnis ' + b.origin : '') + '.');
+    const look = [t.hijab && !/^tidak ada$/i.test(t.hijab) ? 'berhijab (' + t.hijab + ')' : null,
+      join2(t.hair, t.hairDetail), join2(t.eyes, t.eyeDetail), t.skin, t.faceShape, join2(t.lips, t.lipDetail), t.bodyType, t.outfit, t.style, t.accessories]
+      .filter(Boolean).join(', ');
+    if (look) bits.push('Penampilan: ' + look + '.');
+    if (b.appearance.trim()) bits.push(b.appearance.trim());
+    if (b.personality.trim()) bits.push('Ekspresi mencerminkan kepribadian: ' + b.personality.trim() + '.');
+    bits.push('Gaya fotografi estetika Instagram, potret close-up natural, cahaya jendela lembut, latar bersih sederhana.');
+    bits.push('Wajah realistis dengan tekstur kulit nyata dan pori-pori halus; tanpa beauty filter berlebihan, tanpa teks/watermark.');
+    return bits.join(' ').slice(0, 1450);
+    function join2(a, b2) { return [a, b2].filter((x) => String(x || '').trim()).join(' — '); }
+  }
+  async function runGenFace() {
+    const btn = $('wizGenFaceBtn'); const log = $('wizGenLog');
+    if (!btn) return;
+    btn.disabled = true; btn.textContent = 'Membuat foto…';
+    if (log) log.textContent = 'Menyusun prompt & memanggil mesin gambar…';
+    try {
+      const d = await apiJson('/api/ai/image', { prompt: buildFacePrompt(), provider: $('wizGenEngine')?.value || 'auto', aspect: '4:5' });
+      if (!d.image?.data) throw new Error('Mesin tidak mengembalikan gambar.');
+      pendingRef = { mime: d.image.mime, data: d.image.data };
+      refreshPhotoPreview();
+      if (log) log.textContent = 'Foto jadi ✓ (via ' + (d.provider || 'AI') + ') — akan tersimpan sebagai foto referensi. Bisa di-generate ulang.';
+      window.toast?.('Foto karakter jadi ✓');
+    } catch (e) {
+      if (log) log.textContent = 'Gagal: ' + (e.message || 'generator gagal.');
+      window.toast?.(e.message || 'Generator gagal.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Generate Foto Karakter';
+    }
+  }
+
+  // ---------- tahap 2: analisis foto ----------
   async function runAnalysis() {
     const btn = $('wizAnalyzeBtn'); const log = $('wizAnalyzeLog');
     if (!btn) return;
-    let photo = null;
     btn.disabled = true; btn.textContent = 'Menganalisis…';
     if (log) log.textContent = 'Menyiapkan foto…';
     try {
-      photo = await currentPhotoBase64();
+      const photo = await currentPhotoParts();
       if (!photo) {
-        if (log) log.textContent = 'Unggah foto wajah dulu di langkah 1 (atau pakai foto referensi karakter tersimpan).';
+        if (log) log.textContent = 'Unggah / buat foto wajah dulu di tahap 1 (atau pakai foto referensi tersimpan).';
         return;
       }
       if (log) log.textContent = 'Menganalisis foto dengan AI vision…';
@@ -169,17 +245,15 @@
     }
   }
 
-  // ---------- master board ----------
+  // ---------- tahap 3: master board ----------
   function renderBoardBox() {
     const box = $('wizBoardBox'); if (!box) return;
-    if (!editingId) {
-      box.innerHTML = '<div class="wiz-log">Simpan karakter dulu (tombol Simpan Karakter), lalu buka lagi Edit untuk membuat Master Board — sheet referensi 3 panel dari foto wajah + kunci identitas.</div>';
-      return;
-    }
+    const savedNote = editingId
+      ? (currentBoardUrl ? 'Board tersimpan ✓ — buat ulang bila perlu.' : 'Sheet 3 panel (full body · potret · macro) via Gemini + foto referensi.')
+      : 'Simpan karakter dulu bila ingin board langsung tersimpan; untuk karakter baru, board hasil generate akan ikut tersimpan saat Simpan Karakter.';
     let html = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       + '<button type="button" class="pink-btn" id="wizBoardBtn">Buat Master Board</button>'
-      + (currentBoardUrl ? '<span class="wiz-log">Board tersimpan ✓ — buat ulang bila perlu.</span>' : '<span class="wiz-log">Sheet 3 panel (full body · potret · macro) via Gemini + foto referensi.</span>')
-      + '</div><span class="wiz-log" id="wizBoardLog"></span><div id="wizBoardOut"></div>';
+      + '<span class="wiz-log">' + esc(savedNote) + '</span></div><span class="wiz-log" id="wizBoardLog"></span><div id="wizBoardOut"></div>';
     if (currentBoardUrl) html += '<img src="' + esc(currentBoardUrl) + '" alt="Master board" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block;margin-top:10px">';
     box.innerHTML = html;
     $('wizBoardBtn')?.addEventListener('click', runBoard);
@@ -189,21 +263,29 @@
     const btn = $('wizBoardBtn'); const log = $('wizBoardLog'); const out = $('wizBoardOut');
     if (!btn) return;
     btn.disabled = true; btn.textContent = 'Membuat board…';
-    if (log) log.textContent = 'Gemini sedang menyusun sheet referensi (±15–40 detik)…';
+    if (log) log.textContent = 'Gemini menyusun sheet referensi (±15–40 detik)…';
     try {
-      const d = await apiJson('/api/ai/character-board', { characterId: editingId });
-      lastBoard = d.image || null;
-      if (!lastBoard) throw new Error('Generator tidak mengembalikan gambar.');
-      const dataUrl = 'data:' + (lastBoard.mime || 'image/png') + ';base64,' + lastBoard.data;
+      const prompt = ($('characterPrompt')?.value || '').trim() || compileIdentityLock();
+      const body = { prompt };
+      if (editingId) body.characterId = editingId;
+      else {
+        const ref = await currentPhotoParts().catch(() => null);
+        if (ref) body.reference = ref;
+      }
+      const d = await apiJson('/api/ai/character-board', body);
+      if (!d.image?.data) throw new Error('Generator tidak mengembalikan gambar.');
+      pendingBoard = { mime: d.image.mime, data: d.image.data };
+      const dataUrl = 'data:' + (pendingBoard.mime || 'image/png') + ';base64,' + pendingBoard.data;
       if (out) out.innerHTML = '<img src="' + dataUrl + '" alt="Master board baru" style="width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);display:block;margin-top:10px">'
-        + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="pink-btn" id="wizBoardSave">Simpan Master Board</button>'
-        + '<a class="outline-btn" href="' + dataUrl + '" download="master-board-' + esc(editingId.slice(0, 8)) + '.png" style="text-decoration:none;display:inline-flex;align-items:center">Unduh</a></div>';
-      if (log) log.textContent = 'Board jadi ✓ — periksa konsistensi wajahnya, lalu simpan.';
+        + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+        + (editingId ? '<button type="button" class="pink-btn" id="wizBoardSave">Simpan Master Board</button>' : '<span class="wiz-log">Board akan tersimpan saat <b>Simpan Karakter</b> ✓</span>')
+        + '<a class="outline-btn" href="' + dataUrl + '" download="master-board.png" style="text-decoration:none;display:inline-flex;align-items:center">Unduh</a></div>';
+      if (log) log.textContent = 'Board jadi ✓ — periksa konsistensi wajahnya.';
       $('wizBoardSave')?.addEventListener('click', async () => {
         const sv = $('wizBoardSave');
         try {
           sv.disabled = true; sv.textContent = 'Menyimpan…';
-          const r = await apiJson('/api/characters/' + editingId + '/board', { image: lastBoard });
+          const r = await apiJson('/api/characters/' + editingId + '/board', { image: pendingBoard });
           currentBoardUrl = r.board_image_url || '';
           if (log) log.textContent = 'Master board tersimpan ke karakter ✓';
           window.toast?.('Master board tersimpan ✓');
@@ -222,34 +304,131 @@
     }
   }
 
+  // ---------- tahap 4: suara ----------
+  function renderVoiceBox() {
+    const out = $('wizVoiceOut'); if (!out) return;
+    if (currentVoiceUrl && !pendingVoice) {
+      out.innerHTML = '<span class="wiz-log">Sampel suara tersimpan:</span><audio controls src="' + esc(currentVoiceUrl) + '"></audio>';
+    }
+    if (pendingVoice) {
+      const url = URL.createObjectURL(pendingVoice);
+      out.innerHTML = '<span class="wiz-log">Sampel suara baru' + (editingId ? '' : ' — tersimpan saat Simpan Karakter') + ':</span><audio controls src="' + url + '"></audio>';
+    }
+  }
+  async function runVoice() {
+    const btn = $('wizVoiceBtn'); const log = $('wizVoiceLog'); const out = $('wizVoiceOut');
+    if (!btn) return;
+    const script = ($('wizVoiceScript')?.value || '').trim();
+    if (!script) { if (log) log.textContent = 'Tulis dulu contoh naskah suaranya.'; return; }
+    btn.disabled = true; btn.textContent = 'Membuat suara…';
+    if (log) log.textContent = 'Gemini TTS membacakan naskah…';
+    try {
+      const t = (await window.sherlyGetAccessToken?.()) || '';
+      const r = await fetch('/api/ai/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) }, body: JSON.stringify({ text: script, voice: $('wizVoiceName')?.value || '', style: ($('wizVoiceStyle')?.value || '').trim() }) });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || 'TTS gagal (' + r.status + ').');
+      }
+      const buf = await r.arrayBuffer();
+      pendingVoice = new Blob([buf], { type: r.headers.get('Content-Type') || 'audio/wav' });
+      voice = { name: r.headers.get('X-TTS-Voice') || $('wizVoiceName')?.value || '', style: ($('wizVoiceStyle')?.value || '').trim(), script };
+      saveDraft();
+      const url = URL.createObjectURL(pendingVoice);
+      if (out) out.innerHTML = '<span class="wiz-log">Sampel suara baru' + (editingId ? '' : ' — tersimpan saat Simpan Karakter') + ':</span><audio controls src="' + url + '"></audio>';
+      if (log) log.textContent = 'Suara jadi ✓ (voice ' + voice.name + ') — profil suara terkunci ke karakter & bible.';
+      window.toast?.('Sampel suara jadi ✓');
+    } catch (e) {
+      if (log) log.textContent = 'Gagal: ' + (e.message || 'TTS gagal.');
+      window.toast?.(e.message || 'TTS gagal.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Buat Sampel Suara';
+    }
+  }
+
+  // ---------- tahap 5: bible ----------
+  async function runBible() {
+    const btn = $('wizBibleBtn'); const log = $('wizBibleLog'); const ta = $('wizBible');
+    if (!btn || !ta) return;
+    btn.disabled = true; btn.textContent = 'Menyusun bible…';
+    if (log) log.textContent = 'AI merangkum profil, detail fisik, kunci identitas, dan suara…';
+    try {
+      const data = collectBasics();
+      data.traits = traits;
+      data.voice = voice;
+      const d = await apiJson('/api/ai/character-bible', { data });
+      ta.value = d.bible || '';
+      bible = ta.value;
+      saveDraft();
+      if (log) log.textContent = 'Bible jadi ✓ — sunting bila perlu, lalu Simpan Karakter.';
+      window.toast?.('Character Bible jadi ✓');
+    } catch (e) {
+      if (log) log.textContent = 'Gagal: ' + (e.message || 'penyusun bible gagal.');
+      window.toast?.(e.message || 'Penyusun bible gagal.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Buat Character Bible (AI)';
+    }
+  }
+
   // ---------- API untuk index.html ----------
   window.sherlyWizardOpen = function (item) {
     editingId = item?.id || '';
     currentRefUrl = item?.reference_image_url || '';
     currentBoardUrl = item?.board_image_url || '';
-    lastBoard = null;
-    traits = {};
-    if (item?.traits && typeof item.traits === 'object') traits = { ...item.traits };
+    currentVoiceUrl = item?.voice_url || '';
+    pendingRef = null; pendingBoard = null; pendingVoice = null;
+    traits = item?.traits && typeof item.traits === 'object' ? { ...item.traits } : {};
+    bible = typeof item?.bible === 'string' ? item.bible : '';
+    voice = { name: '', style: '', script: '', ...(item?.voice || {}) };
     if (!editingId) {
-      try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (d?.traits) traits = { ...d.traits, ...traits }; } catch {}
+      try {
+        const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+        if (d?.traits) traits = { ...d.traits, ...traits };
+        if (d?.bible && !bible) bible = d.bible;
+        if (d?.voice) voice = { ...d.voice, ...voice };
+      } catch {}
     }
+    // Paket impor: gambar data URL jadi pending blob (tersimpan saat Simpan Karakter).
+    const pkg = item?._pkg || null;
+    if (pkg) {
+      pendingBoard = pkg.board ? { mime: pkg.board.split(';')[0].split(':')[1] || 'image/png', data: pkg.board.split(',')[1] } : null;
+      currentBoardUrl = pkg.board || '';
+      currentVoiceUrl = pkg.voice || '';
+    }
+    const ta = $('wizBible'); if (ta) ta.value = bible;
+    const vn = $('wizVoiceName'); if (vn && voice.name) vn.value = voice.name;
+    const vs = $('wizVoiceScript'); if (vs && voice.script) vs.value = voice.script;
+    const vst = $('wizVoiceStyle'); if (vst && voice.style) vst.value = voice.style;
     renderTraitsGrid();
     refreshLock();
     renderBoardBox();
+    setPhotoMode('upload');
+    refreshPhotoPreview();
     goStep(1);
   };
   window.sherlyWizardCollect = () => {
-    const clean = {};
-    for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) clean[k] = v.slice(0, 300); }
-    return clean;
+    const cleanT = {};
+    for (const [k] of TRAIT_FIELDS) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v.slice(0, 300); }
+    const ta = $('wizBible'); if (ta) bible = ta.value;
+    voice = { name: ($('wizVoiceName')?.value || '').trim(), style: ($('wizVoiceStyle')?.value || '').trim(), script: ($('wizVoiceScript')?.value || '').trim() };
+    const cleanV = {};
+    for (const k of ['name', 'style', 'script']) if (voice[k]) cleanV[k] = voice[k];
+    return { traits: cleanT, bible: String(bible || '').slice(0, 8000), voice: cleanV };
+  };
+  window.sherlyWizardFiles = () => {
+    const out = {};
+    if (pendingRef) out.referenceImage = b64ToBlob(pendingRef.mime, pendingRef.data);
+    if (pendingBoard) out.boardImage = b64ToBlob(pendingBoard.mime, pendingBoard.data);
+    if (pendingVoice) out.voiceSample = pendingVoice;
+    return out;
   };
   window.sherlyCardCompleteness = function (c) {
     const items = [
       ['Foto', !!c.reference_image_url],
       ['Profil', !!(c.name && c.role)],
       ['Detail fisik', Object.keys(c.traits || {}).length >= 10 || (c.appearance || '').length > 40],
-      ['Kunci identitas', (c.identity_prompt || '').length >= 100],
       ['Master board', !!c.board_image_url],
+      ['Suara', !!(c.voice_url || (c.voice && c.voice.name))],
+      ['Bible', (c.bible || '').length > 40],
     ];
     const done = items.filter((x) => x[1]).length;
     const missing = items.filter((x) => !x[1]).map((x) => x[0]);
@@ -258,13 +437,92 @@
     return '<div class="wiz-complete ' + cls + '" title="' + esc(txt) + '">' + esc(txt) + '</div>';
   };
 
-  // ---------- binding statis (sekali, saat file dimuat) ----------
+  // ---------- ekspor / impor paket ----------
+  const fetchAsDataUrl = async (url) => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      return await new Promise((resolve) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => resolve('');
+        fr.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  };
+  window.sherlyExportCharacter = async function (id) {
+    const c = (typeof characterCache !== 'undefined' ? characterCache : []).find((x) => x.id === id);
+    if (!c) return;
+    window.toast?.('Menyiapkan paket karakter…');
+    const images = {};
+    const ref = await fetchAsDataUrl(c.reference_image_url); if (ref) images.reference = ref;
+    const board = await fetchAsDataUrl(c.board_image_url); if (board) images.board = board;
+    const voiceUrl = await fetchAsDataUrl(c.voice_url); if (voiceUrl) images.voice = voiceUrl;
+    const pkg = {
+      app: 'sherlystudio', format: PACKAGE_FORMAT, version: 1, exported_at: new Date().toISOString(),
+      character: {
+        name: c.name || '', role: c.role || '', age: c.age ?? null, origin: c.origin || '',
+        niche: c.niche || [], language: c.language || '', platforms: c.platforms || [],
+        appearance: c.appearance || '', personality: c.personality || '',
+        identity_prompt: c.identity_prompt || '', is_master: !!c.is_master,
+        traits: c.traits || {}, bible: c.bible || '', voice: c.voice || {}, images,
+      },
+    };
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'karakter-' + String(c.name || 'karakter').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.sherlystudio.json';
+    a.click();
+    window.toast?.('Paket karakter diekspor ✓ — bisa diimpor ke AK Talent nanti.');
+  };
+  async function importPackage(file) {
+    if (!file) return;
+    let pkg;
+    try { pkg = JSON.parse(await file.text()); } catch { window.toast?.('Berkas bukan JSON yang valid.'); return; }
+    const ch = pkg?.character;
+    if (!ch || typeof ch !== 'object' || !(pkg.format === PACKAGE_FORMAT || ch.name)) {
+      window.toast?.('Berkas bukan paket karakter SherlyStudio.');
+      return;
+    }
+    const item = {
+      name: ch.name, role: ch.role, age: ch.age, origin: ch.origin,
+      niche: Array.isArray(ch.niche) ? ch.niche : [], language: ch.language,
+      platforms: Array.isArray(ch.platforms) ? ch.platforms : [],
+      appearance: ch.appearance, personality: ch.personality,
+      identity_prompt: ch.identity_prompt, is_master: false,
+      traits: ch.traits || {}, bible: ch.bible || '', voice: ch.voice || {},
+      reference_image_url: ch.images?.reference || '',
+      _pkg: { board: ch.images?.board || '', voice: ch.images?.voice || '' },
+    };
+    // Foto referensi dari paket: jadikan pending (tersimpan saat Simpan Karakter).
+    if (item.reference_image_url && item.reference_image_url.startsWith('data:')) {
+      pendingRefImport = item.reference_image_url;
+      item.reference_image_url = '';
+    }
+    window.showCharacterModal?.(item);
+    window.toast?.('Paket karakter dimuat ✓ — periksa tiap tahap lalu Simpan.');
+  }
+  let pendingRefImport = null;
+
+  // ---------- binding statis ----------
   const bind = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
   document.querySelectorAll('#characterModal .wiz-step').forEach((b) => b.addEventListener('click', () => goStep(b.dataset.step)));
   bind('wizNext1', () => goStep(2));
   bind('wizPrev2', () => goStep(1));
   bind('wizNext2', () => goStep(3));
   bind('wizPrev3', () => goStep(2));
+  bind('wizNext3', () => goStep(4));
+  bind('wizPrev4', () => goStep(3));
+  bind('wizNext4', () => goStep(5));
+  bind('wizPrev5', () => goStep(4));
+  bind('wizModeUpload', () => setPhotoMode('upload'));
+  bind('wizModeGen', () => setPhotoMode('gen'));
+  bind('wizGenFaceBtn', runGenFace);
+  bind('wizCopyFacePrompt', async () => {
+    try { await navigator.clipboard.writeText(buildFacePrompt()); window.toast?.('Prompt foto tersalin ✓'); }
+    catch { window.toast?.('Gagal menyalin — salin manual dari log.'); }
+  });
   bind('wizAnalyzeBtn', runAnalysis);
   bind('wizLockRefresh', () => { refreshLock(); window.toast?.('Kunci identitas disusun ulang dari detail.'); });
   bind('wizLockApply', () => {
@@ -273,7 +531,24 @@
     ta.value = compileIdentityLock();
     window.toast?.('Kunci identitas dipakai sebagai Master Prompt ✓');
   });
+  bind('wizVoiceBtn', runVoice);
+  bind('wizBibleBtn', runBible);
+  $('characterImage')?.addEventListener('change', refreshPhotoPreview);
   ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality'].forEach((id) => {
     $(id)?.addEventListener('input', refreshLock);
   });
+  $('importCharBtn')?.addEventListener('click', () => $('importCharFile')?.click());
+  $('importCharFile')?.addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; importPackage(f); });
+
+  // Paket impor dengan foto data URL: konversi ke pending sesudah wizard dibuka.
+  const origOpen = window.sherlyWizardOpen;
+  window.sherlyWizardOpen = function (item) {
+    origOpen(item);
+    if (pendingRefImport) {
+      const dataUrl = pendingRefImport; pendingRefImport = null;
+      pendingRef = { mime: dataUrl.split(';')[0].split(':')[1] || 'image/png', data: dataUrl.split(',')[1] };
+      currentRefUrl = '';
+      refreshPhotoPreview();
+    }
+  };
 })();

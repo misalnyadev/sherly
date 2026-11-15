@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, TRAIT_FIELDS, TRAIT_LABELS } = await import('../server/character-wizard.js');
+const { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, biblePrompt, sanitizeVoiceProfile, TRAIT_FIELDS, TRAIT_LABELS } = await import('../server/character-wizard.js');
 
 test('sanitizeTraits: whitelist kunci, buang kosong & non-string, kap panjang', () => {
   const out = sanitizeTraits({
@@ -55,4 +55,33 @@ test('boardPrompt: identitas + instruksi 3 panel, error saat kosong', () => {
 test('TRAIT_FIELDS & LABELS konsisten', () => {
   assert.equal(TRAIT_FIELDS.length, 17);
   for (const f of TRAIT_FIELDS) assert.ok(TRAIT_LABELS[f], 'label kurang untuk ' + f);
+});
+
+test('sanitizeVoiceProfile: whitelist + kap panjang', () => {
+  const v = sanitizeVoiceProfile({ name: '  Kore ', style: 'hangat, ramah', script: 'Halo!', bogus: 'x', name2: 42 });
+  assert.deepEqual(v, { name: 'Kore', style: 'hangat, ramah', script: 'Halo!' });
+  assert.deepEqual(sanitizeVoiceProfile(null), {});
+  const long = sanitizeVoiceProfile({ style: 'x'.repeat(500) });
+  assert.equal(long.style.length, 180);
+});
+
+test('biblePrompt: memuat profil, traits, dan suara terkunci', () => {
+  const p = biblePrompt({
+    name: 'Sherly', role: 'Lifestyle Creator', age: '24', origin: 'Indonesia',
+    appearance: 'Perempuan Indonesia, rambut hitam.', personality: 'Ceria.',
+    identity_prompt: 'IDENTITY LOCK — wajah konsisten.',
+    niche: ['Lifestyle', 'Beauty'], traits: { faceShape: 'oval', hijab: 'tidak ada' },
+    voice: { name: 'Kore', style: 'hangat', script: 'Halo semua!' },
+  });
+  assert.ok(p.includes('Nama: Sherly'));
+  assert.ok(p.includes('Bentuk wajah: oval'));
+  assert.ok(p.includes('Hijab: tidak ada'));
+  assert.ok(p.includes('voice Gemini "Kore"'));
+  assert.ok(p.includes('## Kunci Konsistensi'));
+  assert.ok(/maksimal ±600 kata/.test(p));
+});
+
+test('biblePrompt: data kacau tidak meledak', () => {
+  const p = biblePrompt(null);
+  assert.ok(p.includes('(tanpa nama)'));
 });
