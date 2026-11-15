@@ -287,6 +287,53 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .cal-sum{color:var(--muted);font-size:12px;margin:14px 2px 0;line-height:1.7}
 @media(hover:none){.cal-add{display:grid;width:26px;height:26px;opacity:.55}}
 @media(max-width:560px){.cal-cell{min-height:64px;padding:24px 4px 4px}.cal-chip{font-size:9.5px;padding:2px 4px}.cal-legend{gap:10px}}
+/* Studio */
+.st-tabs{display:flex;gap:8px;margin-bottom:14px}
+.st-tab{padding:9px 18px;border-radius:30px;border:1px solid var(--line);background:#101b2a;color:#c7d2e4;font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
+.st-tab svg{width:15px;height:15px}
+.st-tab.active{background:#2a1226;border-color:#e84ba9;color:#fff}
+.st-composer{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid #49334e;border-radius:18px;padding:18px}
+.st-composer label{display:block;font-size:12px;color:#b9c5d5;margin-bottom:8px}
+.st-composer textarea{width:100%;box-sizing:border-box;background:#080f1b;border:1px solid #344158;border-radius:12px;color:#fff;font:inherit;font-size:13.5px;line-height:1.6;padding:12px 14px;resize:vertical;min-height:76px;outline:0}
+.st-composer textarea:focus{border-color:#e84ba9}
+.st-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.st-pill-wrap{position:relative}
+.st-pill{height:38px;padding:0 12px;border-radius:10px;border:1px solid #344158;background:#080f1b;color:#c7d2e4;font-size:12px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
+.st-pill:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.st-pill svg{width:14px;height:14px;stroke:#ff6fc3}
+.st-pill b{color:#ffd0ec;font-weight:600}
+.st-pop{display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:40;min-width:200px;background:#0c1422f7;border:1px solid #344158;border-radius:12px;padding:6px;box-shadow:0 18px 50px #000c}
+.st-pop.open{display:block}
+.st-pop button{display:flex;width:100%;text-align:left;background:transparent;border:0;color:#c7d2e4;font:inherit;font-size:12.5px;padding:9px 11px;border-radius:8px;cursor:pointer}
+.st-pop button:hover{background:#2a1226;color:#fff}
+.st-pop button.on{background:#2a1226;color:#ffd0ec}
+.st-count{margin-left:auto;color:var(--muted);font-size:11px}
+.st-hidden{display:none!important}
+.st-note{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-top:14px;background:#2a1226;border:1px solid #49334e;border-radius:12px;padding:13px 15px;font-size:12.5px;color:#e6d9e8;line-height:1.65}
+.st-note svg{width:18px;height:18px;stroke:#ff6fc3;flex:none;margin-top:2px}
+.st-note div{flex:1;min-width:220px}
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:18px}
+.st-card{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .18s,box-shadow .18s}
+.st-card:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.st-card img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#151323}
+.st-card-body{padding:12px 13px;display:flex;flex-direction:column;gap:8px;flex:1}
+.st-card-body p{margin:0;font-size:12px;color:#c7d2e4;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.st-card-meta{font-size:10px;color:var(--muted);letter-spacing:.03em}
+.st-card-actions{display:flex;gap:7px;margin-top:auto;flex-wrap:wrap}
+.st-act{flex:1;min-width:70px;padding:7px 8px;border-radius:9px;border:1px solid #344158;background:transparent;color:#c7d2e4;font:inherit;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;transition:border-color .18s,color .18s}
+.st-act:hover{border-color:#45304f;color:#ffd0ec}
+.st-act svg{width:12px;height:12px}
+.st-act.danger:hover{border-color:#e84ba9;color:#ff9ebd}
+.st-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:34px 16px;background:linear-gradient(145deg,#101b2a,#0a1220);border:1px dashed #2c3b55;border-radius:15px}
+.st-empty svg{width:26px;height:26px;stroke:#ff6fc3}
+.st-empty b{display:block;color:#fff;margin:10px 0 4px;font-size:14.5px}
+.st-empty p{margin:0 0 12px;font-size:12.5px}
+.st-suggest{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.st-suggest button{padding:8px 14px;border-radius:30px;border:1px solid #344158;background:#080f1b;color:#c7d2e4;font:inherit;font-size:11.5px;cursor:pointer;transition:border-color .18s,color .18s}
+.st-suggest button:hover{border-color:#45304f;color:#ffd0ec}
+.st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#131c2c 30%,#1c2740 50%,#131c2c 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
+@keyframes stShimmer{to{background-position:-200% 0}}
+@media(max-width:560px){.st-composer{padding:14px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pl-actions{display:flex;gap:6px}
 .pl-actions button{background:transparent;border:1px solid #344158;color:#8fa1b7;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;transition:.18s}
 .pl-actions button:hover{border-color:#e84ba9;color:#ffd6ef}
@@ -481,6 +528,10 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <div class="page-heading"><div><h1>Kalender</h1><p>Peta jadwal konten sebulan penuh — dari ide sampai tayang.</p></div></div>
   <div id="calendarRoot"></div>
 </section>
+<section id="studioView" class="page-view">
+  <div class="page-heading"><div><h1>Studio</h1><p>Generator konten — foto jadi, video menyusul.</p></div></div>
+  <div id="studioRoot"></div>
+</section>
 <section id="collabView" class="page-view">
   <div class="page-heading"><div><h1>Kolaborasi</h1><p>Kerja sama konten &amp; karakter — dari brief sampai tayang.</p></div></div>
   <div id="collabRoot"></div>
@@ -609,7 +660,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
 const ADMIN_ONLY_PAGES=['Karakter','Studio','Editor','Aset','Planner','Kalender','Cloud Publish','Pengaturan','Profil'];
-function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');dashboard.style.display=page==='Beranda'?'grid':'none';if(ADMIN_ONLY_PAGES.includes(page)&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');if(pfv)pfv.classList.remove('active');if(plv)plv.classList.remove('active');if(pev)pev.classList.remove('active');if(cov)cov.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi','Kalender'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');dashboard.style.display=page==='Beranda'?'grid':'none';if(ADMIN_ONLY_PAGES.includes(page)&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');if(pfv)pfv.classList.remove('active');if(plv)plv.classList.remove('active');if(pev)pev.classList.remove('active');if(cov)cov.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -674,6 +725,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/portfolio.js"></script>
 <script src="/planner.js"></script>
 <script src="/calendar.js"></script>
+<script src="/studio.js"></script>
 <script src="/persona-data.js"></script>
 <script src="/persona.js"></script>
 <script src="/collab-data.js"></script>

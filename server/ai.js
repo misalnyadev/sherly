@@ -174,6 +174,38 @@ async function callProvider(provider, config, messages, temperature, maxTokens, 
  * tracked (auto-disable after 5 consecutive), and automatic fallback proceeds
  * Groq -> Gemini -> OpenRouter in `auto` mode.
  */
+/** Model generator gambar Gemini (bisa dioverride via GEMINI_IMAGE_MODEL). */
+export function geminiImageModel() {
+  return process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
+}
+
+/** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback). */
+export async function generateImageWithGemini(prompt, auth = {}) {
+  const attempts = await buildAttempts('gemini', geminiImageModel(), auth.supabase);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Gemini belum tersedia untuk generator gambar. Simpan kunci Gemini di vault (Pengaturan) atau set GEMINI_API_KEY.'), { status: 503 });
+  }
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(attempt.model)}:generateContent`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': attempt.apiKey },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
+        signal: AbortSignal.timeout(90000),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { lastError = new Error(data?.error?.message || `Gemini API error (${response.status})`); continue; }
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const img = parts.find((part) => part?.inlineData?.data);
+      if (img) return { mime: img.inlineData.mimeType || 'image/png', data: img.inlineData.data, model: attempt.model, source: attempt.source };
+      lastError = new Error('Model tidak mengembalikan gambar — coba ubah deskripsinya.');
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Generator gambar gagal.'), { status: 502 });
+}
+
 export async function chatWithAI(input, trustedContext = '', options = {}) {
   const parsed = chatSchema.safeParse(input);
   if (!parsed.success) {
