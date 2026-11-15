@@ -430,4 +430,44 @@
   $('refreshKeysBtn')?.addEventListener('click', loadAIProviders);
   $('keyForm')?.addEventListener('submit', submitKeyForm);
   $('keyModal')?.addEventListener('click', (e) => { if (e.target.id === 'keyModal') closeKeyModal(); });
+
+  // ---------- Provider Kustom (Generator Studio) ----------
+  const cpApi = async (url, options = {}) => {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const t = await window.sherlyGetAccessToken?.();
+    if (t) headers.Authorization = 'Bearer ' + t;
+    const res = await fetch(url, { ...options, headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('Permintaan gagal (' + res.status + ')'));
+    return data;
+  };
+  async function loadCustomProviders() {
+    const box = document.getElementById('customProviders'); if (!box) return;
+    try {
+      const d = await cpApi('/api/custom-providers');
+      const list = Array.isArray(d.providers) ? d.providers : [];
+      if (!list.length) { box.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0">Belum ada provider kustom \u2014 tambahkan lewat form di bawah.</p>'; return; }
+      box.innerHTML = list.map((c) => '<div class="pl-item" style="cursor:default"><div class="pl-main"><h3 style="font-size:13.5px">' + esc(c.name) + '</h3><p style="white-space:normal">' + esc(c.baseUrl) + (c.model ? ' \u00b7 ' + esc(c.model) : '') + '</p></div><div class="card-actions" style="flex:none"><button type="button" class="outline-btn danger-btn" data-cp-del="' + esc(c.id) + '"><span data-icon="x"></span> Hapus</button></div></div>').join('');
+      box.querySelectorAll('[data-cp-del]').forEach((b) => b.addEventListener('click', async () => {
+        if (!confirm('Hapus provider kustom ini?')) return;
+        try { await cpApi('/api/custom-providers/' + b.dataset.cpDel, { method: 'DELETE' }); window.toast?.('Provider kustom dihapus.'); loadCustomProviders(); }
+        catch (e) { window.toast?.(e.message); }
+      }));
+    } catch (e) { box.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0">' + esc(e.message) + '</p>'; }
+  }
+  window.loadCustomProviders = loadCustomProviders;
+  $('cpAddBtn')?.addEventListener('click', async () => {
+    const btn = $('cpAddBtn'), msg = $('cpMsg');
+    const name = $('cpName')?.value.trim(), base = $('cpBase')?.value.trim(), model = $('cpModel')?.value.trim(), key = $('cpKey')?.value;
+    msg.textContent = '';
+    if (!name || !base || !key) { msg.style.color = '#ff9ebd'; msg.textContent = 'Nama, base URL, dan API key wajib diisi.'; return; }
+    btn.disabled = true; btn.textContent = 'Menyimpan...';
+    try {
+      await cpApi('/api/custom-providers', { method: 'POST', body: JSON.stringify({ name, base_url: base, model, api_key: key }) });
+      window.toast?.('Provider kustom ditambahkan \u2014 pilih di pil Mesin halaman Studio.');
+      $('cpName').value = ''; $('cpBase').value = ''; $('cpModel').value = ''; $('cpKey').value = '';
+      loadCustomProviders();
+    } catch (e) { msg.style.color = '#ff9ebd'; msg.textContent = e.message; }
+    finally { btn.disabled = false; btn.innerHTML = '<span data-icon="plus"></span> Tambah Provider'; window.injectIcons?.(); }
+  });
 })();

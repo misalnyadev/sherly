@@ -5,9 +5,9 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chatWithAI, generateImageWithGemini, generateImageWithKie } from './ai.js';
+import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
-import { vaultConfigured, vaultSelfTest } from './vault.js';
+import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 
@@ -347,16 +347,32 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect } = req.body || {};
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
-    const provider = ['auto', 'gemini', 'kie'].includes(rawProvider) ? rawProvider : 'auto';
+    const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
+    const provider = customId ? 'custom' : (['auto', 'gemini', 'kie'].includes(rawProvider) ? rawProvider : 'auto');
     const aspect = typeof rawAspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(rawAspect) ? rawAspect : '1:1';
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
     let image, usedProvider = 'gemini', fallbackUsed = false;
-    if (provider === 'kie') { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
+    if (customId) {
+      const customs = await listCustomProviders(req.supabase, req.user.id, true);
+      const cp = customs.find((c) => c.id === customId);
+      if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
+      image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name;
+    }
+    else if (provider === 'kie') { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
     else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; }
     else {
-      // Otomatis: Kie dulu (mesin produksi), Gemini sebagai fallback.
+      // Otomatis: Kie dulu (mesin produksi) -> provider kustom -> Gemini.
       try { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
-      catch { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; fallbackUsed = true; }
+      catch {
+        let done = false;
+        try {
+          const customs = await listCustomProviders(req.supabase, req.user.id, true);
+          for (const cp of customs) {
+            try { image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name; done = true; break; } catch {}
+          }
+        } catch {}
+        if (!done) { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; fallbackUsed = true; }
+      }
     }
     res.json({ ok: true, provider: usedProvider, fallback_used: fallbackUsed, image });
   } catch (error) {
@@ -476,6 +492,35 @@ app.put('/api/admin/settings', requireUser, requireAdmin, async (req, res) => {
     const { error } = await req.supabase.from('app_settings').upsert({ key: 'whatsapp', value: num || null, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) return res.status(500).json({ error: 'Gagal menyimpan setelan studio. Pastikan tabel app_settings sudah dibuat (docs/supabase-studio-settings.sql).' });
     res.json({ ok: true, whatsapp: num });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+async function listCustomProviders(supabase, userId, withKeys = false) {
+  const { data, error } = await supabase.from('custom_providers').select('id,name,base_url,model,encrypted_key,active,created_at').eq('user_id', userId).order('created_at', { ascending: true });
+  if (error) throw new Error('Tabel custom_providers belum bisa diakses. Jalankan docs/supabase-custom-providers.sql di SQL Editor dulu.');
+  return (data || []).map((r) => withKeys
+    ? { id: r.id, name: r.name, baseUrl: r.base_url, model: r.model, apiKey: decryptSecret(r.encrypted_key) }
+    : { id: r.id, name: r.name, baseUrl: r.base_url, model: r.model });
+}
+app.get('/api/custom-providers', requireUser, requireAdmin, async (req, res) => {
+  try { res.json({ providers: await listCustomProviders(req.supabase, req.user.id) }); }
+  catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/custom-providers', requireUser, requireAdmin, requireVault, async (req, res) => {
+  try {
+    const { name, base_url, model, api_key } = req.body || {};
+    if (!name || !base_url || !api_key) return res.status(400).json({ error: 'Nama, base URL, dan API key wajib diisi.' });
+    if (!/^https:\/\/.+/i.test(String(base_url).trim())) return res.status(400).json({ error: 'Base URL harus diawali https:// — cth: https://api.kie.ai/v1' });
+    const encrypted = encryptSecret(String(api_key).trim());
+    const { data, error } = await req.supabase.from('custom_providers').insert({ user_id: req.user.id, name: String(name).trim().slice(0, 40), base_url: String(base_url).trim().slice(0, 200), model: String(model || '').trim().slice(0, 120), encrypted_key: encrypted }).select('id,name,base_url,model').single();
+    if (error) return res.status(500).json({ error: 'Gagal menyimpan provider kustom (' + error.message + ').' });
+    res.json({ ok: true, provider: data });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.delete('/api/custom-providers/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { error } = await req.supabase.from('custom_providers').delete().eq('id', req.params.id).eq('user_id', req.user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
