@@ -414,6 +414,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .wiz-lock-label{font:600 10.5px Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .wiz-lock-preview{white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.65;color:var(--text);max-height:170px;overflow:auto;margin-top:8px}
 .wiz-lock-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.wiz-board{border:1px dashed rgba(240,68,168,.45);border-radius:12px;padding:12px 14px;margin:0 0 16px;background:rgba(240,68,168,.05)}
 .wiz-complete{font-size:11.5px;margin-top:9px;padding:4px 10px;border-radius:999px;display:inline-block;max-width:100%}
 .wiz-complete.ok{color:#7ce7b2;background:rgba(62,207,142,.12);border:1px solid rgba(62,207,142,.35)}
 .wiz-complete.warn{color:#ffd28e;background:rgba(227,168,59,.1);border:1px solid rgba(227,168,59,.35)}
@@ -538,15 +539,32 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
    <div class="wiz-nav"><button type="button" class="outline-btn" id="wizPrev2">Kembali</button><button type="button" class="pink-btn" id="wizNext2">Lanjut: Identitas</button></div>
   </div>
   <div class="wiz-pane" data-pane="3" hidden>
+   <div class="wiz-board" id="wizBoardBox">
+    <span class="wiz-lock-label">Master Board — sheet referensi 3 panel (full body &middot; potret &middot; macro detail)</span>
+    <div class="wiz-prompt">
+     <div class="wiz-prompt-head"><span class="wiz-lock-label">Prompt board — tersusun otomatis, bisa disunting</span><span class="wiz-prompt-tools"><button type="button" class="outline-btn" id="wizBoardRebuild">Susun Ulang</button></span></div>
+     <textarea id="wizBoardPrompt" rows="5" placeholder="Prompt akan tersusun otomatis dari Master Prompt / kunci identitas…"></textarea>
+    </div>
+    <div class="wiz-gen-row">
+     <button type="button" class="pink-btn" id="wizBoardBtn">Buat Master Board (AI)</button>
+     <button type="button" class="outline-btn" id="wizBoardCopy">Salin Prompt</button>
+     <button type="button" class="outline-btn" id="wizBoardUploadBtn">Unggah Hasil dari Aplikasi Lain</button>
+     <input type="file" id="wizBoardUploadFile" accept="image/png,image/jpeg,image/webp" hidden>
+    </div>
+    <span class="wiz-log">Kredit habis atau mau pakai aplikasi lain? Salin prompt-nya, generate di aplikasi luar, lalu unggah hasilnya di sini.</span>
+    <span class="wiz-log" id="wizBoardLog"></span>
+    <div id="wizBoardOut"></div>
+    <div id="wizBoardSaved"></div>
+   </div>
+   <span class="wiz-lock-label" style="display:block;margin:2px 0 10px">Detail identitas — otomatis dari tahap 1&ndash;2, sunting bila perlu</span>
    <div class="form-grid">
    <div class="form-field full"><label>Penampilan / ciri identitas</label><textarea id="characterAppearance">Perempuan Indonesia, 24 tahun; rambut dark brown berlayer, mata dark brown, kulit fair, wajah oval, alis melengkung alami, tubuh hourglass, tinggi sekitar 165–170 cm.</textarea></div>
    <div class="form-field full"><label>Kepribadian &amp; gaya komunikasi</label><textarea id="characterPersonality">Percaya diri, ceria, tenang, playful, ramah, dan natural. Gaya komunikasi hangat dalam Bahasa Indonesia.</textarea></div>
    </div>
    <div class="wiz-lock"><span class="wiz-lock-label">Kunci identitas (otomatis dari langkah 1–2)</span><div class="wiz-lock-preview" id="wizLockPreview"></div><div class="wiz-lock-actions"><button type="button" class="outline-btn" id="wizLockRefresh">Susun ulang</button><button type="button" class="outline-btn" id="wizLockApply">Pakai sebagai Master Prompt</button></div></div>
    <div class="form-grid">
-   <div class="form-field full"><label>Master identity prompt *</label><textarea id="characterPrompt" required>Hyper-realistic virtual female lifestyle influencer named Sherly, 24 years old, Indonesian descent. Layered dark brown hair, dark brown eyes, fair skin tone, oval face, naturally arched eyebrows, hourglass body type, approximately 165–170 cm tall. Minimalist fashion aesthetic. Personality: confident, cheerful, calm, playful, warm and natural. Content niches: Lifestyle, Beauty, Fashion and Travel. Content language: Bahasa Indonesia. Maintain consistent facial structure, hairstyle, eye color, skin tone, and defining features across all generated content. Natural realistic skin texture, visible pores and subtle asymmetry; avoid plastic skin, over-smoothing and artificial beautification.</textarea></div>
+   <div class="form-field full"><label>Master Prompt — dipakai Studio untuk semua konten (opsional)</label><textarea id="characterPrompt">Hyper-realistic virtual female lifestyle influencer named Sherly, 24 years old, Indonesian descent. Layered dark brown hair, dark brown eyes, fair skin tone, oval face, naturally arched eyebrows, hourglass body type, approximately 165–170 cm tall. Minimalist fashion aesthetic. Personality: confident, cheerful, calm, playful, warm and natural. Content niches: Lifestyle, Beauty, Fashion and Travel. Content language: Bahasa Indonesia. Maintain consistent facial structure, hairstyle, eye color, skin tone, and defining features across all generated content. Natural realistic skin texture, visible pores and subtle asymmetry; avoid plastic skin, over-smoothing and artificial beautification.</textarea></div>
    </div>
-   <div class="wiz-board" id="wizBoardBox"></div>
    <div class="wiz-nav"><button type="button" class="outline-btn" id="wizPrev3">Kembali</button><button type="button" class="pink-btn" id="wizNext3">Lanjut: Suara</button></div></div>
   <div class="wiz-pane" data-pane="4" hidden>
    <div class="form-grid">
