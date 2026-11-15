@@ -23,7 +23,8 @@ window.SHERLY_STUDIO = {
       id: 'sherly', name: 'Sherly', img: 'assets/sherly-portrait.png',
       role: 'Lifestyle \u00b7 Beauty \u00b7 Fashion \u00b7 Travel',
       desc: 'Hangat, estetik, timeless \u2014 spesialis konten keseharian yang relevan dan review yang jujur.',
-      tags: ['Reels', 'Review jujur', 'Daily vlog'], status: 'Tersedia'
+      tags: ['Reels', 'Review jujur', 'Daily vlog'], status: 'Tersedia',
+      htPin: 'H3NFU9' // PIN kontak HeyTalent (versi talent) — karakter lain nanti punya PIN sendiri
     }
   ],
 

@@ -35,5 +35,9 @@ window.SHERLY_PERSONA = {
     foto: 'Foto bernuansa cream & beige dengan cahaya alami; komposisi bersih dengan ruang bernapas; subjek tenang dan natural \u2014 tidak ramai, tapi selalu punya sudut pandang.'
   },
   audience: 'Penikmat lifestyle 18\u201334 tahun di Indonesia \u2014 mayoritas perempuan yang menyukai hal estetik namun praktis.',
-  kolaborasi: 'Penawaran kolaborasi & brand deal disambut hangat \u2014 kirim pesan lewat DM Instagram.'
+  kolaborasi: 'Penawaran kolaborasi & brand deal disambut hangat \u2014 kirim pesan lewat DM Instagram.',
+  heyTalent: {
+    pin: 'H3NFU9',
+    note: 'Mau ngobrol dengan Sherly sebagai talent di HeyTalent? Cari Sherly memakai PIN di atas \u2014 langsung tersambung.'
+  }
 };
