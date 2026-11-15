@@ -124,6 +124,31 @@ async function fetchPastMemory(supabase, userId, currentConversationId, timezone
     return `INGATAN PERCAKAPAN LAMPAU (tersimpan di database — lawan bicara yang kembali di lain hari tetap kamu kenal; gunakan untuk kontinuitas, mis. "kemarin kamu pernah bilang..."; jangan bertanya ulang hal yang sudah dijawab):\n${lines.join('\n')}`;
   } catch { return ''; }
 }
+async function fetchSherlyNotes(supabase, userId, timezone) {
+  try {
+    const { data, error } = await supabase.from('ai_memory_notes').select('note,created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(12);
+    if (error || !data?.length) return '';
+    const lines = data.reverse().map(n => `- [${formatIdTimestamp(n.created_at, timezone)}] ${String(n.note || '').replace(/\s+/g, ' ').trim()}`);
+    return `CATATAN PRIBADI SHERLY tentang lawan bicara (ingatan jangka panjangmu, tersimpan server — gunakan secara natural saat relevan, jangan dibacakan seperti daftar; jangan mengaku punya catatan bila kosong):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+async function saveMemoryNotes(supabase, userId, notes) {
+  const clean = [...new Set((notes || []).map(n => String(n).replace(/\s+/g, ' ').trim()).filter(n => n.length >= 3 && n.length <= 300))].slice(0, 3);
+  if (!clean.length) return;
+  try {
+    const { data: existing } = await supabase.from('ai_memory_notes').select('note').eq('user_id', userId).order('created_at', { ascending: false }).limit(30);
+    const have = new Set((existing || []).map(r => String(r.note || '').toLowerCase()));
+    const fresh = clean.filter(n => !have.has(n.toLowerCase()));
+    if (!fresh.length) return;
+    const { error } = await supabase.from('ai_memory_notes').insert(fresh.map(note => ({ user_id: userId, note })));
+    if (error) throw error;
+    const { data: all } = await supabase.from('ai_memory_notes').select('id').eq('user_id', userId).order('created_at', { ascending: false }).limit(50);
+    if (all && all.length > 20) {
+      const stale = all.slice(20).map(r => r.id);
+      if (stale.length) await supabase.from('ai_memory_notes').delete().in('id', stale);
+    }
+  } catch { /* tabel ai_memory_notes belum dibuat — lewati diam-diam (chat tetap normal) */ }
+}
 async function buildTrustedContext(user, timezone, profile, supabase, currentConversationId) {
   const now = new Date();
   const local = new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'full', timeStyle: 'long' }).format(now);
@@ -146,6 +171,8 @@ async function buildTrustedContext(user, timezone, profile, supabase, currentCon
   }
   const base = `KONTEKS SESI TERVERIFIKASI SERVER:\n${identity}\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan (menyebut "kemarin", "besok", janji, atau tenggat); jangan mengumumkannya tanpa alasan.\n${genderRule}\n${roleBlock}`;
   const parts = [base];
+  const notesBlock = await fetchSherlyNotes(supabase, user.id, timezone);
+  if (notesBlock) parts.push(notesBlock);
   const pastMemory = await fetchPastMemory(supabase, user.id, currentConversationId, timezone);
   if (pastMemory) parts.push(pastMemory);
   const profileBlock = safeProfileContext(profile);
@@ -299,11 +326,16 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     const fetched = (history || []).reverse().map(item => ({ role: item.role, content: item.content }));
     const messages = fetched.length ? fetched : [{ role: 'user', content: message }]; // fallback bila histori kosong (mis. sinkronisasi tertunda)
     const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1600, ...(image ? { image } : {}) }, await buildTrustedContext(req.user, safeTimezone(timezone), chatProfile, req.supabase, conversationId), { supabase: req.supabase, accessToken: req.accessToken });
-    const assistantContent = Array.isArray(result.bubbles) ? result.bubbles.join('\n\n') : result.text; // disimpan sebagai teks; histori dipecah lagi per \n\n saat dirender
+    const notePattern = /<{0,2}CATATAN\s*:\s*([^>\n]{3,300})>{0,2}/gi;
+    const foundNotes = [];
+    const stripNotes = (t) => String(t || '').replace(notePattern, (_m, n) => { foundNotes.push(String(n)); return ''; }).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const cleanBubbles = (Array.isArray(result.bubbles) && result.bubbles.length ? result.bubbles : [result.text]).map(stripNotes).filter(Boolean);
+    const assistantContent = cleanBubbles.join('\n\n'); // disimpan sebagai teks; histori dipecah lagi per \n\n saat dirender
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: assistantContent, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
-    res.json({ ok: true, conversation_id: conversationId, reply: assistantContent, bubbles: result.bubbles || [result.text], provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
+    if (foundNotes.length) await saveMemoryNotes(req.supabase, userId, foundNotes).catch(() => {});
+    res.json({ ok: true, conversation_id: conversationId, reply: assistantContent, bubbles: cleanBubbles.length ? cleanBubbles : [assistantContent], provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
