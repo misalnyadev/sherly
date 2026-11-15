@@ -199,6 +199,44 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .mobile-tabbar button.active{background:linear-gradient(100deg,#d82d9126,#b02d8026);color:#ffd6ef}
 .mobile-tabbar button.active [data-icon] svg{filter:drop-shadow(0 0 7px #ff75ca99)}.mobile-tabbar .tab-logo{width:24px;height:24px;object-fit:contain;display:block;border-radius:8px;filter:drop-shadow(0 2px 6px #00000073)}.mobile-tabbar button.active .tab-logo{filter:drop-shadow(0 0 9px #ff75c9b3),drop-shadow(0 2px 5px #0000008c)}.mobile-tabbar .tab-avatar{width:22px;height:22px;display:block}.mobile-tabbar .tab-avatar img{width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 12%;display:block;box-shadow:0 0 0 2px #e95aaf}.mobile-tabbar .tab-avatar img[hidden]{display:none}.mobile-tabbar button.active .tab-avatar img{box-shadow:0 0 0 2px #ff8fd4,0 0 10px #ff75ca80}
 @media(max-width:850px){.app,.app.collapsed{grid-template-columns:minmax(0,1fr)}.mobile-tabbar{display:grid}}
+/* Portfolio */
+.pf-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.pf-filter{border:1px solid #49334e;background:#2a1226;color:#ffd0ec;border-radius:999px;padding:8px 15px;font-size:12px;cursor:pointer;transition:.18s;-webkit-tap-highlight-color:transparent}
+.pf-filter:hover{border-color:#e84ba9}
+.pf-filter.active{background:#b02d80;border-color:#e84ba9;color:#fff}
+.pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.pf-card{background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;overflow:hidden;cursor:pointer;transition:border-color .18s,transform .18s,box-shadow .18s;text-align:left;padding:0;font:inherit;color:inherit;display:flex;flex-direction:column;-webkit-tap-highlight-color:transparent}
+.pf-card:hover{border-color:#45304f;transform:translateY(-2px);box-shadow:0 0 0 3px #e84ba914,0 14px 34px #0009}
+.pf-cover{height:180px;background:#151323;position:relative;overflow:hidden}
+.pf-cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
+.pf-card:hover .pf-cover img{transform:scale(1.04)}
+.pf-badge{position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;gap:5px;background:#d82d91;color:#fff;border-radius:30px;padding:5px 9px;font-size:10px}
+.pf-badge.video{background:#7c2b85}
+.pf-badge.copy{background:#2f3b57}
+.pf-play{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.pf-play span{width:44px;height:44px;border-radius:50%;background:#d82d91cc;display:grid;place-items:center;color:#fff;box-shadow:0 0 24px #d82d91aa}
+.pf-play svg{width:18px;height:18px}
+.pf-cover-copy{height:180px;background:radial-gradient(300px 160px at 30% 0%,rgba(216,45,145,.25),transparent 60%),linear-gradient(145deg,#1c1030,#0a1220);display:flex;flex-direction:column;justify-content:center;padding:18px;gap:8px}
+.pf-cover-copy b{font-size:16px;color:#ffd6ef;line-height:1.35}
+.pf-cover-copy small{color:var(--muted);font-size:11px}
+.pf-info{padding:13px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+.pf-info h3{margin:0;font-size:15px}
+.pf-meta{color:var(--muted);font-size:11px}
+.pf-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto}
+.pf-detail{display:none;position:fixed;inset:0;background:#030610c9;z-index:130;align-items:center;justify-content:center;padding:calc(18px + env(safe-area-inset-top)) 18px 18px}
+.pf-detail.open{display:flex}
+.pf-detail-card{width:min(720px,100%);max-height:90vh;overflow:auto;background:#101827;border:1px solid #49334e;border-radius:18px;box-shadow:0 20px 80px #0009;position:relative}
+.pf-detail-media{background:#070b14}
+.pf-detail-media img,.pf-detail-media video{width:100%;max-height:52vh;object-fit:cover;display:block}
+.pf-detail-body{padding:20px 22px}
+.pf-detail-body h2{margin:0 0 6px}
+.pf-detail-sub{color:var(--muted);font-size:12px;margin:0 0 14px}
+.pf-detail-desc{white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:#dce4f1}
+.pf-detail-note{color:#7184a1;font-size:11px;margin:12px 2px 0;line-height:1.5}
+.pf-detail-note code{background:#080f1b;border:1px solid #344052;border-radius:5px;padding:1px 5px;font-size:10px}
+.pf-detail-close{position:absolute;top:12px;right:12px;background:#0d1526cc;border:1px solid #344158;color:#cdd6e4;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer;transition:.18s;z-index:1}
+.pf-detail-close:hover{border-color:#e84ba9;color:#ffd6ef}
+@media(max-width:560px){.pf-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.pf-cover,.pf-cover-copy{height:120px}.pf-info{padding:10px}.pf-info h3{font-size:13px}.pf-detail-media img,.pf-detail-media video{max-height:38vh}}
 </style></head>
 <body>
 <div class="app">
@@ -295,6 +333,12 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
    <p class="bank-suara-progress" id="bankProgress" role="status"></p>
    <div class="bank-suara-list" id="bankSuaraList"><p class="bank-suara-empty">Memuat Bank Suara...</p></div>
   </div>
+</section>
+<section id="portfolioView" class="page-view">
+  <div class="page-heading"><div><h1>Portfolio</h1><p>Karya pilihan SherlyStudio — foto, video, dan copy.</p></div></div>
+  <div class="pf-filters" id="pfFilters"></div>
+  <div class="pf-grid" id="pfGrid"></div>
+  <div class="pf-detail" id="pfDetail" role="dialog" aria-modal="true" aria-label="Detail karya"><div class="pf-detail-card" id="pfDetailCard"></div></div>
 </section>
 <section id="profileView" class="page-view">
   <div class="page-heading"><div><h1>Profil Pengguna</h1><p>Identitas &amp; kontak kerja sama — data ini dibaca Chat Sherly untuk mengenali lawan bicaranya, dan dipakai untuk portofolio, proposal, serta komunikasi dengan client.</p></div></div>
@@ -418,7 +462,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
-function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -477,6 +521,8 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 })();
 </script>
 <script src="/bank-suara.js"></script>
+<script src="/portfolio-data.js"></script>
+<script src="/portfolio.js"></script>
 <script>if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});</script>
 </body>
 </html>

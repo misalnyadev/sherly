@@ -1,0 +1,93 @@
+// Portfolio — grid karya (foto / video / copy) + tampilan detail.
+// Data statis: portfolio-data.js (window.PORTFOLIO_ITEMS). Dipanggil go('Portfolio') -> window.renderPortfolio().
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Ikon dirender manual karena kartu dibuat SETELAH loop injeksi [data-icon] di index.html berjalan.
+  const icon = (key) => {
+    const paths = (typeof ICONS !== 'undefined' && ICONS[key]) || '';
+    return '<span data-icon="' + key + '">' + (paths ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>' : '') + '</span>';
+  };
+  const TYPE_META = {
+    photo: { label: 'Foto', icon: 'gallery' },
+    video: { label: 'Video', icon: 'clapperboard' },
+    copy: { label: 'Copy', icon: 'file' },
+  };
+  const FILTERS = [['all', 'Semua'], ['photo', 'Foto'], ['video', 'Video'], ['copy', 'Copy']];
+  let filter = 'all';
+
+  function tagsHTML(tags) {
+    return (Array.isArray(tags) && tags.length)
+      ? '<div class="pf-tags">' + tags.map((t) => '<span class="chip">' + esc(t) + '</span>').join('') + '</div>'
+      : '';
+  }
+
+  function cardHTML(item) {
+    const t = TYPE_META[item.type] || TYPE_META.photo;
+    let cover;
+    if (item.type === 'copy') {
+      const first = String(item.copy || item.desc || '').split('\n').map((x) => x.trim()).filter(Boolean)[0] || '';
+      cover = '<div class="pf-cover-copy"><b>\u201C' + esc(item.headline || item.title) + '\u201D</b><small>' + esc(first.slice(0, 90)) + '</small></div>';
+    } else {
+      cover = '<div class="pf-cover">'
+        + (item.img ? '<img src="' + esc(item.img) + '" alt="' + esc(item.title) + '" loading="lazy">' : '')
+        + '<span class="pf-badge ' + esc(item.type) + '">' + icon(t.icon) + esc(t.label) + '</span>'
+        + (item.type === 'video' ? '<span class="pf-play">' + icon('play') + '</span>' : '')
+        + '</div>';
+    }
+    const meta = [item.client, item.date].filter(Boolean).map(esc).join(' \u00b7 ');
+    return '<button type="button" class="pf-card" data-id="' + esc(item.id) + '">'
+      + cover
+      + '<div class="pf-info"><h3>' + esc(item.title) + '</h3>'
+      + (meta ? '<div class="pf-meta"><span>' + meta + '</span></div>' : '')
+      + tagsHTML(item.tags)
+      + '</div></button>';
+  }
+
+  function closeDetail() { $('pfDetail')?.classList.remove('open'); }
+
+  function openDetail(id) {
+    const item = (window.PORTFOLIO_ITEMS || []).find((i) => String(i.id) === String(id));
+    const wrap = $('pfDetail'), card = $('pfDetailCard');
+    if (!item || !wrap || !card) return;
+    const t = TYPE_META[item.type] || TYPE_META.photo;
+    let media = '';
+    if (item.type === 'video') {
+      media = item.video
+        ? '<video src="' + esc(item.video) + '" controls playsinline preload="metadata"' + (item.img ? ' poster="' + esc(item.img) + '"' : '') + '></video>'
+        : (item.img ? '<img src="' + esc(item.img) + '" alt="' + esc(item.title) + '">' : '');
+    } else if (item.img) {
+      media = '<img src="' + esc(item.img) + '" alt="' + esc(item.title) + '">';
+    }
+    const body = item.type === 'copy' ? (item.copy || item.desc || '') : (item.desc || '');
+    const sub = [t.label, item.client, item.date].filter(Boolean).map(esc).join(' \u00b7 ');
+    card.innerHTML = '<button type="button" class="pf-detail-close" id="pfDetailClose" aria-label="Tutup detail">' + icon('x') + '</button>'
+      + (media ? '<div class="pf-detail-media">' + media + '</div>' : '')
+      + '<div class="pf-detail-body">'
+      + '<h2>' + esc(item.title) + '</h2>'
+      + '<p class="pf-detail-sub">' + sub + '</p>'
+      + (body ? '<div class="pf-detail-desc">' + esc(body) + '</div>' : '')
+      + (item.type === 'video' && !item.video ? '<p class="pf-detail-note">Slot video \u2014 isi field <code>video</code> di portfolio-data.js dengan file/URL video.</p>' : '')
+      + tagsHTML(item.tags)
+      + '</div>';
+    wrap.classList.add('open');
+    card.scrollTop = 0;
+    $('pfDetailClose')?.addEventListener('click', closeDetail);
+  }
+
+  window.renderPortfolio = function renderPortfolio() {
+    const grid = $('pfGrid'), fWrap = $('pfFilters');
+    if (!grid || !fWrap) return;
+    const items = (window.PORTFOLIO_ITEMS || []).filter((i) => filter === 'all' || i.type === filter);
+    grid.innerHTML = items.length
+      ? items.map(cardHTML).join('')
+      : '<div class="empty-state">Belum ada karya di kategori ini \u2014 tambahkan di portfolio-data.js.</div>';
+    grid.querySelectorAll('.pf-card').forEach((b) => b.addEventListener('click', () => openDetail(b.dataset.id)));
+    fWrap.innerHTML = FILTERS.map(([k, l]) => '<button type="button" class="pf-filter' + (k === filter ? ' active' : '') + '" data-filter="' + k + '">' + esc(l) + '</button>').join('');
+    fWrap.querySelectorAll('.pf-filter').forEach((b) => b.addEventListener('click', () => { filter = b.dataset.filter; renderPortfolio(); }));
+  };
+
+  $('pfDetail')?.addEventListener('click', (e) => { if (e.target === $('pfDetail')) closeDetail(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+})();
