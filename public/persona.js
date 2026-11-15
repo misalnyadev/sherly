@@ -46,6 +46,7 @@
       + '<div class="pe-card"><h3>' + icon('users') + ' Audiens</h3><p>' + esc(p.audience || '') + '</p></div>'
       + '<div class="pe-card wide"><h3>' + icon('arrow-up-right') + ' Kolaborasi</h3>'
       + '<p>' + esc(p.kolaborasi || '') + '</p>'
+      + (p.heyTalent && p.heyTalent.pin ? '<div class="pe-ht"><span class="pe-ht-pin">' + icon('key') + ' PIN HeyTalent <b>' + esc(p.heyTalent.pin) + '</b></span><button type="button" class="outline-btn" id="peHtBtn">Salin PIN</button></div><p class="pe-ht-note">' + esc(p.heyTalent.note || '') + '</p>' : '')
       + '<div class="pe-cta" style="margin-top:12px">'
       + '<a class="pink-btn" href="' + esc(p.instagram || '#') + '" target="_blank" rel="noopener">' + icon('arrow-up-right') + ' DM ' + esc(p.handle || '') + '</a>'
       + '<button type="button" class="outline-btn" id="peChatBtn">' + icon('message') + ' Chat dengan Sherly</button>'
@@ -60,6 +61,12 @@
     document.getElementById('pePortfolioBtn')?.addEventListener('click', () => window.go?.('Portfolio'));
     document.getElementById('peChatBtn')?.addEventListener('click', () => window.go?.('Chat Sherly'));
     document.getElementById('peCollabBtn')?.addEventListener('click', () => window.go?.('Kolaborasi'));
+    document.getElementById('peHtBtn')?.addEventListener('click', async () => {
+      const pin = String(window.SHERLY_PERSONA?.heyTalent?.pin || '').trim();
+      if (!pin) return;
+      try { await navigator.clipboard.writeText(pin); window.toast?.('PIN HeyTalent disalin: ' + pin); }
+      catch { window.toast?.('PIN HeyTalent: ' + pin); }
+    });
     document.getElementById('peIdeBtn')?.addEventListener('click', () => {
       window.go?.('Chat Sherly');
       setTimeout(() => {
