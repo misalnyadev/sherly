@@ -1,6 +1,6 @@
 // Kolaborasi — katalog karakter publik + layanan + form brief untuk klien.
 // Data: collab-data.js (window.SHERLY_STUDIO). Dipanggil go('Kolaborasi') -> window.renderCollab().
-// Brief dikirim via WhatsApp (wa.me) — nomor dikonfigurasi di collab-data.js.
+// Brief dikirim via WhatsApp (wa.me) — nomor otomatis dari field WhatsApp di profil admin (tersinkron ke server); fallback collab-data.js.
 (() => {
   'use strict';
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,6 +14,11 @@
     const root = document.getElementById('collabRoot');
     if (!root) return;
     const cfg = window.SHERLY_STUDIO || {};
+    // Nomor WA studio: dari field WhatsApp profil admin (tersinkron via server) — fallback collab-data.js.
+    fetch('/api/public/settings').then((r) => r.json().catch(() => ({}))).then((d) => {
+      const wa = String(d?.settings?.whatsapp || '').replace(/\D/g, '');
+      if (wa && window.SHERLY_STUDIO) window.SHERLY_STUDIO.whatsapp = wa;
+    }).catch(() => {});
     const chars = Array.isArray(cfg.characters) ? cfg.characters : [];
     const services = Array.isArray(cfg.services) ? cfg.services : [];
 

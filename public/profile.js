@@ -164,6 +164,10 @@
       btn.disabled = true;
       try {
         await putProfile(p);
+        try {
+          const sr = await fetch('/api/admin/settings', { method: 'PUT', headers: await (async () => { const h = { 'Content-Type': 'application/json' }; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t; return h; })(), body: JSON.stringify({ whatsapp: p.phone || '' }) });
+          if (sr.ok) window.toast?.('Nomor WhatsApp studio tersinkron — brief klien di Kolaborasi kini memakai nomor ini.');
+        } catch {}
         window.toast?.('Profil tersimpan di database — Chat Sherly membacanya, dan tetap sama di perangkat lain saat login.');
       } catch (e) {
         window.toast?.('Profil tersimpan di browser ini. Sinkron database gagal: ' + e.message);

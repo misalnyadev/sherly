@@ -5,7 +5,7 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chatWithAI, generateImageWithGemini } from './ai.js';
+import { chatWithAI, generateImageWithGemini, generateImageWithKie } from './ai.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
@@ -344,10 +344,21 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
 
 app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   try {
-    const prompt = typeof (req.body || {}).prompt === 'string' ? req.body.prompt.trim() : '';
+    const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect } = req.body || {};
+    const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
-    const image = await generateImageWithGemini(prompt, { supabase: req.supabase, accessToken: req.accessToken });
-    res.json({ ok: true, provider: 'gemini', image });
+    const provider = ['auto', 'gemini', 'kie'].includes(rawProvider) ? rawProvider : 'auto';
+    const aspect = typeof rawAspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(rawAspect) ? rawAspect : '1:1';
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    let image, usedProvider = 'gemini', fallbackUsed = false;
+    if (provider === 'kie') { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
+    else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; }
+    else {
+      // Otomatis: Kie dulu (mesin produksi), Gemini sebagai fallback.
+      try { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
+      catch { image = await generateImageWithGemini(prompt, auth); usedProvider = 'gemini'; fallbackUsed = true; }
+    }
+    res.json({ ok: true, provider: usedProvider, fallback_used: fallbackUsed, image });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'Generator gambar gagal.' });
@@ -446,6 +457,27 @@ app.put('/api/profile', requireUser, requireAdmin, async (req, res) => {
 });
 
 // Text-to-speech (admin-only) — via Gemini TTS, memakai key vault/env Gemini. Mengembalikan audio/wav.
+const PUBLIC_SETTING_KEYS = ['whatsapp', 'instagram'];
+app.get('/api/public/settings', async (_req, res) => {
+  try {
+    if (!supabaseConfigured) return res.json({ settings: {} });
+    const { data } = await createPublicClient().from('app_settings').select('key,value').in('key', PUBLIC_SETTING_KEYS);
+    const out = {};
+    (data || []).forEach((r) => { if (r && r.key) out[r.key] = r.value || ''; });
+    res.json({ settings: out });
+  } catch { res.json({ settings: {} }); }
+});
+app.put('/api/admin/settings', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const raw = (req.body || {}).whatsapp;
+    let num = typeof raw === 'string' ? raw.replace(/\D/g, '') : '';
+    if (num.startsWith('0')) num = '62' + num.slice(1); // 08xx -> 628xx (format internasional wa.me)
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '' && num.length < 8) return res.status(400).json({ error: 'Nomor WhatsApp tidak valid — gunakan format internasional tanpa + (mis. 62812xxxxxxx).' });
+    const { error } = await req.supabase.from('app_settings').upsert({ key: 'whatsapp', value: num || null, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) return res.status(500).json({ error: 'Gagal menyimpan setelan studio. Pastikan tabel app_settings sudah dibuat (docs/supabase-studio-settings.sql).' });
+    res.json({ ok: true, whatsapp: num });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
 app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
   try {
     const { text, voice: reqVoice, style: reqStyle } = req.body || {};

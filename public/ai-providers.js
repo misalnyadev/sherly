@@ -3,8 +3,8 @@
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const PROVIDERS = ['groq', 'gemini', 'openrouter'];
-  const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter' };
+  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
+  const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
   let groupCache = [];
   let modelCache = {};
   let keyModalMode = 'add'; // add | edit | rotate
@@ -19,7 +19,7 @@
     { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: 'clapperboard', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
     { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: 'film', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
   ];
-  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'] };
+  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'] };
   let capabilityRegistry = FALLBACK_CAPABILITIES;
   let providerCapabilities = FALLBACK_PROVIDER_CAPS;
   let activeCapability = 'all';
