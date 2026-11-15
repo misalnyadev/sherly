@@ -132,6 +132,24 @@
     const file = $('characterImage')?.files?.[0];
     const src = file ? URL.createObjectURL(file) : (pendingRef ? 'data:' + (pendingRef.mime || 'image/png') + ';base64,' + pendingRef.data : (currentRefUrl || ''));
     if (src) { img.src = src; wrap.hidden = false; } else wrap.hidden = true;
+    refreshBoardRef(src);
+  }
+
+  /** Thumbnail foto referensi di tahap 3 — menegaskan basis image-to-image board. */
+  function refreshBoardRef(src) {
+    const img = $('wizBoardRefImg'), note = $('wizBoardRefNote');
+    if (!img || !note) return;
+    if (src === undefined) {
+      const file = $('characterImage')?.files?.[0];
+      src = file ? URL.createObjectURL(file) : (pendingRef ? 'data:' + (pendingRef.mime || 'image/png') + ';base64,' + pendingRef.data : (currentRefUrl || ''));
+    }
+    if (src) {
+      img.src = src; img.hidden = false;
+      note.textContent = 'Dipakai Gemini sebagai basis image-to-image — wajah & detail tetap konsisten.';
+    } else {
+      img.removeAttribute('src'); img.hidden = true;
+      note.textContent = 'Belum ada foto — unggah / buat dulu di tahap 1, atau pakai mesin teks→gambar.';
+    }
   }
 
   // ---------- traits grid ----------
@@ -161,7 +179,7 @@
   }
 
   // ---------- kunci identitas ----------
-  function compileIdentityLock() {
+  function compileIdentityLock(opts = {}) {
     const b = collectBasics();
     const t = traits;
     const join = (a, bb) => [a, bb].filter((x) => String(x || '').trim()).join(' — ');
@@ -181,7 +199,8 @@
     s += line('Gaya', t.style);
     s += line('Aksesoris', t.accessories);
     s += line('Tekstur kulit', t.skinTexture || 'pori-pori halus terlihat natural, tekstur kulit nyata, tanpa efek beauty filter berlebihan');
-    if (voice.name) s += 'Suara: voice Gemini "' + voice.name + '"' + (voice.style ? ', gaya ' + voice.style : '') + '. ';
+    // skipVoice: prompt board (tahap 3) disusun sebelum tahap 4 — jangan sertakan profil suara.
+    if (voice.name && !opts.skipVoice) s += 'Suara: voice Gemini "' + voice.name + '"' + (voice.style ? ', gaya ' + voice.style : '') + '. ';
     s += 'Pertahankan wajah, rambut, kulit, dan proporsi tubuh ini persis sama di semua konten — jangan berubah menjadi orang lain. Foto realistis, anatomi wajar, pencahayaan konsisten.';
     if (b.appearance.trim()) s += '\nPenampilan umum: ' + b.appearance.trim();
     if (b.personality.trim()) s += '\nKepribadian: ' + b.personality.trim();
@@ -395,10 +414,10 @@
         return;
       }
       if (log) log.textContent = 'Menganalisis foto dengan AI vision…';
-      const d = await apiJson('/api/ai/vision', { image: photo });
+      const d = await apiJson('/api/ai/vision', { image: photo, provider: $('wizVisionEngine')?.value || 'auto' });
       traits = Object.assign({}, traits, d.traits || {});
       renderTraitsGrid(); refreshLock(); saveDraft();
-      if (log) log.textContent = 'Analisis selesai ✓ — ' + Object.keys(d.traits || {}).length + ' detail terisi. Periksa & sunting sesukamu.';
+      if (log) log.textContent = 'Analisis selesai ✓ (via ' + (d.provider || 'AI') + ') — ' + Object.keys(d.traits || {}).length + ' detail terisi. Periksa & sunting sesukamu.';
       window.toast?.('Analisis foto selesai ✓');
     } catch (e) {
       if (log) log.textContent = 'Gagal: ' + (e.message || 'analisis foto gagal.');
@@ -410,9 +429,13 @@
 
   // ---------- tahap 3: master board ----------
   let boardPromptDirty = false;
+  // Instruksi sheet 3 panel — sama seperti boardPrompt() di server (sinkron manual).
+  const BOARD_SHEET_INSTRUCTIONS = '\n\nMASTER CHARACTER BOARD — buat satu lembar referensi karakter (character reference sheet) dengan tiga panel bergrid rapi:\n1) full body dari kepala sampai kaki, 2) potret setengah badan menghadap kamera, 3) close-up macro wajah.\nLatar polos netral yang seragam di semua panel, pencahayaan studio merata, tanpa teks, label, atau watermark.\nWajah, rambut, kulit, dan proporsi tubuh HARUS identik dan konsisten di ketiga panel — jangan menjadi orang lain.';
   function buildBoardPrompt() {
     const mp = ($('characterPrompt')?.value || '').trim();
-    return mp || compileIdentityLock();
+    const base = mp || compileIdentityLock({ skipVoice: true });
+    // Identitas dipotong dulu supaya instruksi sheet tidak terpotong.
+    return String(base).trim().slice(0, 1050) + BOARD_SHEET_INSTRUCTIONS;
   }
   function refreshBoardPrompt(force) {
     const ta = $('wizBoardPrompt'); if (!ta) return;
@@ -460,9 +483,11 @@
     if (log) log.textContent = 'Gemini menyusun sheet referensi (±15–40 detik)…';
     try {
       const prompt = ($('wizBoardPrompt')?.value || '').trim() || buildBoardPrompt();
-      const body = { prompt };
+      const engine = $('wizBoardEngine')?.value || 'gemini';
+      const body = { prompt, provider: engine };
       if (editingId) body.characterId = editingId;
-      else {
+      else if (engine === 'gemini') {
+        // Foto tahap 1 jadi basis img2img — hanya Gemini yang mendukung.
         const ref = await currentPhotoParts().catch(() => null);
         if (ref) body.reference = ref;
       }
@@ -470,7 +495,8 @@
       if (!d.image?.data) throw new Error('Generator tidak mengembalikan gambar.');
       pendingBoard = { mime: d.image.mime, data: d.image.data };
       showBoardResult();
-      if (log) log.textContent = 'Board jadi ✓ — periksa konsistensi wajahnya.';
+      const via = 'via ' + (d.provider || 'AI') + (d.mode === 'txt2img' ? ' (teks→gambar, tanpa foto referensi)' : ' (img2img dari foto tahap 1)');
+      if (log) log.textContent = 'Board jadi ✓ ' + via + ' — periksa konsistensi wajahnya.';
     } catch (e) {
       if (log) log.textContent = 'Gagal: ' + (e.message || 'generator master board gagal.') + ' Atau salin prompt-nya, generate di aplikasi lain, lalu unggah hasilnya di sini.';
       window.toast?.(e.message || 'Generator master board gagal.');
@@ -530,7 +556,7 @@
       const data = collectBasics();
       data.traits = traits;
       data.voice = voice;
-      const d = await apiJson('/api/ai/character-bible', { data });
+      const d = await apiJson('/api/ai/character-bible', { data, provider: $('wizBibleEngine')?.value || 'auto' });
       ta.value = d.bible || '';
       bible = ta.value;
       saveDraft();
@@ -559,7 +585,7 @@
         const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
         if (d?.traits) traits = { ...d.traits, ...traits };
         if (d?.bible && !bible) bible = d.bible;
-        if (d?.voice) voice = { ...d.voice, ...voice };
+        if (d?.voice) voice = { ...voice, ...d.voice }; // draft mengisi field yang masih kosong
         if (d?.gen) gen = { ...gen, ...d.gen };
       } catch {}
     }
@@ -578,6 +604,8 @@
     renderGenForm();
     refreshLock();
     renderBoardBox();
+    refreshBoardRef();
+    refreshEngineSelects();
     setPhotoMode('upload');
     refreshPhotoPreview();
     goStep(1);
@@ -763,6 +791,29 @@
       window.toast?.(err.message || 'Gagal membaca berkas.');
     }
   });
+  // Provider kustom dari Pengaturan jadi pilihan mesin gambar (wajah & board), seperti di Studio.
+  let customProviders = null;
+  async function loadCustomProviders() {
+    if (customProviders) return customProviders;
+    try {
+      const t = (await window.sherlyGetAccessToken?.()) || '';
+      const r = await fetch('/api/custom-providers', { headers: t ? { Authorization: 'Bearer ' + t } : {} });
+      if (!r.ok) return []; // jangan cache kegagalan — coba lagi saat wizard dibuka
+      const d = await r.json().catch(() => ({}));
+      customProviders = Array.isArray(d?.providers) ? d.providers : [];
+    } catch { return []; }
+    return customProviders;
+  }
+  async function refreshEngineSelects() {
+    const customs = await loadCustomProviders();
+    if (!customs.length) return;
+    const mk = (c, suffix) => '<option value="custom:' + esc(c.id) + '">' + esc('Kustom: ' + String(c.name || 'Provider') + suffix) + '</option>';
+    const face = $('wizGenEngine');
+    if (face && !face.innerHTML.includes('custom:')) face.insertAdjacentHTML('beforeend', customs.map((c) => mk(c, '')).join(''));
+    const board = $('wizBoardEngine');
+    if (board && !board.innerHTML.includes('custom:')) board.insertAdjacentHTML('beforeend', customs.map((c) => mk(c, ' — tanpa foto')).join(''));
+  }
+  refreshEngineSelects();
   bind('wizAnalyzeBtn', runAnalysis);
   bind('wizLockRefresh', () => { refreshLock(); window.toast?.('Kunci identitas disusun ulang dari detail.'); });
   bind('wizLockApply', () => {

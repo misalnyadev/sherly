@@ -89,6 +89,18 @@ export function boardPrompt(identityPrompt) {
   ].join('\n');
 }
 
+/**
+ * Prompt board final untuk route /api/ai/character-board.
+ * Klien wizard (D-103) kini mengirim prompt SHEET LENGKAP (identitas + instruksi 3 panel,
+ * bertanda "MASTER CHARACTER BOARD") — pakai apa adanya agar tidak dobel instruksi.
+ * Klien lama / panggilan tanpa prompt hanya mengirim identitas — bungkus dengan boardPrompt().
+ */
+export function resolveBoardPrompt(identityPrompt) {
+  const id = String(identityPrompt || '').trim();
+  if (id.includes('MASTER CHARACTER BOARD')) return id;
+  return boardPrompt(id);
+}
+
 // ===== D-99: suara karakter (TTS) + bible =====
 
 /** Whitelist profil suara karakter dari klien (dipakai juga oleh biblePrompt). */
