@@ -11,8 +11,8 @@
   .ss-chat-id{display:flex;align-items:center;gap:9px;min-width:0;border:1px solid #45304f;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #e84ba914;transition:border-color .18s,box-shadow .18s}
   .ss-chat-id:hover{border-color:rgba(232,75,169,.6);box-shadow:0 0 0 3px #e84ba91f}
   .ss-status-text{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ss-ava-wrap{position:relative;flex:none}
-  .ss-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 16%;border:1px solid rgba(255,255,255,.16);background:#131c2e}
+  .ss-ava-wrap{position:relative;flex:none;display:flex;padding:0;border:0;background:none;appearance:none;-webkit-appearance:none}
+  .ss-ava{display:block;width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 16%;border:1px solid rgba(255,255,255,.16);background:#131c2e}
   .ss-chat-name{font-size:13.5px;font-weight:500;color:#ffffff;letter-spacing:0;display:flex;align-items:center;gap:6px;line-height:1.15}
   .ss-verified{color:#ff72c5;display:inline-flex}.ss-verified svg{width:13px;height:13px}
   .ss-chat-status{font-size:10.5px;line-height:1.35;color:#8fa4bd;display:flex;align-items:center;gap:5px;margin-top:1px;letter-spacing:.01em}
