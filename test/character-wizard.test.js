@@ -57,6 +57,11 @@ test('resolveBoardPrompt: prompt sheet lengkap dari klien dipakai apa adanya', (
   assert.equal(resolveBoardPrompt(full), full);
 });
 
+test('resolveBoardPrompt: engine AK Talent (D-104) dipakai apa adanya', () => {
+  const full = 'You are an automatic character-sheet engine. You receive ONE reference image…\nSHEET PROMPT\n"Single landscape (16:9) professional character reference sheet…"';
+  assert.equal(resolveBoardPrompt(full), full);
+});
+
 test('resolveBoardPrompt: identitas polos dibungkus instruksi sheet', () => {
   const p = resolveBoardPrompt('Perempuan Indonesia, rambut hitam.');
   assert.ok(p.includes('Perempuan Indonesia, rambut hitam.'));

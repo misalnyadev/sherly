@@ -97,7 +97,9 @@ export function boardPrompt(identityPrompt) {
  */
 export function resolveBoardPrompt(identityPrompt) {
   const id = String(identityPrompt || '').trim();
-  if (id.includes('MASTER CHARACTER BOARD')) return id;
+  // D-103: sheet prompt lama bertanda "MASTER CHARACTER BOARD".
+  // D-104: engine AK Talent bertanda "character-sheet engine".
+  if (id.includes('MASTER CHARACTER BOARD') || id.includes('character-sheet engine')) return id;
   return boardPrompt(id);
 }
 

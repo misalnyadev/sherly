@@ -184,7 +184,7 @@
     const t = traits;
     const join = (a, bb) => [a, bb].filter((x) => String(x || '').trim()).join(' — ');
     const line = (label, v) => (String(v || '').trim() ? label + ': ' + String(v).trim() + '. ' : '');
-    let s = 'IDENTITY LOCK — karakter ' + (b.name || 'ini') + (b.age ? ', usia visual ' + b.age + ' tahun' : '') + (b.origin ? ', asal ' + b.origin : '') + (b.role ? ', peran ' + b.role : '') + '. ';
+    let s = 'IDENTITY LOCK — karakter ' + (b.name || 'ini') + (b.age ? ', usia visual ' + b.age + ' tahun' : '') + (b.origin ? ', etnis ' + b.origin : '') + (gen.gender ? ', gender ' + ({ wanita: 'Perempuan', pria: 'Laki-laki', netral: 'netral' }[gen.gender] || gen.gender) : '') + (b.role ? ', peran ' + b.role : '') + '. ';
     s += line('Bentuk wajah', t.faceShape);
     s += line('Warna kulit', t.skin);
     s += line('Mata', join(t.eyes, t.eyeDetail));
@@ -429,13 +429,51 @@
 
   // ---------- tahap 3: master board ----------
   let boardPromptDirty = false;
-  // Instruksi sheet 3 panel — sama seperti boardPrompt() di server (sinkron manual).
-  const BOARD_SHEET_INSTRUCTIONS = '\n\nMASTER CHARACTER BOARD — buat satu lembar referensi karakter (character reference sheet) dengan tiga panel bergrid rapi:\n1) full body dari kepala sampai kaki, 2) potret setengah badan menghadap kamera, 3) close-up macro wajah.\nLatar polos netral yang seragam di semua panel, pencahayaan studio merata, tanpa teks, label, atau watermark.\nWajah, rambut, kulit, dan proporsi tubuh HARUS identik dan konsisten di ketiga panel — jangan menjadi orang lain.';
+  // Engine character-sheet — VERBATIM ala AK Talent (docs/referensi-aktalent.md).
+  // Struktur: preamble + STEP 0 (kunci identitas & lingkungan) -> "Karakter dasar:" + identitas
+  // -> STEP 1 (generate landscape 16:9) -> SHEET PROMPT (3 full-body + grid 4x3 = 12 foto).
+  const BOARD_ENGINE_PRE = `You are an automatic character-sheet engine. You receive ONE reference image of a character and produce ONE landscape character sheet showing the exact same person from many views. Do not ask the user any questions and do not offer choices. If no reference image is attached, ask once for it, then proceed.
+
+STEP 0 - IDENTITY AND ENVIRONMENT LOCK (silent)
+
+Study the reference image (and the original character prompt if provided). Keep these identical in every panel: face shape and bone structure, eye color and iris pattern, brows, nose, lip shape, skin tone and undertone, freckles / moles / marks and their positions, hair color, texture, length and style, facial hair, age, build, outfit, accessories, lighting style and color grade.
+
+Also lock the environment: identify the location, background elements, surfaces, lighting direction and color palette in the reference image. Every full-body and portrait panel must keep this same environment. Do not replace it with a studio backdrop.
+
+For views the reference does not show (back, side, full body), infer them consistently: the hair style continues logically (same braid, curl or cut pattern and length), the outfit continues, and the body matches the visible build. For the environment, continue the same location logically: the same surfaces, the same props, the same lighting, seen from the new angle.
+
+Karakter dasar (acuan identitas, Bahasa Indonesia — jadikan rujukan utama bersama foto referensi): `;
+  const BOARD_ENGINE_POST = `
+
+STEP 1 - GENERATE (automatic)
+
+Generate exactly ONE image: landscape 16:9, highest resolution available, containing the full set of panels below, arranged as specified. No text, labels, captions, numbers, watermarks or UI anywhere in the image.
+
+SHEET PROMPT
+
+"Single landscape (16:9) professional character reference sheet of the exact same person as the reference image, laid out as a clean editorial grid of photographs separated by thin even white gutters. Every panel shows the same person with identical face, skin tone, freckles and marks, hair, outfit and accessories, under the same lighting style and color grade. Every full-body and portrait panel keeps the same environment as the reference image.
+
+LEFT SECTION (about 45% of the width): three full-body photographs side by side at the same scale, head to feet visible, standing relaxed in the exact same environment as the reference image, with the same location, background, surfaces and lighting:
+
+1) full body front view,
+
+2) full body side profile view (clean profile of forehead, nose, lips and chin), with the background continuing naturally from the same location,
+
+3) full body back view (hair from behind with the exact same style and length, outfit seen from the back with realistic seams and fabric folds), with the background continuing naturally from the same location.
+
+RIGHT SECTION (about 55% of the width): a 4-column by 3-row grid of 12 photographs:
+
+Row 1, portraits (each in the same environment, softly blurred behind the person): head-and-shoulders front portrait; three-quarter portrait looking at the lens; side profile portrait with rim light on the face edge; back-of-head view showing hair from behind in full detail.
+
+Row 2, macro close-ups: eye macro (iris with a natural color gradient and soft limbal ring, sharp pupil, moist reflections, individual lashes with natural curl, individual eyebrow hairs, fine lines and pores around the eye); ear macro (skin translucency, pores, peach fuzz, rim-lit hair strands, earring with sharp specular highlights if the reference has one); hair macro (individual strands clearly defined, natural variation in thickness and direction, fine baby hairs at the hairline, scalp visible where the style allows); cheek macro (pores distinctly visible, freckles and marks as in the reference, fine peach fuzz, natural oils with glossy highlights on the cheekbone).
+
+Row 3, features and expressions: nose macro (fine evenly distributed hairs, visible pores, slight shine on the tip, realistic shadowing); lips macro, closed (natural lip texture and fine lines, slight color variation, soft edges, fine hair around the lips); natural genuine smile (teeth slightly visible, crinkles at the eye corners, lifted cheeks); open-mouth laugh showing natural slightly uneven teeth with translucent edges, gums, tongue and realistic moisture.
+
+All skin is unretouched and natural: pores distinctly visible with subtle variation, fine vellus hair (peach fuzz), tiny bumps, natural oils, fine skin grain, soft directional sheen. Natural proportions, five fingers per hand. Consistent professional editorial photography across all panels, shallow depth of field in the portraits and macro lenses in the close-ups, subtle film grain, no plastic smoothing, no beauty filter, no HDR look. Each panel is sharp, well exposed and cleanly framed with no overlap between panels."`;
   function buildBoardPrompt() {
     const mp = ($('characterPrompt')?.value || '').trim();
     const base = mp || compileIdentityLock({ skipVoice: true });
-    // Identitas dipotong dulu supaya instruksi sheet tidak terpotong.
-    return String(base).trim().slice(0, 1050) + BOARD_SHEET_INSTRUCTIONS;
+    return BOARD_ENGINE_PRE + String(base).trim().slice(0, 1600) + BOARD_ENGINE_POST;
   }
   function refreshBoardPrompt(force) {
     const ta = $('wizBoardPrompt'); if (!ta) return;
