@@ -85,7 +85,7 @@
   .ss-chat-close:hover{color:#fff}
   @media(max-width:850px){
   .ss-chat-close{display:grid;place-items:center}
-  .ss-chat.open{position:fixed;inset:0;z-index:96;height:100vh!important;height:100dvh!important;min-height:0;border-radius:0;box-shadow:none}
+  .ss-chat.open{position:fixed;inset:0;z-index:96;height:100vh!important;height:100dvh!important;min-height:0;border-radius:0;box-shadow:none;padding-top:env(safe-area-inset-top)}
   main.ss-chat-active #ssChatRoot{height:0!important;overflow:visible}
   }
   `;
