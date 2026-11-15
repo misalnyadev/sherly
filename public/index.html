@@ -237,6 +237,30 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
 .pf-detail-close{position:absolute;top:12px;right:12px;background:#0d1526cc;border:1px solid #344158;color:#cdd6e4;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer;transition:.18s;z-index:1}
 .pf-detail-close:hover{border-color:#e84ba9;color:#ffd6ef}
 @media(max-width:560px){.pf-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.pf-cover,.pf-cover-copy{height:120px}.pf-info{padding:10px}.pf-info h3{font-size:13px}.pf-detail-media img,.pf-detail-media video{max-height:38vh}}
+/* Planner */
+.pl-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.pl-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.pl-list{display:flex;flex-direction:column;gap:10px}
+.pl-item{display:flex;gap:14px;align-items:center;background:linear-gradient(145deg,#101b2a,#0a1220);border:1px solid var(--line);border-radius:15px;padding:13px 15px;transition:border-color .18s,box-shadow .18s;cursor:pointer}
+.pl-item:hover{border-color:#45304f;box-shadow:0 0 0 3px #e84ba914}
+.pl-date{flex:none;width:52px;text-align:center;border-right:1px solid var(--line);padding-right:12px}
+.pl-date b{display:block;font-size:19px;color:#ffd6ef;line-height:1.2}
+.pl-date small{font-size:9px;letter-spacing:.14em;color:var(--muted)}
+.pl-main{flex:1;min-width:0}
+.pl-main h3{margin:0 0 3px;font-size:14.5px}
+.pl-main p{margin:0 0 6px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-main .pf-tags{margin:0}
+.pl-side{display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex:none}
+.pl-status{font-size:10px;border-radius:30px;padding:4px 10px;letter-spacing:.04em}
+.pl-status.ide{background:#233150;color:#c9d4e8}
+.pl-status.draft{background:#3a2153;color:#e4ccf7}
+.pl-status.terjadwal{background:#b02d80;color:#fff}
+.pl-status.tayang{background:#17372c;color:#7ee2ae}
+.pl-actions{display:flex;gap:6px}
+.pl-actions button{background:transparent;border:1px solid #344158;color:#8fa1b7;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;transition:.18s}
+.pl-actions button:hover{border-color:#e84ba9;color:#ffd6ef}
+.pl-actions svg{width:14px;height:14px}
+@media(max-width:560px){.pl-item{flex-wrap:wrap}.pl-side{flex-direction:row;width:100%;justify-content:space-between;align-items:center}}
 </style></head>
 <body>
 <div class="app">
@@ -340,6 +364,23 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
   <div class="pf-grid" id="pfGrid"></div>
   <div class="pf-detail" id="pfDetail" role="dialog" aria-modal="true" aria-label="Detail karya"><div class="pf-detail-card" id="pfDetailCard"></div></div>
 </section>
+<section id="plannerView" class="page-view">
+  <div class="page-heading"><div><h1>Planner</h1><p>Rencana &amp; progres konten Sherly — ide, draft, jadwal, tayang.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="plIdeBtn"><span data-icon="sparkles"></span> Minta ide dari Sherly</button><button type="button" class="pink-btn" id="plAddBtn"><span data-icon="plus"></span> Tambah Konten</button></div></div>
+  <div class="pl-filters" id="plFilters"></div>
+  <div class="pl-list" id="plList"></div>
+  <div class="modal-backdrop" id="plModal"><div class="modal">
+    <h2 id="plModalTitle">Tambah Konten</h2>
+    <p class="modal-sub">Rencanakan konten — judul, platform, tanggal, status, dan catatan.</p>
+    <div class="form-grid">
+      <div class="form-field full"><label for="plTitle">Judul konten</label><input id="plTitle" maxlength="120" placeholder="Reels: rutinitas skincare malam"></div>
+      <div class="form-field"><label for="plPlatform">Platform</label><select id="plPlatform"></select></div>
+      <div class="form-field"><label for="plDate">Tanggal</label><input id="plDate" type="date"></div>
+      <div class="form-field"><label for="plStatus">Status</label><select id="plStatus"></select></div>
+      <div class="form-field full"><label for="plNotes">Catatan / outline</label><textarea id="plNotes" rows="3" maxlength="600" placeholder="Hook, shot list, caption singkat..."></textarea></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="outline-btn danger-btn" id="plDeleteBtn" hidden>Hapus</button><button type="button" class="outline-btn" id="plCancelBtn">Batal</button><button type="button" class="pink-btn" id="plSaveBtn">Simpan</button></div>
+  </div></div>
+</section>
 <section id="profileView" class="page-view">
   <div class="page-heading"><div><h1>Profil Pengguna</h1><p>Identitas &amp; kontak kerja sama — data ini dibaca Chat Sherly untuk mengenali lawan bicaranya, dan dipakai untuk portofolio, proposal, serta komunikasi dengan client.</p></div></div>
   <div class="profile-grid">
@@ -406,7 +447,7 @@ button:focus-visible{outline:2px solid #e84ba980;outline-offset:2px}
  </section>
  <aside class="rightcol">
   <section class="panel chat"><h3><span data-icon="message-circle"></span> Chat Sherly <span data-icon="arrow-up-right"></span></h3><span class="online">● Online</span><p>Hai, aku Sherly! Ada ide konten, butuh bantuan atau sekadar ngobrol santai? Yuk, cerita aja...</p><button class="primary" onclick="toast('Chat AI belum dihubungkan — ini masih prototype')">Mulai Chat &nbsp; <span data-icon="chevron-right"></span></button><img src="assets/sherly-panel.png" alt="Sherly — master character portrait"></section>
-  <section class="panel"><div class="section-head"><h2><span data-icon="sparkles"></span> Quick Tools</h2></div><div class="quick"><button onclick="go('Karakter')"><span data-icon="user-plus"></span>Buat Karakter</button><button onclick="go('Studio')"><span data-icon="image-plus"></span>Generate Gambar</button><button onclick="go('Studio')"><span data-icon="video"></span>Generate Video</button><button onclick="toast('Text-to-speech belum dihubungkan')"><span data-icon="audio-lines"></span>Teks ke Suara</button></div></section>
+  <section class="panel"><div class="section-head"><h2><span data-icon="sparkles"></span> Quick Tools</h2></div><div class="quick"><button onclick="go('Karakter')"><span data-icon="user-plus"></span>Buat Karakter</button><button onclick="go('Studio')"><span data-icon="image-plus"></span>Generate Gambar</button><button onclick="go('Studio')"><span data-icon="video"></span>Generate Video</button><button onclick="toast('Text-to-speech belum dihubungkan')"><span data-icon="audio-lines"></span>Teks ke Suara</button><button onclick="go('Planner')"><span data-icon="list-checks"></span>Planner Konten</button></div></section>
   <section class="panel"><div class="section-head"><h2><span data-icon="calendar-days"></span> Kalender & Jadwal</h2><button class="link" data-page="Kalender">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="calendar-top"><b>November 2026</b><span class="calendar-arrows"><span data-icon="chevron-left"></span><span data-icon="chevron-right"></span></span></div><div class="days"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span class="selected">14</span><span>15</span></div><div class="events"><div class="event"><i></i><b>09:00</b><span>Meeting Content Plan</span><em>Planner</em></div><div class="event"><i></i><b>14:00</b><span>Shooting — Sherly</span><em>Studio</em></div><div class="event"><i></i><b>19:00</b><span>Edit Video</span><em>Editor</em></div></div></section>
   <section class="panel"><div class="section-head"><h2><span data-icon="bell"></span> Notifikasi Terbaru</h2><button class="link" onclick="toast('Semua notifikasi sudah dibaca')">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="notifications"><div class="notification"><span data-icon="user-round-check"></span><div>Karakter Sherly siap dikelola<small>Baru saja</small></div></div><div class="notification"><span data-icon="clapperboard"></span><div>Proyek Hey Sherly diperbarui<small>Hari ini</small></div></div><div class="notification"><span data-icon="images"></span><div>Aset baru ditambahkan ke Library<small>Hari ini</small></div></div></div></section>
  </aside>
@@ -462,7 +503,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
-function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');dashboard.style.display=page==='Beranda'?'grid':'none';if((page==='Karakter'||page==='Pengaturan'||page==='Profil')&&!sessionToken){auth.classList.remove('active');chars.classList.remove('active');if(vault)vault.classList.remove('active');if(prof)prof.classList.remove('active');if(assets)assets.classList.remove('active');window.sherlyOpenLogin?.();return;}auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.()}if(page==='Profil')window.loadProfile?.();if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(!['Karakter','Pengaturan','Profil','Beranda','Aset','Portfolio','Planner'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -523,6 +564,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/bank-suara.js"></script>
 <script src="/portfolio-data.js"></script>
 <script src="/portfolio.js"></script>
+<script src="/planner.js"></script>
 <script>if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});</script>
 </body>
 </html>
