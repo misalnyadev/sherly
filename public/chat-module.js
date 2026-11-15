@@ -8,7 +8,7 @@
   .ss-chat button{cursor:pointer;font:inherit}
   /* header */
   .ss-chat-toolbar{display:flex;align-items:center;gap:13px;padding:13px 20px;background:linear-gradient(180deg,rgba(255,255,255,.025),transparent);border-bottom:1px solid rgba(255,255,255,.045);position:relative;z-index:2}
-  .ss-chat-id{display:flex;align-items:center;gap:9px;min-width:0;border:1px solid #45304f;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #e84ba914;transition:border-color .18s,box-shadow .18s}
+  .ss-chat-id{display:flex;align-items:flex-start;gap:9px;min-width:0;border:1px solid #45304f;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #e84ba914;transition:border-color .18s,box-shadow .18s}
   .ss-chat-id:hover{border-color:rgba(232,75,169,.6);box-shadow:0 0 0 3px #e84ba91f}
   .ss-status-text{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ss-ava-wrap{position:relative;flex:none}
@@ -18,7 +18,7 @@
   .ss-chat-status{font-size:10.5px;color:#8fa4bd;display:flex;align-items:center;gap:5px;margin-top:1px;letter-spacing:.01em}
   .ss-status-dot{width:6px;height:6px;border-radius:50%;background:#3ddc84;display:inline-block}
   .ss-spacer{flex:1}
-  .ss-chat-info{background:none;border:0;padding:0;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0;flex:1;display:block}
+  .ss-chat-info{background:none;border:0;padding:1px 0 0;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0;flex:1;display:block}
   .ss-chat-info:hover .ss-chat-name{color:#ffd6ef}
   .ss-voice-sep{height:1px;background:rgba(255,255,255,.08);margin:16px 0 2px}
   .ss-profile-box{border:1px solid #45304f;background:#111a2e;border-radius:14px;padding:13px 14px;box-shadow:0 0 0 3px #e84ba914}
