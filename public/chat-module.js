@@ -1,13 +1,13 @@
 (() => {
   const style = `
   #ssChatRoot{display:none}
-  .ss-chat{position:relative;width:100%;height:100%;flex:1;min-height:0;align-self:stretch;background:radial-gradient(1100px 480px at 50% -12%,rgba(216,45,145,.16),transparent 62%),radial-gradient(700px 380px at 88% 110%,rgba(124,43,133,.14),transparent 60%),#070b14;display:none;grid-template-rows:auto minmax(0,1fr) auto;color:#f4f5fb;font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;border:0;border-radius:18px;overflow:hidden}
+  .ss-chat{position:relative;width:100%;height:100%;flex:1;min-height:0;align-self:stretch;background:linear-gradient(180deg,#070b14 120px,rgba(216,45,145,.13) 240px,rgba(216,45,145,0) 460px),radial-gradient(700px 380px at 88% 110%,rgba(124,43,133,.14),transparent 60%),#070b14;display:none;grid-template-rows:auto minmax(0,1fr) auto;color:#f4f5fb;font:14px/1.55 Inter,ui-sans-serif,system-ui,sans-serif;border:0;border-radius:18px;overflow:hidden}
   main.ss-chat-active>.layout,main.ss-chat-active>.page-view{display:none!important}main.ss-chat-active>#ssChatRoot{display:flex!important;flex:1;min-height:0;align-items:stretch;position:relative}main.ss-chat-active{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0!important}
   .ss-chat.open{display:grid}
   .ss-chat-main{min-width:0;min-height:0;height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
   .ss-chat button{cursor:pointer;font:inherit}
   /* header */
-  .ss-chat-toolbar{display:flex;align-items:center;gap:13px;padding:13px 20px;background:linear-gradient(180deg,rgba(255,255,255,.025),transparent);border-bottom:1px solid rgba(255,255,255,.045);position:relative;z-index:2}
+  .ss-chat-toolbar{display:flex;align-items:center;gap:13px;padding:13px 20px;background:none;border-bottom:1px solid rgba(255,255,255,.045);position:relative;z-index:2}
   .ss-chat-id{display:flex;align-items:center;gap:9px;min-width:0;border:1px solid #45304f;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #e84ba914;transition:border-color .18s,box-shadow .18s}
   .ss-chat-id:hover{border-color:rgba(232,75,169,.6);box-shadow:0 0 0 3px #e84ba91f}
   .ss-status-text{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
