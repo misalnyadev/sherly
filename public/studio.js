@@ -72,7 +72,7 @@
       + '<img src="' + dataUrl + '" alt="' + esc(String(it.prompt).slice(0, 80)) + '" loading="lazy">'
       + '<div class="st-card-body">'
       + '<p>' + esc(it.prompt) + '</p>'
-      + '<span class="st-card-meta">' + esc(it.aspect || '') + ' · ' + esc(it.style ? (STYLES[it.style] || {}).label || '' : '') + (it.model ? ' · ' + esc(String(it.model).split('/').pop()) : '') + '</span>'
+      + '<span class="st-card-meta">' + esc(it.aspect || '') + ' · ' + esc(it.style ? (STYLES[it.style] || {}).label || '' : '') + (it.provider ? ' · ' + esc(it.provider === 'kie' ? 'Kie AI' : it.provider === 'gemini' ? 'Gemini' : it.provider) : '') + (it.model ? ' · ' + esc(String(it.model).split('/').pop()) : '') + '</span>'
       + '<div class="st-card-actions">'
       + '<a class="st-act" href="' + dataUrl + '" download="sherly-studio-' + esc(it.id) + '.' + ext + '">' + icon('cloud-upload') + ' Unduh</a>'
       + '<button type="button" class="st-act" data-act="planner">' + icon('list-checks') + ' Ke Planner</button>'
@@ -110,6 +110,7 @@
     const isVideo = m === 'video';
     const ta = $('stPrompt'); if (ta) ta.placeholder = isVideo ? 'cth: opening reels \u2014 Sherly berjalan masuk cafe, slow motion, cahaya hangat' : 'cth: flatlay skincare pagi di meja kayu, cahaya jendela lembut, nuansa cream';
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
+    $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
     $('stGenBtn')?.classList.toggle('st-hidden', isVideo);
     $('stVideoNote')?.classList.toggle('st-hidden', !isVideo);
     updatePillLabels();
@@ -120,10 +121,11 @@
     if (a) a.querySelector('b').textContent = aspectLabel();
     if (s) s.querySelector('b').textContent = styleLabel();
     if (d) d.querySelector('b').textContent = state.duration;
+    const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = state.engine === 'auto' ? 'Otomatis' : (state.engine === 'kie' ? 'Kie AI' : 'Gemini');
   }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
   }
@@ -134,11 +136,13 @@
     if (which === 'aspect') items = ASPECTS.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (state.aspect === v ? 'on' : '') + '">' + l + '</button>').join('');
     if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     if (which === 'dur') items = DURATIONS.map((v) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + v + '</button>').join('');
+    if (which === 'engine') items = ENGINES.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (state.engine === v ? 'on' : '') + '">' + l + '</button>').join('');
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
       if (which === 'style') state.style = b.dataset.v;
       if (which === 'dur') state.duration = b.dataset.v;
+      if (which === 'engine') state.engine = b.dataset.v;
       updatePillLabels();
       el.classList.remove('open'); popOpen = null;
     }));
@@ -154,10 +158,10 @@
     skel.innerHTML = '<div class="st-skel-img"></div><div class="st-card-body"><p>Memproses \u201c' + esc(raw.slice(0, 46)) + '\u2026\u201d</p></div>';
     if (grid) { grid.querySelector('.st-empty')?.remove(); grid.prepend(skel); }
     try {
-      const r = await fetch('/api/ai/image', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ prompt: composedPrompt(raw) }) });
+      const r = await fetch('/api/ai/image', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ prompt: composedPrompt(raw), provider: state.engine, aspect: state.aspect }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Generator gambar gagal.');
-      history.unshift({ id: 'g' + Date.now(), prompt: raw, aspect: state.aspect, style: state.style, mime: d.image?.mime, data: d.image?.data, model: d.image?.model, createdAt: new Date().toISOString() });
+      history.unshift({ id: 'g' + Date.now(), prompt: raw, aspect: state.aspect, style: state.style, provider: d.provider, mime: d.image?.mime, data: d.image?.data, model: d.image?.model, createdAt: new Date().toISOString() });
       saveHistory(); renderGrid();
       window.toast?.('Gambar jadi \u2728');
     } catch (e) {
@@ -180,6 +184,7 @@
       + '<label for="stPrompt">Deskripsi konten yang kamu mau</label>'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: flatlay skincare pagi di meja kayu, cahaya jendela lembut, nuansa cream"></textarea>'
       + '<div class="st-controls">'
+      + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('clapperboard') + ' Mesin <b>Otomatis</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-engine"></div></div>'
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' Aspek <b>4:5</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-aspect"></div></div>'
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' Gaya <b>Lifestyle</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-style"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('play') + ' Durasi <b>5 detik</b> ' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-dur"></div></div>'
@@ -191,6 +196,7 @@
       + '<div class="st-grid" id="stGrid"></div>';
 
     document.querySelectorAll('#studioRoot .st-tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
+    $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });

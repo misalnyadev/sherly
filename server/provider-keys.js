@@ -2,7 +2,7 @@
 // RLS scopes every row to the owning admin; ciphertext never leaves this module toward HTTP responses.
 import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
-export const PROVIDERS = ['groq', 'gemini', 'openrouter'];
+export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter'];
 export const AUTO_DISABLE_AFTER = 5;
 
@@ -24,8 +24,9 @@ export const PROVIDER_CAPABILITIES = {
   groq: ['chat', 'vision'],
   gemini: ['chat', 'vision', 'tts'],
   openrouter: ['chat', 'vision'],
+  kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'],
 };
-const PROBE_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter' };
+const PROBE_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
 
 // Catatan 2026-11: Google menjawab bahwa gemini-2.5-flash “is no longer available to new users” (lihat error API live).
 const DEFAULT_MODELS = {
@@ -116,7 +117,7 @@ export async function listKeyGroups(supabase) {
 }
 
 export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
-  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, atau openrouter.'), { status: 400 });
+  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, atau kie.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
@@ -306,6 +307,7 @@ const rankModel = (a, b) => {
 export async function fetchProviderModels(provider, apiKey) {
   const controller = AbortSignal.timeout(15000);
   let models = [];
+  if (provider === 'kie') throw new Error('Daftar model Kie belum tersedia — model gambar Kie diatur lewat KIE_IMAGE_MODEL (opsional).');
   if (provider === 'gemini') {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey }, signal: controller });
     const data = await res.json().catch(() => ({}));
@@ -343,6 +345,10 @@ export async function probeProviderKey(provider, apiKey) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 8) return { ok: false, error: 'API key tidak valid (kosong/terlalu pendek).' };
   const controller = AbortSignal.timeout(20000);
   const key = apiKey.trim();
+  if (provider === 'kie') {
+    // Kie belum punya endpoint listing gratis yang diketahui — validasi format saja; kunci teruji sungguhan saat generate pertama.
+    return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
+  }
   try {
     let res;
     if (provider === 'gemini') {

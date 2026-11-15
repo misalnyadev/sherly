@@ -179,6 +179,64 @@ export function geminiImageModel() {
   return process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
 }
 
+/** Konfigurasi Kie AI — aggregator generatif (dipakai studio AK Talent untuk produksi). */
+export function kieConfig() {
+  return {
+    base: process.env.KIE_API_BASE || 'https://api.kie.ai',
+    imageModel: process.env.KIE_IMAGE_MODEL || 'flux/dev',
+  };
+}
+
+async function kieAttempts(auth = {}) {
+  const attempts = [];
+  if (auth.supabase) {
+    const vaultKeys = await getUsableKeys(auth.supabase, 'kie').catch(() => []);
+    for (const vk of vaultKeys) attempts.push({ apiKey: vk.apiKey, source: 'vault' });
+  }
+  if (process.env.KIE_API_KEY) attempts.push({ apiKey: process.env.KIE_API_KEY, source: 'env' });
+  return attempts;
+}
+
+function pickKieImage(data) {
+  const b64 = data?.data?.b64_json || data?.data?.[0]?.b64_json || data?.b64_json || data?.images?.[0]?.b64_json || null;
+  if (b64) return { b64 };
+  const url = data?.data?.url || data?.data?.[0]?.url || data?.url || data?.image_url || data?.images?.[0]?.url
+    || (typeof data?.data?.[0] === 'string' ? data.data[0] : null)
+    || (typeof data?.images?.[0] === 'string' ? data.images[0] : null);
+  return url ? { url } : null;
+}
+
+/** Generate gambar via Kie AI. CATATAN: endpoint dibuat best-effort (docs tidak bisa diakses dari sandbox) —
+ *  kalau respons Kie berbeda, kirim contoh responsnya ke chat untuk dikalibrasi. Env: KIE_API_KEY, KIE_API_BASE, KIE_IMAGE_MODEL. */
+export async function generateImageWithKie(prompt, aspect, auth = {}) {
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
+  }
+  const { base, imageModel } = kieConfig();
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(base + '/api/v1/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + attempt.apiKey },
+        body: JSON.stringify({ model: imageModel, prompt, aspect_ratio: aspect || '1:1' }),
+        signal: AbortSignal.timeout(120000),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { lastError = new Error(data?.error || data?.message || `Kie API error (${response.status})`); continue; }
+      const picked = pickKieImage(data);
+      if (!picked) { lastError = new Error('Kie tidak mengembalikan gambar — format respons belum dikenali. Kirim contoh respons dari dashboard Kie untuk dikalibrasi.'); continue; }
+      if (picked.b64) return { mime: 'image/png', data: picked.b64, model: imageModel, source: attempt.source };
+      const imgRes = await fetch(picked.url, { signal: AbortSignal.timeout(60000) });
+      if (!imgRes.ok) { lastError = new Error('Gagal mengunduh hasil dari Kie (' + imgRes.status + ').'); continue; }
+      const buf = Buffer.from(await imgRes.arrayBuffer());
+      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model: imageModel, source: attempt.source };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Generator Kie gagal.'), { status: 502 });
+}
+
 /** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback). */
 export async function generateImageWithGemini(prompt, auth = {}) {
   const attempts = await buildAttempts('gemini', geminiImageModel(), auth.supabase);
