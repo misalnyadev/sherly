@@ -11,13 +11,13 @@
   let addPrefill = null;    // {provider, key_name}
   // Capability taxonomy (server sends authoritative list; fallbacks keep UI alive if payload lama)
   const FALLBACK_CAPABILITIES = [
-    { id: 'chat', label: 'Teks & Logika', short: 'Teks', badge: '💬', description: 'Chat, reasoning, copywriting & analisis — otak utama Sherly.' },
-    { id: 'vision', label: 'Vision / Analisis Gambar', short: 'Vision', badge: '👁️', description: 'Memahami isi gambar & referensi visual.' },
-    { id: 'tts', label: 'Text-to-Speech', short: 'TTS', badge: '🔊', description: 'Mengubah teks menjadi voiceover.' },
-    { id: 'image_gen', label: 'Text-to-Image', short: 'T2I', badge: '🖼️', description: 'Studio: generate gambar dari prompt (mis. kie.ai).' },
-    { id: 'image_edit', label: 'Image-to-Image', short: 'I2I', badge: '✏️', description: 'Studio: restyle/edit gambar dengan prompt (mis. kie.ai).' },
-    { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: '🎬', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
-    { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: '🎞️', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
+    { id: 'chat', label: 'Teks & Logika', short: 'Teks', badge: 'message', description: 'Chat, reasoning, copywriting & analisis — otak utama Sherly.' },
+    { id: 'vision', label: 'Vision / Analisis Gambar', short: 'Vision', badge: 'eye', description: 'Memahami isi gambar & referensi visual.' },
+    { id: 'tts', label: 'Text-to-Speech', short: 'TTS', badge: 'audio-lines', description: 'Mengubah teks menjadi voiceover.' },
+    { id: 'image_gen', label: 'Text-to-Image', short: 'T2I', badge: 'gallery', description: 'Studio: generate gambar dari prompt (mis. kie.ai).' },
+    { id: 'image_edit', label: 'Image-to-Image', short: 'I2I', badge: 'pencil', description: 'Studio: restyle/edit gambar dengan prompt (mis. kie.ai).' },
+    { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: 'clapperboard', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
+    { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: 'film', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
   ];
   const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'] };
   let capabilityRegistry = FALLBACK_CAPABILITIES;
@@ -27,17 +27,18 @@
 
   const capById = (id) => capabilityRegistry.find(c => c.id === id);
   const capsOf = (provider) => providerCapabilities[provider] || [];
+  const iconSvg = (key) => { try { const P = (typeof ICONS !== 'undefined') ? ICONS : {}; return P[key] ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[key]}</svg>` : ''; } catch (e) { return ''; } };
   const providersForCap = (capId) => PROVIDERS.filter(p => capsOf(p).includes(capId));
   function capabilityBadges(provider) {
-    return capsOf(provider).map(id => { const c = capById(id); return c ? `<span class="cap-badge" title="${esc(c.label)}">${c.badge} ${esc(c.short || c.label)}</span>` : ''; }).join('');
+    return capsOf(provider).map(id => { const c = capById(id); return c ? `<span class="cap-badge" title="${esc(c.label)}">${iconSvg(c.badge)}${esc(c.short || c.label)}</span>` : ''; }).join('');
   }
   function renderCapabilityTabs() {
     const wrap = $('capabilityTabs');
     if (!wrap) return;
-    const tabs = [{ id: 'all', label: 'Semua', short: 'Semua', badge: '✦' }].concat(capabilityRegistry);
+    const tabs = [{ id: 'all', label: 'Semua', short: 'Semua', badge: 'sparkles' }].concat(capabilityRegistry);
     wrap.innerHTML = tabs.map(t => {
       const count = t.id === 'all' ? PROVIDERS.length : providersForCap(t.id).length;
-      return `<button type="button" class="cap-tab${activeCapability === t.id ? ' active' : ''}" data-cap-tab="${esc(t.id)}" role="tab" aria-selected="${activeCapability === t.id}"><span>${t.badge || ''} ${esc(t.label)}</span><small>${count}</small></button>`;
+      return `<button type="button" class="cap-tab${activeCapability === t.id ? ' active' : ''}" data-cap-tab="${esc(t.id)}" role="tab" aria-selected="${activeCapability === t.id}"><span>${t.badge ? iconSvg(t.badge) : ''}${esc(t.label)}</span><small>${count}</small></button>`;
     }).join('');
     wrap.querySelectorAll('[data-cap-tab]').forEach(b => b.addEventListener('click', () => {
       activeCapability = b.dataset.capTab;
@@ -55,7 +56,7 @@
       const cap = capById(activeCapability);
       if (isEmpty && cap) {
         empty.hidden = false;
-        empty.innerHTML = `<h3>${cap.badge || ''} ${esc(cap.label)}</h3><p>${esc(cap.description || '')}</p><p>Belum ada provider terdaftar untuk kategori ini. Di roadmap: <b>kie.ai</b> (text-to-image, image-to-image, text-to-video, image-to-video) serta provider TTS khusus — tab ini akan terisi otomatis begitu key-nya ditambahkan.</p><p><small>Sambil menunggu, kategori <b>Teks &amp; Logika</b> / <b>Vision</b> sudah bisa dipakai dengan key Groq, Gemini, atau OpenRouter yang tersimpan.</small></p>`;
+        empty.innerHTML = `<h3>${iconSvg(cap.badge)} ${esc(cap.label)}</h3><p>${esc(cap.description || '')}</p><p>Belum ada provider terdaftar untuk kategori ini. Di roadmap: <b>kie.ai</b> (text-to-image, image-to-image, text-to-video, image-to-video) serta provider TTS khusus — tab ini akan terisi otomatis begitu key-nya ditambahkan.</p><p><small>Sambil menunggu, kategori <b>Teks &amp; Logika</b> / <b>Vision</b> sudah bisa dipakai dengan key Groq, Gemini, atau OpenRouter yang tersimpan.</small></p>`;
       } else {
         empty.hidden = true;
         empty.innerHTML = '';

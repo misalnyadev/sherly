@@ -127,7 +127,7 @@
       input.setAttribute('aria-label', 'Teks untuk ' + item.file.name);
       input.addEventListener('input', () => { item.text = input.value; });
       const rm = document.createElement('button');
-      rm.type = 'button'; rm.innerHTML = '✕'; rm.title = 'Hapus dari daftar';
+      rm.type = 'button'; rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; rm.title = 'Hapus dari daftar';
       rm.addEventListener('click', () => { pending.splice(i, 1); renderPending(); });
       row.append(fname, input, rm);
       list.appendChild(row);
