@@ -206,6 +206,29 @@ function pickKieImage(data) {
   return url ? { url } : null;
 }
 
+/** Generate gambar via provider kustom kompatibel OpenAI (POST {base}/images/generations). */
+export async function generateImageWithCustom(cfg, prompt, aspect) {
+  const sizes = { '1:1': '1024x1024', '4:5': '1024x1280', '9:16': '768x1344', '16:9': '1344x768' };
+  const base = String(cfg.baseUrl || '').replace(/\/+$/, '');
+  const response = await fetch(base + '/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+    body: JSON.stringify({ prompt, n: 1, size: sizes[aspect] || '1024x1024', ...(cfg.model ? { model: cfg.model } : {}), response_format: 'b64_json' }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(data?.error?.message || (typeof data?.error === 'string' ? data.error : null) || `Provider kustom error (${response.status})`), { status: 502 });
+  const item = data?.data?.[0];
+  if (item?.b64_json) return { mime: 'image/png', data: item.b64_json, model: cfg.model || 'custom', source: 'custom' };
+  if (item?.url) {
+    const imgRes = await fetch(item.url, { signal: AbortSignal.timeout(60000) });
+    if (!imgRes.ok) throw new Error('Gagal mengunduh hasil dari provider kustom (' + imgRes.status + ').');
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model: cfg.model || 'custom', source: 'custom' };
+  }
+  throw Object.assign(new Error('Provider kustom tidak mengembalikan gambar.'), { status: 502 });
+}
+
 /** Generate gambar via Kie AI. CATATAN: endpoint dibuat best-effort (docs tidak bisa diakses dari sandbox) —
  *  kalau respons Kie berbeda, kirim contoh responsnya ke chat untuk dikalibrasi. Env: KIE_API_KEY, KIE_API_BASE, KIE_IMAGE_MODEL. */
 export async function generateImageWithKie(prompt, aspect, auth = {}) {

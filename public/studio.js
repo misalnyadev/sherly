@@ -27,6 +27,7 @@
     free: { label: 'Bebas', suffix: '' }
   };
   const DURATIONS = ['5 detik', '10 detik'];
+  let engines = [['auto', 'Otomatis (Kie \u2192 Kustom \u2192 Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']];
   const SUGGESTIONS = [
     'Flatlay skincare pagi di meja kayu, cahaya jendela lembut, nuansa cream',
     'Sudut cafe cozy di Bogor, secangkir kopi latte dan buku terbuka',
@@ -34,7 +35,7 @@
     'Meja kerja kreator rapi dengan kamera film dan moodboard'
   ];
 
-  const state = { mode: 'photo', aspect: '4:5', style: 'lifestyle', duration: '5 detik' };
+  const state = { mode: 'photo', aspect: '4:5', style: 'lifestyle', duration: '5 detik', engine: 'auto' };
   let history = [];
   let popOpen = null;
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
@@ -121,7 +122,7 @@
     if (a) a.querySelector('b').textContent = aspectLabel();
     if (s) s.querySelector('b').textContent = styleLabel();
     if (d) d.querySelector('b').textContent = state.duration;
-    const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = state.engine === 'auto' ? 'Otomatis' : (state.engine === 'kie' ? 'Kie AI' : 'Gemini');
+    const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || [null, 'Otomatis'])[1];
   }
 
   function togglePop(which) {
@@ -136,7 +137,7 @@
     if (which === 'aspect') items = ASPECTS.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (state.aspect === v ? 'on' : '') + '">' + l + '</button>').join('');
     if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     if (which === 'dur') items = DURATIONS.map((v) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + v + '</button>').join('');
-    if (which === 'engine') items = ENGINES.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (state.engine === v ? 'on' : '') + '">' + l + '</button>').join('');
+    if (which === 'engine') items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">' + esc(l) + '</button>').join('');
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
@@ -172,7 +173,7 @@
     }
   }
 
-  window.renderStudio = function renderStudio() {
+  window.renderStudio = async function renderStudio() {
     const root = $('studioRoot'); if (!root) return;
     loadHistory();
     root.innerHTML =
@@ -195,6 +196,12 @@
       + '</div>'
       + '<div class="st-grid" id="stGrid"></div>';
 
+    // Provider kustom dari Pengaturan otomatis jadi pilihan Mesin.
+    fetch('/api/custom-providers', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
+      const list = Array.isArray(d?.providers) ? d.providers : [];
+      engines = [['auto', 'Otomatis (Kie \u2192 Kustom \u2192 Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']].concat(list.map((c) => ['custom:' + c.id, String(c.name || 'Provider')]));
+      updatePillLabels();
+    }).catch(() => {});
     document.querySelectorAll('#studioRoot .st-tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
