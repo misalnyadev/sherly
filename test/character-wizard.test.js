@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, biblePrompt, sanitizeVoiceProfile, TRAIT_FIELDS, TRAIT_LABELS } = await import('../server/character-wizard.js');
+const { sanitizeTraits, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, sanitizeVoiceProfile, TRAIT_FIELDS, TRAIT_LABELS } = await import('../server/character-wizard.js');
 
 test('sanitizeTraits: whitelist kunci, buang kosong & non-string, kap panjang', () => {
   const out = sanitizeTraits({
@@ -50,6 +50,22 @@ test('boardPrompt: identitas + instruksi 3 panel, error saat kosong', () => {
   assert.ok(b.includes('Perempuan Indonesia'));
   assert.ok(/full body/.test(b) && /close-up macro/.test(b));
   assert.throws(() => boardPrompt('   '), /Master identity prompt/);
+});
+
+test('resolveBoardPrompt: prompt sheet lengkap dari klien dipakai apa adanya', () => {
+  const full = 'IDENTITY LOCK — karakter Rara.\n\nMASTER CHARACTER BOARD — buat satu lembar referensi karakter dengan tiga panel bergrid rapi.';
+  assert.equal(resolveBoardPrompt(full), full);
+});
+
+test('resolveBoardPrompt: identitas polos dibungkus instruksi sheet', () => {
+  const p = resolveBoardPrompt('Perempuan Indonesia, rambut hitam.');
+  assert.ok(p.includes('Perempuan Indonesia, rambut hitam.'));
+  assert.ok(p.includes('MASTER CHARACTER BOARD'));
+  assert.ok(p.includes('tiga panel'));
+});
+
+test('resolveBoardPrompt: kosong tetap melempar error jelas', () => {
+  assert.throws(() => resolveBoardPrompt('   '), /Master identity prompt/);
 });
 
 test('TRAIT_FIELDS & LABELS konsisten', () => {

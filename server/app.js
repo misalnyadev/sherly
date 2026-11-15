@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom } from './ai.js';
-import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
+import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
@@ -447,12 +447,14 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
 // D-98: analisis foto wajah -> traits terstruktur (wizard Karakter, langkah 2).
 app.post('/api/ai/vision', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { image } = req.body || {};
+    const { image, provider: rawProvider } = req.body || {};
     if (!image || typeof image.data !== 'string' || image.data.length < 8) return res.status(400).json({ ok: false, error: 'Foto wajah wajib dikirim.' });
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(image.mime)) return res.status(400).json({ ok: false, error: 'Format foto harus JPG, PNG, atau WebP.' });
     if (image.data.length > 3_500_000) return res.status(400).json({ ok: false, error: 'Foto terlalu besar — biarkan aplikasi mengompresnya (maks 1280px).' });
+    // D-103: pengguna bisa memilih mesin analisis (default auto: gemini -> openrouter -> groq).
+    const provider = ['auto', 'gemini', 'openrouter', 'groq'].includes(rawProvider) ? rawProvider : 'auto';
     const result = await chatWithAI(
-      { provider: 'auto', messages: [{ role: 'user', content: visionTraitsPrompt() }], temperature: 0.2, maxTokens: 1600, image: { mime: image.mime, data: image.data } },
+      { provider, messages: [{ role: 'user', content: visionTraitsPrompt() }], temperature: 0.2, maxTokens: 1600, image: { mime: image.mime, data: image.data } },
       '', { supabase: req.supabase, accessToken: req.accessToken, systemPrompt: VISION_SYSTEM_PROMPT },
     );
     res.json({ ok: true, traits: parseVisionTraits(result.text), provider: result.provider });
@@ -466,7 +468,7 @@ app.post('/api/ai/vision', requireUser, requireAdmin, async (req, res) => {
 // atau { characterId | referenceCharacterId } untuk memakai data karakter tersimpan.
 app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { prompt: rawPrompt, characterId, referenceCharacterId, reference: rawReference } = req.body || {};
+    const { prompt: rawPrompt, provider: rawProvider, characterId, referenceCharacterId, reference: rawReference } = req.body || {};
     let identity = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     let reference = null;
     const refId = validUuid(characterId) ? characterId : (validUuid(referenceCharacterId) ? referenceCharacterId : null);
@@ -487,8 +489,28 @@ app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) 
       if (rawReference.data.length > 3_500_000) return res.status(400).json({ ok: false, error: 'Foto referensi terlalu besar (maks ±2.5 MB setelah dikompres).' });
       reference = { mime: rawReference.mime, data: rawReference.data };
     }
-    const image = await generateImageWithGemini(boardPrompt(identity), { supabase: req.supabase, accessToken: req.accessToken }, { aspect: '3:4', reference });
-    res.json({ ok: true, image });
+    // D-103: pilih mesin — Gemini img2img (default, pakai foto referensi) atau Kie/kustom (txt2img, tanpa foto).
+    const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
+    const provider = customId ? 'custom' : (['kie', 'gemini'].includes(rawProvider) ? rawProvider : 'gemini');
+    // Prompt dari wizard D-103 sudah berupa sheet prompt lengkap — pakai apa adanya (resolveBoardPrompt).
+    const finalPrompt = resolveBoardPrompt(identity);
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    let image, usedProvider = 'gemini', mode = 'img2img';
+    if (provider === 'gemini') {
+      image = await generateImageWithGemini(finalPrompt, auth, { aspect: '3:4', reference });
+    } else if (provider === 'kie') {
+      mode = 'txt2img';
+      image = await generateImageWithKie(finalPrompt, '3:4', auth);
+      usedProvider = 'kie';
+    } else {
+      mode = 'txt2img';
+      const customs = await listCustomProviders(req.supabase, req.user.id, true);
+      const cp = customs.find((c) => c.id === customId);
+      if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
+      image = await generateImageWithCustom(cp, finalPrompt, '3:4');
+      usedProvider = cp.name;
+    }
+    res.json({ ok: true, provider: usedProvider, mode, image });
   } catch (error) {
     res.status(Number.isInteger(error.status) ? error.status : 502).json({ ok: false, error: error.message || 'Generator master board gagal.' });
   }
@@ -497,8 +519,11 @@ app.post('/api/ai/character-board', requireUser, requireAdmin, async (req, res) 
 // D-99: susun Character Bible dari data wizard (profil + traits + suara terkunci).
 app.post('/api/ai/character-bible', requireUser, requireAdmin, async (req, res) => {
   try {
+    // D-103: pengguna bisa memilih mesin penyusun bible (default auto).
+    const rawProvider = (req.body || {}).provider;
+    const provider = ['auto', 'gemini', 'openrouter', 'groq'].includes(rawProvider) ? rawProvider : 'auto';
     const result = await chatWithAI(
-      { provider: 'auto', messages: [{ role: 'user', content: biblePrompt((req.body || {}).data || {}) }], temperature: 0.6, maxTokens: 2400 },
+      { provider, messages: [{ role: 'user', content: biblePrompt((req.body || {}).data || {}) }], temperature: 0.6, maxTokens: 2400 },
       '', { supabase: req.supabase, accessToken: req.accessToken, systemPrompt: BIBLE_SYSTEM_PROMPT },
     );
     const bible = String(result.text || '').trim().slice(0, 8000);
