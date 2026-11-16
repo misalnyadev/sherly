@@ -78,18 +78,32 @@
     }
     owner?.classList.toggle('is-guest', !user);
     // D-116: badge tier di halaman profil — status yang dikenali Sherly saat chat (server-side).
-    const tb = $('pfTierBadge');
-    if (tb) {
+    ['pfTierBadge', 'pcTierBadge'].forEach((id) => {
+      const tb = $(id);
+      if (!tb) return;
       const r = user?.role || 'guest';
       const t = r === 'admin' ? { c: 'owner', l: 'OWNER', d: 'Sherly mengenalimu: pemilik SherlyStudio — partner satu tim' }
         : r === 'member' ? { c: 'member', l: 'KLIEN', d: 'Sherly mengenalimu: klien terdaftar SherlyStudio' }
         : { c: 'guest', l: 'TAMU', d: 'Sherly mengenalimu: tamu (buku tamu) — belum punya akun klien' };
       tb.hidden = false; tb.className = 'ss-tier-badge ' + t.c; tb.textContent = t.l; tb.title = t.d;
-    }
+    });
     renderAvatar();
   }
 
   window.sherlyApplyProfile = applyProfileUI;
+  // D-120: profil ringkas khusus klien/tamu — sumbernya metadata akun (bukan user_profiles admin).
+  window.sherlyApplyTierProfile = function () {
+    const user = window.sherlyUser || null;
+    const grid = $('pfClientGrid');
+    if (!grid || !user) return;
+    const role = user.role || 'guest';
+    if (role === 'admin') return; // admin memakai grid profil penuh
+    const set = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+    set('pcFullName', user.full_name); set('pcNickname', user.nickname);
+    set('pcGender', (user.gender === 'pria' || user.gender === 'wanita') ? user.gender : '');
+    set('pcContact', user.contact); set('pcEmail', user.email);
+    const cta = $('pcGuestCta'); if (cta) cta.hidden = role !== 'guest';
+  };
   // D-119: bersihkan jejak profil akun sebelumnya — dipanggil saat logout / ganti akun.
   window.sherlyResetLocalProfile = function () {
     window.sherlyRemoveProfile?.();
@@ -220,6 +234,28 @@
       window.toast?.('Foto profil dihapus.');
     });
     $('pfOpenProvidersBtn')?.addEventListener('click', () => window.go?.('Pengaturan'));
+    // D-120: aksi profil klien/tamu
+    $('pcLogoutBtn')?.addEventListener('click', () => window.sherlyLogout?.());
+    $('pcUpgradeBtn')?.addEventListener('click', () => window.sherlyOpenRegister?.());
+    $('pcSaveBtn')?.addEventListener('click', async () => {
+      const btn = $('pcSaveBtn');
+      const body = { full_name: $('pcFullName')?.value.trim() || '', nickname: $('pcNickname')?.value.trim() || '', gender: $('pcGender')?.value || '', contact: $('pcContact')?.value.trim() || '' };
+      if (!body.full_name) { window.toast?.('Nama lengkap wajib diisi ya.'); return; }
+      btn.disabled = true;
+      try {
+        const h = { 'Content-Type': 'application/json' };
+        const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/account', { method: 'PUT', headers: h, body: JSON.stringify(body) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
+        const s = window.sherlyStoredToken?.();
+        window.sherlySetAuthSession?.({ access_token: s?.access_token || null, refresh_token: s?.refresh_token || null, expires_at: s?.expires_at || null, user: d.user || null });
+        window.sherlyApplyProfile?.();
+        window.sherlyApplyTierProfile?.();
+        window.toast?.('Tersimpan — Sherly sekarang tahu cara menyapamu dengan benar.');
+      } catch (e) { window.toast?.(e.message); }
+      finally { btn.disabled = false; }
+    });
     $('pfLogoutBtn')?.addEventListener('click', () => window.sherlyLogout?.());
 
     // restore UI identity from any previously saved profile

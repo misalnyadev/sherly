@@ -179,6 +179,7 @@
   }
   function openLogin(){ $('ssLogin').classList.add('open'); const first = $('ssLoginForm').querySelector('[data-fields]:not([hidden]) input, [data-fields]:not([hidden]) select'); (first || $('ssEmail'))?.focus(); }
   window.sherlyOpenLogin=openLogin;
+  window.sherlyOpenRegister=()=>{openLogin();setAuthMode('register');};
   const savedSession = window.sherlyStoredToken?.(); if (savedSession?.access_token) { token = savedSession.access_token; setProfile(savedSession.user || { email: 'Admin', role: 'admin' }); window.sherlyApplyProfile?.(); }
   // ---------- Lampiran gambar/file untuk Vision ----------
   const attachBtn = $('ssAttachBtn'), attachInput = $('ssAttachInput'), attachChip = $('ssAttachChip'), attachThumb = $('ssAttachThumb'), attachName = $('ssAttachName'), attachRemove = $('ssAttachRemove');
