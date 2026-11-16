@@ -689,31 +689,52 @@ app.get('/api/public/settings', async (_req, res) => {
   try {
     if (!supabaseConfigured) return res.json({ settings: {} });
 
-app.get('/api/public/characters', async (_req, res) => {
-  try {
-    if (!supabaseConfigured) return res.json({ characters: [] });
-    const client = createPublicClient();
-    const { data, error } = await client.from('characters')
-      .select('id,name,role,origin,niche,is_master,reference_image_path')
-      .eq('status', 'active')
-      .order('is_master', { ascending: false })
-      .order('name', { ascending: true });
-    if (error) return res.status(400).json({ error: error.message });
-    const characters = await Promise.all((data || []).map(async (c) => {
-      let reference_image_url = null;
-      if (c.reference_image_path) {
-        try { const { data: signed } = await client.storage.from(bucket).createSignedUrl(c.reference_image_path, 3600); reference_image_url = signed?.signedUrl || null; } catch {}
-      }
-      return { id: c.id, name: c.name, role: c.role || 'Virtual Influencer', origin: c.origin || '', niche: Array.isArray(c.niche) ? c.niche : [], is_master: Boolean(c.is_master), reference_image_url };
-    }));
-    res.json({ characters });
-  } catch (error) { res.status(500).json({ error: error.message }); }
-});
     const { data } = await createPublicClient().from('app_settings').select('key,value').in('key', PUBLIC_SETTING_KEYS);
     const out = {};
     (data || []).forEach((r) => { if (r && r.key) out[r.key] = r.value || ''; });
     res.json({ settings: out });
   } catch { res.json({ settings: {} }); }
+});
+
+app.get('/api/public/characters', async (req, res) => {
+  try {
+    if (!supabaseConfigured) return res.json({ characters: [] });
+    const anon = createPublicClient();
+    let rows = [];
+    let signer = anon;
+    // Jalur utama: view publik (kolom aman saja, karakter aktif) - tersedia setelah supabase/public_characters.sql.
+    const view = await anon.from('characters_public_view')
+      .select('id,name,role,origin,niche,is_master,reference_image_path')
+      .order('is_master', { ascending: false })
+      .order('name', { ascending: true });
+    if (!view.error) {
+      rows = view.data || [];
+    } else {
+      // Fallback sebelum migration dijalankan: pemanggil yang login (mis. admin)
+      // melihat karakter miliknya sendiri lewat RLS owner - supaya panel tidak kosong.
+      const auth = String(req.headers.authorization || '');
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+      if (token) {
+        try {
+          const userClient = createUserClient(token);
+          const mine = await userClient.from('characters')
+            .select('id,name,role,origin,niche,is_master,reference_image_path')
+            .eq('status', 'active')
+            .order('is_master', { ascending: false })
+            .order('name', { ascending: true });
+          if (!mine.error) { rows = mine.data || []; signer = userClient; }
+        } catch {}
+      }
+    }
+    const characters = await Promise.all(rows.map(async (c) => {
+      let reference_image_url = null;
+      if (c.reference_image_path) {
+        try { const { data: signed } = await signer.storage.from(bucket).createSignedUrl(c.reference_image_path, 3600); reference_image_url = signed?.signedUrl || null; } catch {}
+      }
+      return { id: c.id, name: c.name, role: c.role || 'Virtual Influencer', origin: c.origin || '', niche: Array.isArray(c.niche) ? c.niche : [], is_master: Boolean(c.is_master), reference_image_url };
+    }));
+    res.json({ characters });
+  } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.put('/api/admin/settings', requireUser, requireAdmin, async (req, res) => {
   try {
