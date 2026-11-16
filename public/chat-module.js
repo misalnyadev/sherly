@@ -22,6 +22,14 @@
   .ss-tier-badge.member{border:1px solid #74436c;color:#ff9bdc;background:#111a2e}
   .ss-tier-badge.guest{border:1px solid #49334e;color:#a9b8cd;background:#111a2e}
   .ss-bubble-meta small.ss-tier-tag{font-weight:800;letter-spacing:.14em;color:#ff9bdc}
+  /* D-115: layar kecil (±5.8", chat ~316px) — badge & tombol + tidak boleh terpotong:
+     toolbar lebih rapat, badge kompak, teks status menyusut, rantai min-width:0 tuntas. */
+  @media(max-width:700px){
+    .ss-chat-toolbar{gap:7px;padding:10px}
+    .ss-tier-badge{padding:3px 8px;font-size:8px;letter-spacing:.1em}
+    .ss-status-text{max-width:104px}
+    .ss-chat-status{min-width:0}
+  }
   .ss-spacer{flex:1}
   .ss-chat-info{background:none;border:0;padding:0;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0;flex:1;display:block}
   .ss-chat-info:hover .ss-chat-name{color:#ffd0ec}
