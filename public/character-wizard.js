@@ -116,6 +116,13 @@
     if (String(n) === '1') syncGenDropdowns(); // refresh dropdown setelah sunting trait di tahap 2
     if (String(n) === '3') refreshBoardPrompt(); // refresh prompt board setelah sunting identitas
     if (String(n) === '4') renderVoiceBox();
+    if (String(n) === '5') {
+      // D-108: sampai di tahap Bible, kunci identitas otomatis jadi Master Prompt
+      // (bila masih kosong) — user tinggal susun Bible lalu Simpan.
+      refreshLock();
+      const ta = $('characterPrompt');
+      if (ta && !ta.value.trim()) { ta.value = compileIdentityLock(); refreshBoardPrompt(); }
+    }
   }
 
   // ---------- mode foto (unggah / buat) ----------
@@ -165,6 +172,21 @@
     });
   }
 
+  // D-108: "Penampilan" tidak lagi field manual di tahap 5 — dirangkum otomatis dari
+  // detail fisik tahap 1–2, jadi selalu sinkron dengan karakter (bukan teks default statis).
+  function ringkasAppearance() {
+    const p = [];
+    if (traits.gender) p.push(traits.gender);
+    if (traits.height) p.push('tinggi ' + traits.height);
+    if (traits.hair) p.push('rambut ' + traits.hair);
+    if (traits.eyes) p.push('mata ' + traits.eyes);
+    if (traits.skin) p.push('kulit ' + traits.skin);
+    if (traits.faceShape) p.push('wajah ' + traits.faceShape);
+    if (traits.bodyType) p.push('tubuh ' + traits.bodyType);
+    if (traits.hijab && !/^(tidak|tanpa|no)/i.test(String(traits.hijab).trim())) p.push('berhijab: ' + traits.hijab);
+    if (traits.mark) p.push('ciri khas: ' + traits.mark);
+    return p.join('; ').slice(0, 900);
+  }
   function collectBasics() {
     return {
       name: ($('characterName')?.value || '').trim(),
@@ -174,7 +196,7 @@
       niche: ($('characterNiche')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
       platforms: ($('characterPlatforms')?.value || '').split(',').map((x) => x.trim()).filter(Boolean),
       language: fieldVal('characterLanguage'),
-      appearance: $('characterAppearance')?.value || '',
+      appearance: ringkasAppearance(),
       personality: $('characterPersonality')?.value || '',
       identity_prompt: $('characterPrompt')?.value || '',
     };
@@ -670,7 +692,8 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
     voice = { name: ($('wizVoiceName')?.value || '').trim(), style: ($('wizVoiceStyle')?.value || '').trim(), script: ($('wizVoiceScript')?.value || '').trim() };
     const cleanV = {};
     for (const k of ['name', 'style', 'script']) if (voice[k]) cleanV[k] = voice[k];
-    return { traits: cleanT, bible: String(bible || '').slice(0, 8000), voice: cleanV };
+    // D-108: appearance dirangkum otomatis dari detail fisik — bukan field manual lagi.
+    return { traits: cleanT, appearance: ringkasAppearance(), bible: String(bible || '').slice(0, 8000), voice: cleanV };
   };
   window.sherlyWizardFiles = () => {
     const out = {};
@@ -683,7 +706,7 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
     const items = [
       ['Foto', !!c.reference_image_url],
       ['Profil', !!(c.name && c.role)],
-      ['Detail fisik', Object.keys(c.traits || {}).length >= 10 || (c.appearance || '').length > 40],
+      ['Detail fisik', Object.keys(c.traits || {}).length >= 6 || (c.appearance || '').length > 40],
       ['Master board', !!c.board_image_url],
       ['Suara', !!(c.voice_url || (c.voice && c.voice.name))],
       ['Bible', (c.bible || '').length > 40],
@@ -768,7 +791,12 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
   document.querySelectorAll('#characterModal .wiz-step').forEach((b) => b.addEventListener('click', () => goStep(b.dataset.step)));
   bind('wizNext1', () => goStep(2));
   bind('wizPrev2', () => goStep(1));
-  bind('wizNext2', () => goStep(3));
+  bind('wizNext2', () => {
+    // D-108: ingatkan lembut bila detail fisik masih minim (tidak memblokir — tetap bisa lanjut).
+    const filled = Object.values(traits).filter((v) => String(v || '').trim()).length;
+    if (filled < 3) window.toast?.('Detail fisik masih minim — klik "Analisis Foto Otomatis" atau isi manual dulu di tahap 2 biar karakter konsisten.');
+    goStep(3);
+  });
   bind('wizPrev3', () => goStep(2));
   bind('wizNext3', () => goStep(4));
   bind('wizPrev4', () => goStep(3));
@@ -879,7 +907,7 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
   bind('wizVoiceBtn', runVoice);
   bind('wizBibleBtn', runBible);
   $('characterImage')?.addEventListener('change', refreshPhotoPreview);
-  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterAppearance', 'characterPersonality', 'characterLanguage', 'characterPrompt'].forEach((id) => {
+  ['characterName', 'characterRole', 'characterAge', 'characterOrigin', 'characterPersonality', 'characterLanguage', 'characterPrompt'].forEach((id) => {
     const el = $(id); if (!el) return;
     const fn = () => { refreshLock(); refreshGenPrompt(); refreshBoardPrompt(); };
     el.addEventListener('input', fn);
