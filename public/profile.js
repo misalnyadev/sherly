@@ -317,6 +317,9 @@
       finally { btn.disabled = false; btn.textContent = 'Simpan & Tes Key'; }
     });
 
+    // D-143: pintasan ke halaman Pengaturan member & modal suara Sherly.
+    $('pcSettingsBtn')?.addEventListener('click', () => window.go?.('Pengaturan Saya'));
+    $('pcVoiceBtn')?.addEventListener('click', () => window.sherlyOpenVoicePanel?.());
     $('pfLogoutBtn')?.addEventListener('click', () => window.sherlyLogout?.());
 
     // restore UI identity from any previously saved profile
@@ -331,6 +334,7 @@
       window.__pcKeysRoleHook = true;
       window.sherlyApplyRole = function () { __applyRolePrev.apply(this, arguments); loadPcKeys(); };
     }
+    window.sherlyLoadPersonalKeys = loadPcKeys;
     loadPcKeys();
   }
 
