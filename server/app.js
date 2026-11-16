@@ -185,13 +185,18 @@ async function buildTrustedContext(user, timezone, profile, supabase, currentCon
   const local = new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'full', timeStyle: 'long' }).format(now);
   const meta = user.user_metadata || {};
   const role = resolveUserRole(user);
-  const fullName = meta.full_name || meta.display_name || user.email?.split('@')[0] || 'Pengguna';
-  const nick = meta.nickname || fullName;
+  // Nama "asli" = metadata akun (saat daftar / buku tamu) ATAU halaman Profil (user_profiles).
+  // Bila keduanya kosong, JANGAN pakai email/username sebagai nama — Sherly menyapa tanpa nama.
+  const fullName = meta.full_name || meta.display_name || profile?.name || '';
+  const nick = meta.nickname || profile?.name || fullName;
+  const named = Boolean(fullName);
   const genderRaw = String(meta.gender || '').toLowerCase();
   const gender = genderRaw === 'pria' || genderRaw === 'wanita' ? genderRaw : null;
   const since = user.created_at ? new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'medium' }).format(new Date(user.created_at)) : null;
-  const identity = `IDENTITAS LAWAN BICARA (terverifikasi server):\nNama: ${fullName}. Panggilan: ${nick}. Jenis kelamin: ${gender ? gender : 'belum diketahui — bila perlu menyapa spesifik, tanyakan dengan halus dulu'}. Peran akun: ${role === 'admin' ? 'admin/pemilik SherlyStudio' : role === 'member' ? 'klien terdaftar SherlyStudio (login email)' : 'tamu (buku tamu, belum punya akun)'}. Badge: ${role === 'admin' ? 'OWNER (juga tampil di antarmuka chat)' : role === 'member' ? 'KLIEN (juga tampil di antarmuka chat)' : 'TAMU (juga tampil di antarmuka chat)'}${user.email ? `. Email: ${user.email}` : ''}${meta.contact ? `. Kontak: ${meta.contact}` : ''}${since ? `. ${role === 'member' ? 'Klien sejak' : 'Terhubung sejak'}: ${since}` : ''}`;
-  const genderRule = `SAPAAN PENTING: sapa lawan bicara dengan panggilannya ("${nick}") dan gunakan sapaan/predikat yang sesuai jenis kelaminnya — JANGAN pernah tertukar (mis. jangan menyapa laki-laki dengan "Bu"/"Mbak", atau perempuan dengan "Bang"/"Mas").`;
+  const identity = `IDENTITAS LAWAN BICARA (terverifikasi server):\n${named ? `Nama: ${fullName}. Panggilan: ${nick}.` : `Nama & panggilan: BELUM DIISI (halaman Profil belum dilengkapi) — JANGAN menyapa atau menyebut email/username-nya (mis. "${user.email ? user.email.split('@')[0] : 'username'}") sebagai nama; sapa hangat tanpa nama, lalu di momen yang pas tanyakan nama & panggilannya dan sarankan melengkapi halaman Profil SherlyStudio.`} Jenis kelamin: ${gender ? gender : 'belum diketahui — bila perlu menyapa spesifik, tanyakan dengan halus dulu'}. Peran akun: ${role === 'admin' ? 'admin/pemilik SherlyStudio' : role === 'member' ? 'klien terdaftar SherlyStudio (login email)' : 'tamu (buku tamu, belum punya akun)'}. Badge: ${role === 'admin' ? 'OWNER (juga tampil di antarmuka chat)' : role === 'member' ? 'KLIEN (juga tampil di antarmuka chat)' : 'TAMU (juga tampil di antarmuka chat)'}${user.email ? `. Email: ${user.email}` : ''}${meta.contact ? `. Kontak: ${meta.contact}` : ''}${since ? `. ${role === 'member' ? 'Klien sejak' : 'Terhubung sejak'}: ${since}` : ''}`;
+  const genderRule = named
+    ? `SAPAAN PENTING: sapa lawan bicara dengan panggilannya ("${nick}") dan gunakan sapaan/predikat yang sesuai jenis kelaminnya — JANGAN pernah tertukar (mis. jangan menyapa laki-laki dengan "Bu"/"Mbak", atau perempuan dengan "Bang"/"Mas").`
+    : 'SAPAAN PENTING: nama & panggilan lawan bicara belum diketahui — sapa hangat TANPA nama (jangan memakai email/username), gunakan sapaan netral sampai namanya diketahui.';
   let roleBlock;
   if (role === 'admin') {
     roleBlock = 'Pengguna adalah admin/pemilik SherlyStudio — partner kerja kamu sendiri. Kamu tahu persis sedang ngobrol dengan pemiliknya: sapa seperti partner satu tim yang sudah saling kenal, boleh langsung dan informal. Boleh membahas apa saja termasuk rencana konten, strategi, dan hal internal studio.';
