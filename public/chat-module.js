@@ -17,6 +17,11 @@
   .ss-verified{color:#ff72c5;display:inline-flex}.ss-verified svg{width:13px;height:13px}
   .ss-chat-status{font-size:10.5px;line-height:1.35;color:#91a2b9;display:flex;align-items:center;gap:5px;margin-top:1px;letter-spacing:.01em}
   .ss-status-dot{width:6px;height:6px;border-radius:50%;background:#ff72c5;display:inline-block}
+  .ss-tier-badge{flex:none;display:inline-flex;align-items:center;border-radius:999px;padding:4px 12px;font-size:9.5px;font-weight:800;letter-spacing:.16em;cursor:default;user-select:none}
+  .ss-tier-badge.owner{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;box-shadow:0 4px 14px #f044a833}
+  .ss-tier-badge.member{border:1px solid #74436c;color:#ff9bdc;background:#111a2e}
+  .ss-tier-badge.guest{border:1px solid #49334e;color:#a9b8cd;background:#111a2e}
+  .ss-bubble-meta small.ss-tier-tag{font-weight:800;letter-spacing:.14em;color:#ff9bdc}
   .ss-spacer{flex:1}
   .ss-chat-info{background:none;border:0;padding:0;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0;flex:1;display:block}
   .ss-chat-info:hover .ss-chat-name{color:#ffd0ec}
@@ -112,6 +117,7 @@
           </button>
         </div>
         <span class="ss-spacer"></span>
+        <span class="ss-tier-badge" id="ssTierBadge" hidden title="Status yang dikenali Sherly"></span>
         <button type="button" class="ss-newchat" id="ssNewChat" title="Percakapan baru" aria-label="Percakapan baru"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       </header>
       <div class="ss-chat-messages" id="ssMessages" aria-live="polite"><div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div></div>
@@ -143,6 +149,12 @@
   const VOICE_CHOICES = [['Kore','Tegas & hangat'],['Aoede','Ringan & santai'],['Leda','Muda & ceria'],['Zephyr','Cerah & semangat'],['Sulafat','Lembut & ramah'],['Callirrhoe','Kalem & mengalir'],['Despina','Halus & akrab'],['Puck','Riang & akrab'],['Charon','Tenang & dalam'],['Fenrir','Tegas & semangat'],['Orus','Mantap & hangat'],['Iapetus','Jernih & santai'],['Enceladus','Lembut & dekat'],['Umbriel','Kalem & tenang']];
   function voicePrefs(){ try { const p = JSON.parse(localStorage.getItem('sherly.voicePrefs') || '{}'); return { voice: VOICE_CHOICES.some(v=>v[0]===p.voice) ? p.voice : 'Zephyr', style: typeof p.style === 'string' ? p.style.slice(0,180) : '', mode: p?.mode === 'device' ? 'device' : 'gemini', deviceVoiceURI: typeof p?.deviceVoiceURI === 'string' ? p.deviceVoiceURI : '', rate: Math.min(1.3, Math.max(0.7, Number(p?.rate) || 1)) }; } catch { return { voice: 'Zephyr', style: '', mode: 'gemini', deviceVoiceURI: '', rate: 1 }; } }
   function saveVoicePrefs(prefs){ try { const cur = voicePrefs(); localStorage.setItem('sherly.voicePrefs', JSON.stringify({ voice: prefs.voice ?? cur.voice, style: String(prefs.style ?? cur.style).slice(0,180), mode: prefs.mode ?? cur.mode, deviceVoiceURI: prefs.deviceVoiceURI ?? cur.deviceVoiceURI, rate: prefs.rate ?? cur.rate })); } catch {} }
+  let profileRole = 'guest';
+  // D-114: label tier — Sherly mengenali status lawan bicaranya (server juga mengirimnya
+  // sebagai konteks terverifikasi); badge ini membuat statusnya terlihat di UI.
+  const tierInfo = (r) => r === 'admin' ? { cls: 'owner', label: 'OWNER', title: 'Sherly mengenalimu: pemilik SherlyStudio — partner satu tim' }
+    : r === 'member' ? { cls: 'member', label: 'KLIEN', title: 'Sherly mengenalimu: klien terdaftar SherlyStudio' }
+    : { cls: 'guest', label: 'TAMU', title: 'Sherly mengenalimu: tamu (buku tamu) — belum berlangganan' };
   function setProfile(user){
     const owner = document.querySelector('.topbar .owner');
     const b = owner?.querySelector('b'), small = owner?.querySelector('small');
@@ -150,6 +162,12 @@
     if (b) b.textContent = name;
     const r = (user && user.role) || 'guest';
     if (small) small.textContent = user ? (r === 'admin' ? 'ADMIN' : r === 'member' ? 'KLIEN · SHERLYSTUDIO' : 'TAMU · SHERLYSTUDIO') : 'LOGIN · SHERLYSTUDIO';
+    profileRole = r;
+    const tb = $('ssTierBadge');
+    if (tb) {
+      if (user) { const t = tierInfo(r); tb.hidden = false; tb.className = 'ss-tier-badge ' + t.cls; tb.textContent = t.label; tb.title = t.title; }
+      else { tb.hidden = true; }
+    }
     owner?.classList.toggle('is-guest', !user);
   }
   let authMode = 'login';
@@ -261,7 +279,9 @@
   window.addEventListener('resize', sizeChat);
   function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); window.dispatchEvent(new Event('sherly-chat-opened')); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
   function closeChat(){ const root=$('ssChatRoot'); if(root) root.style.height=''; $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); window.dispatchEvent(new Event('sherly-chat-closed')); }
+  let tierTagShown = false;
   function empty(){
+    tierTagShown = false;
     const u = window.sherlyStoredToken?.()?.user || null;
     const role = u?.role || 'guest';
     const escX = (v) => String(v || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -317,7 +337,7 @@
       if (latest?.id) await openConversation(latest.id);
     } catch { /* biarkan empty state */ }
   }
-  async function openConversation(id){conversationId=id;$('ssMessages').textContent='Memuat percakapan...';try{const r=await fetch(`/api/ai/conversations/${encodeURIComponent(id)}/messages`,{headers:{'Authorization':'Bearer '+((await window.sherlyGetAccessToken?.())||token||'')}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal membuka percakapan');empty();for(const m of d.messages||[]){const chunks=String(m.content||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);const parts=chunks.length?chunks:[String(m.content||'')];parts.forEach((t,i)=>{const last=i===parts.length-1;bubble(m.role,t,(last&&m.provider)?`${m.provider}${m.model?' · '+m.model:''}`:'')})}await loadConversations()}catch(e){empty();if(typeof window.toast==='function')window.toast(e.message);else alert(e.message)}}
+  async function openConversation(id){conversationId=id;$('ssMessages').textContent='Memuat percakapan...';try{const r=await fetch(`/api/ai/conversations/${encodeURIComponent(id)}/messages`,{headers:{'Authorization':'Bearer '+((await window.sherlyGetAccessToken?.())||token||'')}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Gagal membuka percakapan');empty();for(const m of d.messages||[]){const chunks=String(m.content||'').split(/\n{2,}/).map(x=>x.trim()).filter(Boolean);const parts=chunks.length?chunks:[String(m.content||'')];parts.forEach((t,i)=>{const last=i===parts.length-1;const tierFirst=(m.role==='user'&&!tierTagShown)?(tierTagShown=true,tierInfo(profileRole).label+' · dikenali Sherly'):'';bubble(m.role,t,tierFirst||((last&&m.provider)?`${m.provider}${m.model?' · '+m.model:''}`:''))})}await loadConversations()}catch(e){empty();if(typeof window.toast==='function')window.toast(e.message);else alert(e.message)}}
   async function submitAuth(e){
     e.preventDefault();
     const btn = $('ssLoginSubmit'), err = $('ssLoginError');
@@ -355,7 +375,8 @@
     } catch (e2) { err.textContent = e2.message; }
     finally { btn.disabled = false; btn.textContent = label; }
   }
-  async function send(e){e.preventDefault();if(sending)return;if(!hasToken()){openLogin();return}const input=$('ssChatInput');let message=input.value.trim();const outgoingImage=pendingImage,outgoingFile=pendingFile;if(!message&&!outgoingImage){window.toast?.('Tulis pesan atau lampirkan gambar dulu ya.');return}if(outgoingFile){message=(message?message+'\n\n':'')+`[Lampiran file: ${outgoingFile.name}]\n\`\`\`\n${outgoingFile.text}\n\`\`\``}const displayText = message || 'Tolong analisis gambar ini.';sending=true;$('ssSend').disabled=true;input.value='';input.style.height='44px';clearAttachment();bubble('user',displayText,'',{imageDataUrl:outgoingImage?.dataUrl,fileName:outgoingFile?.name});const pending=bubble('assistant','Sherly sedang mengetik...','',{tts:false});try{const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Jakarta';const r=await fetch('/api/ai/chat',{method:'POST',headers:await authHeaders(),body:JSON.stringify({message,provider:$('ssProvider').value,conversation_id:conversationId,timezone,...(outgoingImage?{image:{mime:outgoingImage.mime,data:outgoingImage.data}}:{})})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Sherly gagal merespons');pending.remove();conversationId=d.conversation_id;try{localStorage.removeItem('sherly.forceNewChat')}catch{}const parts=(Array.isArray(d.bubbles)&&d.bubbles.length?d.bubbles:String(d.reply||'').split(/\n{2,}/)).map(x=>String(x).trim()).filter(Boolean);const metaStr=`${d.provider}${d.model?' · '+d.model:''}${d.fallback_used?' · fallback otomatis':''}`;parts.forEach((text,i)=>{const last=i===parts.length-1;window.setTimeout(()=>{bubble('assistant',text,last?metaStr:'',last?{tts:true}:{tts:false})}, Math.min(i*450,1800))});await loadConversations()}catch(e2){pending.querySelector('.ss-bubble-text').textContent=`Maaf, pesan belum berhasil diproses: ${e2.message}`}finally{sending=false;$('ssSend').disabled=false;input.focus()}}
+  async function send(e){e.preventDefault();if(sending)return;if(!hasToken()){openLogin();return}const input=$('ssChatInput');let message=input.value.trim();const outgoingImage=pendingImage,outgoingFile=pendingFile;if(!message&&!outgoingImage){window.toast?.('Tulis pesan atau lampirkan gambar dulu ya.');return}if(outgoingFile){message=(message?message+'\n\n':'')+`[Lampiran file: ${outgoingFile.name}]\n\`\`\`\n${outgoingFile.text}\n\`\`\``}const displayText = message || 'Tolong analisis gambar ini.';sending=true;$('ssSend').disabled=true;input.value='';input.style.height='44px';clearAttachment();const tierMeta = tierTagShown ? '' : tierInfo(profileRole).label + ' · dikenali Sherly'; tierTagShown = true;
+    bubble('user',displayText,tierMeta,{imageDataUrl:outgoingImage?.dataUrl,fileName:outgoingFile?.name});const pending=bubble('assistant','Sherly sedang mengetik...','',{tts:false});try{const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Jakarta';const r=await fetch('/api/ai/chat',{method:'POST',headers:await authHeaders(),body:JSON.stringify({message,provider:$('ssProvider').value,conversation_id:conversationId,timezone,...(outgoingImage?{image:{mime:outgoingImage.mime,data:outgoingImage.data}}:{})})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Sherly gagal merespons');pending.remove();conversationId=d.conversation_id;try{localStorage.removeItem('sherly.forceNewChat')}catch{}const parts=(Array.isArray(d.bubbles)&&d.bubbles.length?d.bubbles:String(d.reply||'').split(/\n{2,}/)).map(x=>String(x).trim()).filter(Boolean);const metaStr=`${d.provider}${d.model?' · '+d.model:''}${d.fallback_used?' · fallback otomatis':''}`;parts.forEach((text,i)=>{const last=i===parts.length-1;window.setTimeout(()=>{bubble('assistant',text,last?metaStr:'',last?{tts:true}:{tts:false})}, Math.min(i*450,1800))});await loadConversations()}catch(e2){pending.querySelector('.ss-bubble-text').textContent=`Maaf, pesan belum berhasil diproses: ${e2.message}`}finally{sending=false;$('ssSend').disabled=false;input.focus()}}
   function logout(){
     token=null; conversationId=null;
     try { localStorage.removeItem('sherly.forceNewChat'); } catch {}
