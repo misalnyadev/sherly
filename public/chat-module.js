@@ -139,7 +139,8 @@
     ownerEl.setAttribute('role', 'button');
     ownerEl.setAttribute('tabindex', '0');
     ownerEl.querySelector('[data-icon]')?.remove();
-    const openAccountOrLogin = () => { const u = window.sherlyStoredToken?.()?.user; if (u?.role === 'admin') window.go?.('Profil'); else openLogin(); };
+    // D-123: kapsul profil pojok atas — sudah login (tier apa pun) buka halaman Profil-nya; publik buka form login.
+    const openAccountOrLogin = () => { if (window.sherlyStoredToken?.()?.access_token || token) window.go?.('Profil'); else openLogin(); };
     ownerEl.addEventListener('click', openAccountOrLogin);
     ownerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccountOrLogin(); } });
   }
