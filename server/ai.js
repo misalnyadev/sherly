@@ -118,7 +118,7 @@ async function buildAttempts(provider, model, supabase) {
   const attempts = [];
   if (supabase) {
     const vaultKeys = await getUsableKeys(supabase, provider).catch(() => []);
-    for (const vk of vaultKeys) attempts.push({ apiKey: vk.apiKey, model: provider === 'custom' ? (vk.customModel || model) : model, keyId: vk.keyId, keyName: vk.keyName, source: 'vault', baseUrl: vk.baseUrl || null });
+    for (const vk of vaultKeys) attempts.push({ apiKey: vk.apiKey, model: vk.customModel || model, keyId: vk.keyId, keyName: vk.keyName, source: 'vault', baseUrl: vk.baseUrl || null });
     if (attempts.length) return attempts;
   }
   const env = envKey(provider);

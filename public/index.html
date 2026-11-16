@@ -144,6 +144,12 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .mykey-empty{font-size:12px;color:#91a2b9;padding:10px 12px;border:1px dashed #49334e;border-radius:12px;margin-bottom:10px;line-height:1.55}
 #pcKeyForm{margin-top:4px}
 #pcKeysCard .form-field{margin-bottom:10px}
+.pc-key-model-row{display:flex;gap:8px}
+.pc-key-model-row input{flex:1;min-width:0}
+.pc-key-model-row .outline-btn{white-space:nowrap}
+.pc-key-getlink{font-size:11px;line-height:1.5}
+.pc-key-getlink a{color:#ff9bdc}
+.pc-key-getlink a:hover{color:#ffd0ec}
 .profile-actions{display:flex;gap:10px;flex-wrap:wrap}
 #pfClientGrid input:disabled{opacity:.6;cursor:not-allowed}
 .side-nav-btn{display:flex;align-items:center;gap:12px;width:100%;background:transparent;border:1px solid transparent;border-radius:9px;padding:8px 11px;color:#cfd6e4;cursor:pointer;font:inherit;font-size:13px;text-align:left;transition:border-color .18s,background .18s,box-shadow .18s}
@@ -766,10 +772,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     <p class="profile-sub">Supaya kamu bisa mengobrol dengan Sherly, simpan API key milikmu sendiri di sini. Key dienkripsi (AES-256-GCM) dan hanya dipakai untuk akunmu — SherlyStudio tidak bisa membacanya utuh.</p>
     <div id="pcKeysList" aria-live="polite"></div>
     <form id="pcKeyForm" autocomplete="off">
-     <div class="form-field"><label for="pcKeyProvider">Provider</label><select id="pcKeyProvider"><option value="gemini">Gemini (Google AI Studio)</option><option value="groq">Groq (console.groq.com)</option><option value="openrouter">OpenRouter (openrouter.ai)</option><option value="custom">Kustom (endpoint sendiri)</option></select></div>
-     <div class="form-field" id="pcKeyCustomBase" hidden><label for="pcKeyBaseUrl">Base URL (OpenAI-compatible)</label><input id="pcKeyBaseUrl" maxlength="200" placeholder="https://provider-kamu.com/v1"><small>Alamat endpoint yang mendukung format OpenAI (/chat/completions).</small></div>
-     <div class="form-field" id="pcKeyCustomModel" hidden><label for="pcKeyModel">Nama model</label><input id="pcKeyModel" maxlength="120" placeholder="mis. claude-sonnet-4"></div>
-     <div class="form-field"><label for="pcKeySecret">API key</label><input id="pcKeySecret" type="password" maxlength="400" placeholder="Tempel API key-mu di sini"></div>
+     <div class="form-field"><label for="pcKeyProvider">1 · Pilih provider</label><select id="pcKeyProvider"><option value="gemini">Gemini (Google AI Studio)</option><option value="groq">Groq (console.groq.com)</option><option value="openrouter">OpenRouter (openrouter.ai)</option><option value="custom">Kustom (endpoint sendiri)</option></select></div>
+     <div class="form-field" id="pcKeyCustomBase" hidden><label for="pcKeyBaseUrl">Base URL (OpenAI-compatible)</label><input id="pcKeyBaseUrl" maxlength="200" placeholder="https://provider-kamu.com/v1"><small>Alamat endpoint yang mendukung format OpenAI (/chat/completions) — kolom ini hanya muncul untuk provider kustom.</small></div>
+     <div class="form-field" id="pcKeyGetRow"><small class="pc-key-getlink">2 · Belum punya API key? <a id="pcKeyGetLink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Ambil gratis di Google AI Studio</a></small></div>
+     <div class="form-field"><label for="pcKeySecret">3 · Tempel API key</label><input id="pcKeySecret" type="password" maxlength="400" placeholder="Tempel API key-mu di sini"></div>
+     <div class="form-field"><label for="pcKeyModel">4 · Model</label><div class="pc-key-model-row"><input id="pcKeyModel" maxlength="120" list="pcKeyModelList" placeholder="Kosongkan = model andalan Sherly"><datalist id="pcKeyModelList"></datalist><button type="button" class="outline-btn" id="pcKeyDetectBtn"><span data-icon="refresh-cw"></span> <span id="pcKeyDetectLabel">Deteksi</span></button></div><small id="pcKeyModelHint">Opsional — kosongkan untuk memakai model andalan Sherly. Klik Deteksi untuk melihat model yang tersedia di key-mu.</small></div>
      <div class="profile-actions"><button type="submit" class="pink-btn" id="pcKeySaveBtn">Simpan &amp; Tes Key</button></div>
      <p class="inline-note" id="pcKeyNote">Gemini &amp; Groq punya tier gratis — cukup untuk chat sehari-hari dengan Sherly. Satu key per provider; menyimpan ulang mengganti yang lama.</p>
     </form>
