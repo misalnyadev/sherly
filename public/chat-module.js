@@ -138,6 +138,10 @@
   // Pindahkan modal login ke <body> supaya selalu tampil walau chat belum dibuka.
   const loginModal = root.querySelector('#ssLogin');
   if (loginModal) document.body.appendChild(loginModal);
+  // D-143: modal suara juga dipindah ke <body> supaya bisa dibuka dari halaman
+  // Pengaturan member walau chat belum dibuka (#ssChatRoot display:none).
+  const voiceModal = root.querySelector('#ssVoicePanel');
+  if (voiceModal) document.body.appendChild(voiceModal);
   // Account chip (top-right): logged in -> buka Profil Pengguna; tamu -> buka login.
   const ownerEl = document.querySelector('.topbar .owner');
   if (ownerEl) {
@@ -548,6 +552,7 @@ $('ssChatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey)
   // (D-117) JANGAN reset profil di sini — baris ini menimpa status tier dari sesi login
   // di atas (setProfile(savedSession.user)), sehingga tag pesan pertama selalu bilang "TAMU".
   window.openSherlyChat=openChat;
+  window.sherlyOpenVoicePanel=openVoicePanel;
   window.sherlyLogout=logout;
   window.sherlyCloseChat=closeChat;
 })();
