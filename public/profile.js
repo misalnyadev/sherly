@@ -256,6 +256,67 @@
       } catch (e) { window.toast?.(e.message); }
       finally { btn.disabled = false; }
     });
+    // D-142: kunci AI pribadi (BYOK) — tamu & klien mengisi API key sendiri.
+    const PC_KEY_PROVIDERS = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter', custom: 'Kustom' };
+    async function loadPcKeys() {
+      const list = $('pcKeysList'); if (!list) return;
+      const role = window.sherlyUser?.role || 'guest';
+      if (!window.sherlyStoredToken?.() || role === 'admin') { list.innerHTML = ''; return; }
+      let keys = null;
+      try {
+        const h = {}; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/my/keys', { headers: h });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('Gagal memuat kunci (' + res.status + ')'));
+        keys = Array.isArray(d.keys) ? d.keys : [];
+      } catch (e) { list.innerHTML = '<p class="mykey-empty">Kunci AI belum bisa dimuat: ' + esc(e.message) + '</p>'; return; }
+      if (!keys.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
+      list.innerHTML = keys.map((k) => (
+        '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + '</b><small>•••• ' + esc(k.last4 || '????') + (k.provider === 'custom' ? ' · ' + esc(k.model || '') + ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>'
+      )).join('');
+    }
+    $('pcKeysList')?.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.mykey-del'); if (!btn) return;
+      const id = btn.getAttribute('data-key-id'); if (!id || btn.disabled) return;
+      btn.disabled = true;
+      try {
+        const h = {}; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/my/keys/' + encodeURIComponent(id), { method: 'DELETE', headers: h });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'Gagal menghapus kunci.');
+        window.toast?.('Kunci dihapus.');
+        await loadPcKeys();
+      } catch (e) { btn.disabled = false; window.toast?.(e.message); }
+    });
+    $('pcKeyProvider')?.addEventListener('change', () => {
+      const custom = $('pcKeyProvider')?.value === 'custom';
+      const base = $('pcKeyCustomBase'); if (base) base.hidden = !custom;
+      const model = $('pcKeyCustomModel'); if (model) model.hidden = !custom;
+    });
+    $('pcKeyForm')?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = $('pcKeySaveBtn'); if (!btn || btn.disabled) return;
+      const provider = $('pcKeyProvider')?.value || '';
+      const api_key = $('pcKeySecret')?.value.trim() || '';
+      const base_url = $('pcKeyBaseUrl')?.value.trim() || '';
+      const model = $('pcKeyModel')?.value.trim() || '';
+      if (!api_key) { window.toast?.('API key wajib diisi.'); return; }
+      if (provider === 'custom' && !base_url) { window.toast?.('Base URL wajib diisi untuk provider kustom.'); return; }
+      if (provider === 'custom' && !model) { window.toast?.('Nama model wajib diisi untuk provider kustom.'); return; }
+      btn.disabled = true; btn.textContent = 'Menyimpan & mengetes…';
+      try {
+        const h = { 'Content-Type': 'application/json' };
+        const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/my/keys', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key, base_url, model }) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
+        if ($('pcKeySecret')) $('pcKeySecret').value = '';
+        window.toast?.('Kunci tersimpan & terverifikasi — sekarang kamu bisa chat dengan Sherly.');
+        await loadPcKeys();
+      } catch (e) { window.toast?.(e.message); }
+      finally { btn.disabled = false; btn.textContent = 'Simpan & Tes Key'; }
+    });
+
     $('pfLogoutBtn')?.addEventListener('click', () => window.sherlyLogout?.());
 
     // restore UI identity from any previously saved profile
@@ -263,6 +324,14 @@
     if (saved) { window.__pfPhoto = saved.photo || null; window.__pfPosition = saved.photoPosition || POSITIONS[0].v; }
     applyProfileUI();
     backgroundSync();
+
+    // D-142: muat kunci pribadi saat role berubah (login/logout) tanpa reload halaman.
+    const __applyRolePrev = window.sherlyApplyRole;
+    if (typeof __applyRolePrev === 'function' && !window.__pcKeysRoleHook) {
+      window.__pcKeysRoleHook = true;
+      window.sherlyApplyRole = function () { __applyRolePrev.apply(this, arguments); loadPcKeys(); };
+    }
+    loadPcKeys();
   }
 
   // Silently pull the DB profile right after load so the topbar shows the account's

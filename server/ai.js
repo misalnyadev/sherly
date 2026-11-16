@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
-  provider: z.enum(['auto', 'gemini', 'groq', 'openrouter']).default('auto'),
+  provider: z.enum(['auto', 'gemini', 'groq', 'openrouter', 'custom']).default('auto'),
   model: z.string().trim().min(1).max(120).optional(),
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
@@ -118,7 +118,7 @@ async function buildAttempts(provider, model, supabase) {
   const attempts = [];
   if (supabase) {
     const vaultKeys = await getUsableKeys(supabase, provider).catch(() => []);
-    for (const vk of vaultKeys) attempts.push({ apiKey: vk.apiKey, model, keyId: vk.keyId, keyName: vk.keyName, source: 'vault' });
+    for (const vk of vaultKeys) attempts.push({ apiKey: vk.apiKey, model: provider === 'custom' ? (vk.customModel || model) : model, keyId: vk.keyId, keyName: vk.keyName, source: 'vault', baseUrl: vk.baseUrl || null });
     if (attempts.length) return attempts;
   }
   const env = envKey(provider);
@@ -144,7 +144,11 @@ async function callGemini(config, messages, temperature, maxTokens, trustedConte
 }
 
 async function callOpenAICompatible(provider, config, messages, temperature, maxTokens, trustedContext, image, systemOverride) {
-  const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+  let base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+  if (provider === 'custom') {
+    base = String(config.baseUrl || '').replace(/\/+$/, '');
+    if (!/^https?:\/\/.+/.test(base)) throw new Error('Base URL kustom tidak valid pada kunci ini.');
+  }
   const headers = { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' };
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = 'https://sherlystudio.vercel.app';
@@ -404,7 +408,7 @@ export async function chatWithAI(input, trustedContext = '', options = {}) {
     }
     for (const attempt of attempts) {
       attempted += 1;
-      const config = { key: attempt.apiKey, model: attempt.model };
+      const config = { key: attempt.apiKey, model: attempt.model, baseUrl: attempt.baseUrl };
       try {
         const result = await callProvider(name, config, messages, temperature, maxTokens, trustedContext, image, systemOverride);
         if (supabase && attempt.keyId) await recordSuccess(supabase, attempt.keyId);

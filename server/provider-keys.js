@@ -3,7 +3,9 @@
 import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
 export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
-export const AUTO_ORDER = ['groq', 'gemini', 'openrouter'];
+export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
+// Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
+export const PERSONAL_PROVIDERS = ['gemini', 'groq', 'openrouter', 'custom'];
 export const AUTO_DISABLE_AFTER = 5;
 
 // ---------- Capability taxonomy (API key categories) ----------
@@ -210,18 +212,28 @@ export async function deleteKey(supabase, id) {
 /** Fetch + decrypt active keys for one provider, ordered by priority (lower first). Server-side only. */
 export async function getUsableKeys(supabase, provider) {
   if (!vaultConfigured()) return [];
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('ai_provider_keys')
-    .select('id,key_name,ciphertext,iv,auth_tag,priority')
+    .select('id,key_name,ciphertext,iv,auth_tag,priority,base_url,model')
     .eq('provider', provider)
     .eq('is_active', true)
     .order('priority', { ascending: true })
     .order('created_at', { ascending: true });
+  if (error && /base_url|"model"|column/i.test(error.message || '')) {
+    // D-142: migrasi kolom kustom belum dijalankan — ulang tanpa kolom baru agar key lama tetap hidup.
+    ({ data, error } = await supabase
+      .from('ai_provider_keys')
+      .select('id,key_name,ciphertext,iv,auth_tag,priority')
+      .eq('provider', provider)
+      .eq('is_active', true)
+      .order('priority', { ascending: true })
+      .order('created_at', { ascending: true }));
+  }
   if (error) return [];
   const usable = [];
   for (const row of data || []) {
     try {
-      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row) });
+      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row), baseUrl: row.base_url || null, customModel: row.model || null });
     } catch (decryptError) {
       await recordFailure(supabase, row.id, decryptError.message);
     }
@@ -396,4 +408,52 @@ export function envFallbackStatus() {
     gemini: Boolean(process.env.GEMINI_API_KEY),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
   };
+}
+
+
+// ---------- Kunci AI pribadi (BYOK tamu & klien) ----------
+// Satu kunci per provider per akun; baris di-scope RLS ke pemilik (user_id = auth.uid()).
+export async function listPersonalKeys(supabase) {
+  const { data, error } = await supabase.from('ai_provider_keys')
+    .select('id,provider,last4,base_url,model,created_at')
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return (data || []).map((r) => ({ id: r.id, provider: r.provider, last4: r.last4, base_url: r.base_url || null, model: r.model || null, created_at: r.created_at }));
+}
+
+export async function savePersonalKey(supabase, { provider, api_key, base_url, model, user_id }) {
+  if (!PERSONAL_PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus gemini, groq, openrouter, atau custom.'), { status: 400 });
+  const key = String(api_key || '').trim();
+  if (!key || key.length < 20 || key.length > 400) throw Object.assign(new Error('API key tidak valid (panjang 20-400 karakter).'), { status: 400 });
+  let baseUrl = null, customModel = null;
+  if (provider === 'custom') {
+    baseUrl = String(base_url || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\/.{4,}/i.test(baseUrl)) throw Object.assign(new Error('Base URL kustom wajib diawali http:// atau https://.'), { status: 400 });
+    customModel = String(model || '').trim();
+    if (!customModel || customModel.length > 120) throw Object.assign(new Error('Model wajib diisi untuk provider kustom (maks 120 karakter).'), { status: 400 });
+  } else {
+    const probe = await probeProviderKey(provider, key).catch((e) => ({ ok: false, error: e.message }));
+    if (!probe.ok) throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
+  }
+  if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
+  const enc = encryptSecret(key);
+  // Satu kunci per provider: hapus kunci lama milik akun ini (RLS owner) dulu.
+  await supabase.from('ai_provider_keys').delete().eq('provider', provider);
+  const row = {
+    user_id, provider, key_name: 'pribadi',
+    ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag, last4: enc.last4,
+    priority: 100, is_active: true,
+    health_status: provider === 'custom' ? 'unknown' : 'ok',
+    consecutive_failures: 0, last_failure_at: null, last_error: null,
+    base_url: baseUrl, model: customModel,
+  };
+  const { data, error } = await supabase.from('ai_provider_keys').insert(row).select('id,provider,last4,base_url,model,created_at').single();
+  if (error) throw Object.assign(new Error(error.message), { status: 400 });
+  return data;
+}
+
+export async function deletePersonalKey(supabase, id) {
+  if (typeof id !== 'string' || !/^[0-9a-f-]{10,}$/i.test(id)) throw Object.assign(new Error('ID kunci tidak valid.'), { status: 400 });
+  const { error } = await supabase.from('ai_provider_keys').delete().eq('id', id);
+  if (error) throw Object.assign(new Error(error.message), { status: 400 });
 }
