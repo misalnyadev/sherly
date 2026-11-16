@@ -14,6 +14,7 @@
     return {
       fullName: $('pfFullName').value.trim(),
       displayName: $('pfDisplayName').value.trim(),
+      gender: $('pfGender').value,
       accountType: $('pfAccountType').value,
       role: $('pfRole').value.trim(),
       company: $('pfCompany').value.trim(),
@@ -30,7 +31,7 @@
 
   function writeForm(p) {
     const set = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
-    set('pfFullName', p.fullName); set('pfDisplayName', p.displayName);
+    set('pfFullName', p.fullName); set('pfDisplayName', p.displayName); set('pfGender', p.gender);
     if (p.accountType) $('pfAccountType').value = p.accountType;
     set('pfRole', p.role); set('pfCompany', p.company); set('pfBio', p.bio);
     set('pfEmail', p.email); set('pfPhone', p.phone); set('pfLocation', p.location); set('pfWebsite', p.website);
@@ -91,13 +92,13 @@
   window.sherlyApplyProfile = applyProfileUI;
   // DB <-> form mapping (snake_case <-> camelCase)
   const dbToForm = (r) => ({
-    fullName: r.full_name || '', displayName: r.display_name || '', accountType: r.account_type || 'Kreator',
+    fullName: r.full_name || '', displayName: r.display_name || '', gender: r.gender || '', accountType: r.account_type || 'Kreator',
     role: r.role || '', company: r.company || '', bio: r.bio || '',
     email: r.email || '', phone: r.phone || '', location: r.location || '', website: r.website || '',
     primaryContact: r.primary_contact || 'WhatsApp', photo: r.photo || null, photoPosition: r.photo_position || POSITIONS[0].v,
   });
   const formToDb = (p) => ({
-    full_name: p.fullName || '', display_name: p.displayName || '', account_type: p.accountType || 'Kreator',
+    full_name: p.fullName || '', display_name: p.displayName || '', gender: p.gender || '', account_type: p.accountType || 'Kreator',
     role: p.role || '', company: p.company || '', bio: p.bio || '',
     email: p.email || '', phone: p.phone || '', location: p.location || '', website: p.website || '',
     primary_contact: p.primaryContact || 'WhatsApp', photo: p.photo || '', photo_position: p.photoPosition || POSITIONS[0].v,

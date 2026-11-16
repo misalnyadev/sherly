@@ -190,7 +190,7 @@ async function buildTrustedContext(user, timezone, profile, supabase, currentCon
   const fullName = meta.full_name || meta.display_name || profile?.name || '';
   const nick = meta.nickname || profile?.name || fullName;
   const named = Boolean(fullName);
-  const genderRaw = String(meta.gender || '').toLowerCase();
+  const genderRaw = String(meta.gender || profile?.gender || '').toLowerCase();
   const gender = genderRaw === 'pria' || genderRaw === 'wanita' ? genderRaw : null;
   const since = user.created_at ? new Intl.DateTimeFormat('id-ID', { timeZone: timezone, dateStyle: 'medium' }).format(new Date(user.created_at)) : null;
   const identity = `IDENTITAS LAWAN BICARA (terverifikasi server):\n${named ? `Nama: ${fullName}. Panggilan: ${nick}.` : `Nama & panggilan: BELUM DIISI (halaman Profil belum dilengkapi) — JANGAN menyapa atau menyebut email/username-nya (mis. "${user.email ? user.email.split('@')[0] : 'username'}") sebagai nama; sapa hangat tanpa nama, lalu di momen yang pas tanyakan nama & panggilannya dan sarankan melengkapi halaman Profil SherlyStudio.`} Jenis kelamin: ${gender ? gender : 'belum diketahui — bila perlu menyapa spesifik, tanyakan dengan halus dulu'}. Peran akun: ${role === 'admin' ? 'admin/pemilik SherlyStudio' : role === 'member' ? 'klien terdaftar SherlyStudio (login email)' : 'tamu (buku tamu, belum punya akun)'}. Badge: ${role === 'admin' ? 'OWNER (juga tampil di antarmuka chat)' : role === 'member' ? 'KLIEN (juga tampil di antarmuka chat)' : 'TAMU (juga tampil di antarmuka chat)'}${user.email ? `. Email: ${user.email}` : ''}${meta.contact ? `. Kontak: ${meta.contact}` : ''}${since ? `. ${role === 'member' ? 'Klien sejak' : 'Terhubung sejak'}: ${since}` : ''}`;
@@ -370,8 +370,8 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     if (saveUserError) throw saveUserError;
     let chatProfile = null;
     try {
-      const { data: pf } = await req.supabase.from('user_profiles').select('display_name,full_name,role,company,bio').eq('user_id', userId).maybeSingle();
-      if (pf) chatProfile = { name: pf.display_name || pf.full_name, role: pf.role, company: pf.company, bio: pf.bio };
+      const { data: pf } = await req.supabase.from('user_profiles').select('display_name,full_name,gender,role,company,bio').eq('user_id', userId).maybeSingle();
+      if (pf) chatProfile = { name: pf.display_name || pf.full_name, gender: pf.gender || '', role: pf.role, company: pf.company, bio: pf.bio };
     } catch (_pfError) { /* tabel belum dimigrasi / error sesaat — lanjut tanpa profil */ }
     const { data: history, error: historyError } = await req.supabase.from('ai_messages').select('role,content').eq('conversation_id', conversationId).eq('user_id', userId).in('role', ['user','assistant']).order('created_at', { ascending: false }).limit(24);
     if (historyError) throw historyError;
@@ -610,8 +610,8 @@ function envFallbackKey(provider) {
 
 
 // ---------- Profil Pengguna (persisten lintas perangkat) ----------
-const PROFILE_FIELDS = ['full_name','display_name','account_type','role','company','bio','email','phone','location','website','primary_contact','photo','photo_position'];
-const PROFILE_CAPS = { full_name:120, display_name:80, account_type:40, role:120, company:120, bio:600, email:120, phone:40, location:120, website:160, primary_contact:40, photo:400000, photo_position:20 };
+const PROFILE_FIELDS = ['full_name','display_name','gender','account_type','role','company','bio','email','phone','location','website','primary_contact','photo','photo_position'];
+const PROFILE_CAPS = { full_name:120, display_name:80, gender:10, account_type:40, role:120, company:120, bio:600, email:120, phone:40, location:120, website:160, primary_contact:40, photo:400000, photo_position:20 };
 function sanitizeProfile(body) {
   const out = {};
   for (const field of PROFILE_FIELDS) {
@@ -620,6 +620,7 @@ function sanitizeProfile(body) {
     if (typeof v !== 'string') throw Object.assign(new Error(`Field ${field} tidak valid.`), { status: 400 });
     out[field] = v.slice(0, PROFILE_CAPS[field]);
   }
+  if (out.gender && !['pria', 'wanita'].includes(out.gender)) throw Object.assign(new Error('Jenis kelamin harus pria atau wanita.'), { status: 400 });
   if (out.photo && !out.photo.startsWith('data:image/')) throw Object.assign(new Error('Foto harus berupa data URL gambar (data:image/...).'), { status: 400 });
   return out;
 }
