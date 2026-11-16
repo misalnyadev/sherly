@@ -133,6 +133,11 @@
   const topbarEl = mainEl?.querySelector('.topbar');
   if (mainEl) { if (topbarEl) topbarEl.insertAdjacentElement('afterend', root); else mainEl.prepend(root); }
   else document.body.appendChild(root);
+  // D-124: #ssChatRoot ber-display:none saat chat tertutup, jadi modal login di dalamnya
+  // ikut tersembunyi (klik profil atas / tab Profil = "tidak ada reaksi", halaman kosong).
+  // Pindahkan modal login ke <body> supaya selalu tampil walau chat belum dibuka.
+  const loginModal = root.querySelector('#ssLogin');
+  if (loginModal) document.body.appendChild(loginModal);
   // Account chip (top-right): logged in -> buka Profil Pengguna; tamu -> buka login.
   const ownerEl = document.querySelector('.topbar .owner');
   if (ownerEl) {
