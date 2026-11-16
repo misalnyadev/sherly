@@ -269,14 +269,31 @@ app.post('/api/auth/refresh', async (req, res) => {
     res.json(sessionPayload(data.user, data.session));
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
+app.put('/api/account', requireUser, requireChatUser, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const data = {
+      full_name: String(b.full_name || '').trim().slice(0, 120),
+      nickname: String(b.nickname || '').trim().slice(0, 80),
+      gender: String(b.gender || '').toLowerCase(),
+      contact: String(b.contact || '').trim().slice(0, 120),
+    };
+    if (!data.full_name) return res.status(400).json({ error: 'Nama lengkap wajib diisi.' });
+    if (data.gender && !['pria', 'wanita'].includes(data.gender)) return res.status(400).json({ error: 'Jenis kelamin harus pria atau wanita.' });
+    const { data: out, error } = await req.supabase.auth.updateUser({ data });
+    if (error || !out?.user) return res.status(400).json({ error: error.message || 'Gagal memperbarui profil akun.' });
+    const u = out.user, meta = u.user_metadata || {};
+    res.json({ user: { id: u.id, email: u.email || null, role: resolveUserRole(u), full_name: meta.full_name || null, nickname: meta.nickname || null, gender: meta.gender || null, contact: meta.contact || null, display_name: meta.nickname || meta.full_name || meta.display_name || (u.email ? u.email.split('@')[0] : 'Tamu') } });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
 app.get('/api/auth/me', requireUser, requireAdmin, (req, res) => res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.app_metadata?.role } }));
 
-app.get('/api/characters', requireUser, async (req, res) => {
+app.get('/api/characters', requireUser, requireAdmin, async (req, res) => {
   const { data, error } = await req.supabase.from('characters').select('*').order('created_at', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
   res.json({ characters: await Promise.all(data.map(c => signedCharacter(c, req.supabase))) });
 });
-app.post('/api/characters', requireUser, characterUpload, async (req, res) => {
+app.post('/api/characters', requireUser, requireAdmin, characterUpload, async (req, res) => {
   try {
     const { data: userData, error: userError } = await req.supabase.auth.getUser(req.accessToken);
     if (userError || !userData.user) return res.status(401).json({ error: 'Sesi login tidak valid. Silakan login kembali.' });
@@ -295,7 +312,7 @@ app.post('/api/characters', requireUser, characterUpload, async (req, res) => {
     res.status(201).json({ character: await signedCharacter(data, req.supabase) });
   } catch (error) { res.status(error.status || 400).json({ error: error.message || 'Gagal menyimpan karakter.' }); }
 });
-app.put('/api/characters/:id', requireUser, characterUpload, async (req, res) => {
+app.put('/api/characters/:id', requireUser, requireAdmin, characterUpload, async (req, res) => {
   try {
     const { data: userData, error: userError } = await req.supabase.auth.getUser(req.accessToken);
     if (userError || !userData.user) return res.status(401).json({ error: 'Sesi login tidak valid.' });
@@ -314,7 +331,7 @@ app.put('/api/characters/:id', requireUser, characterUpload, async (req, res) =>
     res.json({ character: await signedCharacter(data, req.supabase) });
   } catch (error) { res.status(error.status || 400).json({ error: error.message || 'Gagal memperbarui karakter.' }); }
 });
-app.delete('/api/characters/:id', requireUser, async (req, res) => {
+app.delete('/api/characters/:id', requireUser, requireAdmin, async (req, res) => {
   const { data: current } = await req.supabase.from('characters').select('reference_image_path,board_path,voice_path').eq('id', req.params.id).maybeSingle();
   const { error } = await req.supabase.from('characters').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
@@ -548,7 +565,7 @@ app.post('/api/ai/character-bible', requireUser, requireAdmin, async (req, res) 
 });
 
 // D-98: simpan hasil Master Board ke Storage + kolom characters.board_path.
-app.post('/api/characters/:id/board', requireUser, async (req, res) => {
+app.post('/api/characters/:id/board', requireUser, requireAdmin, async (req, res) => {
   try {
     const { image } = req.body || {};
     if (!image || typeof image.data !== 'string' || image.data.length < 8) return res.status(400).json({ error: 'Gambar master board wajib dikirim.' });
