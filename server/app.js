@@ -9,7 +9,7 @@ import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImag
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
-import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 
@@ -630,6 +630,21 @@ app.post('/api/my/keys', requireUser, requireChatUser, requireMemberOnly, requir
 app.delete('/api/my/keys/:id', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
   await deletePersonalKey(req.supabase, req.params.id);
   return { ok: true };
+}));
+// D-144: deteksi model yang tersedia untuk API key yang ditempel user (belum tersimpan).
+app.post('/api/my/models', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  const { provider, api_key, base_url } = req.body || {};
+  if (!PERSONAL_PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus gemini, groq, openrouter, atau custom.'), { status: 400 });
+  const key = String(api_key || '').trim();
+  if (!key || key.length < 20 || key.length > 400) throw Object.assign(new Error('Tempel API key yang valid dulu (20-400 karakter).'), { status: 400 });
+  let baseUrl;
+  if (provider === 'custom') {
+    baseUrl = String(base_url || '').trim().replace(/\/+$/, '');
+    if (!baseUrl) throw Object.assign(new Error('Base URL kustom wajib diisi dulu.'), { status: 400 });
+    assertSafeBaseUrl(baseUrl);
+  }
+  const models = await fetchProviderModels(provider, key, baseUrl);
+  return { models: models.slice(0, 400) };
 }));
 app.get('/api/ai-provider-models/:provider', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const provider = String(req.params.provider || '');

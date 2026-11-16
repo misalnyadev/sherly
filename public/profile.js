@@ -272,7 +272,7 @@
       } catch (e) { list.innerHTML = '<p class="mykey-empty">Kunci AI belum bisa dimuat: ' + esc(e.message) + '</p>'; return; }
       if (!keys.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
       list.innerHTML = keys.map((k) => (
-        '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + '</b><small>•••• ' + esc(k.last4 || '????') + (k.provider === 'custom' ? ' · ' + esc(k.model || '') + ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>'
+        '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + '</b><small>•••• ' + esc(k.last4 || '????') + (k.model ? ' · ' + esc(k.model) : '') + (k.provider === 'custom' ? ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>'
       )).join('');
     }
     $('pcKeysList')?.addEventListener('click', async (ev) => {
@@ -288,10 +288,57 @@
         await loadPcKeys();
       } catch (e) { btn.disabled = false; window.toast?.(e.message); }
     });
-    $('pcKeyProvider')?.addEventListener('change', () => {
-      const custom = $('pcKeyProvider')?.value === 'custom';
+    // D-144: alur form jelas — pilih provider → ambil key (link) → tempel → deteksi model → simpan.
+    const PC_KEY_LINKS = {
+      gemini: { href: 'https://aistudio.google.com/app/apikey', text: 'Ambil gratis di Google AI Studio' },
+      groq: { href: 'https://console.groq.com/keys', text: 'Ambil gratis di console.groq.com' },
+      openrouter: { href: 'https://openrouter.ai/keys', text: 'Ambil di openrouter.ai/keys' },
+      custom: null,
+    };
+    function applyPcKeyProviderUi() {
+      const provider = $('pcKeyProvider')?.value || 'gemini';
+      const custom = provider === 'custom';
       const base = $('pcKeyCustomBase'); if (base) base.hidden = !custom;
-      const model = $('pcKeyCustomModel'); if (model) model.hidden = !custom;
+      const link = PC_KEY_LINKS[provider] || null;
+      const row = $('pcKeyGetRow'); if (row) row.hidden = !link;
+      const a = $('pcKeyGetLink');
+      if (a && link) { a.href = link.href; a.textContent = link.text; }
+      const modelInput = $('pcKeyModel');
+      if (modelInput) modelInput.placeholder = custom ? 'Wajib — klik Deteksi untuk memilih' : 'Kosongkan = model andalan Sherly';
+      const hint = $('pcKeyModelHint');
+      if (hint) hint.textContent = custom
+        ? 'Wajib diisi. Klik Deteksi untuk menampilkan model yang tersedia di endpoint-mu.'
+        : 'Opsional — kosongkan untuk memakai model andalan Sherly. Klik Deteksi untuk melihat model milik key-mu.';
+    }
+    $('pcKeyProvider')?.addEventListener('change', applyPcKeyProviderUi);
+    applyPcKeyProviderUi();
+    $('pcKeyDetectBtn')?.addEventListener('click', async () => {
+      const btn = $('pcKeyDetectBtn'); if (!btn || btn.disabled) return;
+      const provider = $('pcKeyProvider')?.value || '';
+      const api_key = $('pcKeySecret')?.value.trim() || '';
+      const base_url = $('pcKeyBaseUrl')?.value.trim() || '';
+      if (!api_key) { window.toast?.('Tempel API key-mu dulu ya, baru deteksi model.'); return; }
+      if (provider === 'custom' && !base_url) { window.toast?.('Isi Base URL dulu ya, baru deteksi model.'); return; }
+      const label = $('pcKeyDetectLabel'); const oldLabel = label?.textContent || 'Deteksi';
+      btn.disabled = true; if (label) label.textContent = 'Mendeteksi…';
+      try {
+        const h = { 'Content-Type': 'application/json' };
+        const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/my/models', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key, base_url }) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('Deteksi gagal (' + res.status + ')'));
+        const models = Array.isArray(d.models) ? d.models : [];
+        const list = $('pcKeyModelList');
+        if (list) list.innerHTML = models.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.display || '') + '</option>').join('');
+        const modelInput = $('pcKeyModel');
+        if (modelInput && !modelInput.value.trim() && models.length) modelInput.value = models[0].id;
+        const hint = $('pcKeyModelHint');
+        if (hint) hint.textContent = models.length
+          ? models.length + ' model tersedia untuk key ini — pilih dari daftar saat mengetik.'
+          : 'Tidak ada model terdeteksi — ketik manual nama modelnya.';
+        window.toast?.(models.length ? 'Deteksi berhasil — ' + models.length + ' model ditemukan.' : 'Tidak ada model terdeteksi untuk key ini.');
+      } catch (e) { window.toast?.(e.message); }
+      finally { btn.disabled = false; if (label) label.textContent = oldLabel; }
     });
     $('pcKeyForm')?.addEventListener('submit', async (ev) => {
       ev.preventDefault();

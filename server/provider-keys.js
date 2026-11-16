@@ -315,8 +315,22 @@ const rankModel = (a, b) => {
   return String(a.id).localeCompare(String(b.id));
 };
 
+/** Validasi base URL kustom (anti-SSRF dasar): wajib http(s) & bukan host internal/lokal. */
+export function assertSafeBaseUrl(raw) {
+  let u;
+  try { u = new URL(String(raw)); } catch { throw Object.assign(new Error('Base URL kustom tidak valid.'), { status: 400 }); }
+  if (!/^https?:$/.test(u.protocol)) throw Object.assign(new Error('Base URL kustom wajib diawali http:// atau https://.'), { status: 400 });
+  const host = (u.hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  const internal = host === 'localhost' || host === '::1' || host === '0.0.0.0'
+    || /^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || /^169\.254\./.test(host)
+    || /^f[cd][0-9a-f]{2}:/.test(host) || host.endsWith('.local') || host.endsWith('.internal');
+  if (internal) throw Object.assign(new Error('Base URL ke alamat internal/lokal tidak diizinkan.'), { status: 400 });
+  return u;
+}
+
 /** Live-fetch the model catalogue for a provider. */
-export async function fetchProviderModels(provider, apiKey) {
+export async function fetchProviderModels(provider, apiKey, baseUrl) {
   const controller = AbortSignal.timeout(15000);
   let models = [];
   if (provider === 'kie') throw new Error('Daftar model Kie belum tersedia — model gambar Kie diatur lewat KIE_IMAGE_MODEL (opsional).');
@@ -328,7 +342,8 @@ export async function fetchProviderModels(provider, apiKey) {
       .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map(m => ({ id: String(m.name || '').replace(/^models\//, ''), display: m.displayName || null }));
   } else {
-    const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+    let base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+    if (provider === 'custom') base = assertSafeBaseUrl(String(baseUrl || '').trim().replace(/\/+$/, '')).href.replace(/\/+$/, '');
     const headers = { Authorization: `Bearer ${apiKey}` };
     if (provider === 'openrouter') { headers['HTTP-Referer'] = 'https://sherlystudio.vercel.app'; headers['X-Title'] = 'SherlyStudio'; }
     const res = await fetch(`${base}/models`, { headers, signal: controller });
@@ -425,17 +440,24 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
   if (!PERSONAL_PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus gemini, groq, openrouter, atau custom.'), { status: 400 });
   const key = String(api_key || '').trim();
   if (!key || key.length < 20 || key.length > 400) throw Object.assign(new Error('API key tidak valid (panjang 20-400 karakter).'), { status: 400 });
-  let baseUrl = null, customModel = null;
+  const modelChoice = String(model || '').trim();
+  if (modelChoice.length > 120) throw Object.assign(new Error('Nama model maksimal 120 karakter.'), { status: 400 });
+  let baseUrl = null;
   if (provider === 'custom') {
     baseUrl = String(base_url || '').trim().replace(/\/+$/, '');
-    if (!/^https?:\/\/.{4,}/i.test(baseUrl)) throw Object.assign(new Error('Base URL kustom wajib diawali http:// atau https://.'), { status: 400 });
-    customModel = String(model || '').trim();
-    if (!customModel || customModel.length > 120) throw Object.assign(new Error('Model wajib diisi untuk provider kustom (maks 120 karakter).'), { status: 400 });
+    if (!baseUrl) throw Object.assign(new Error('Base URL kustom wajib diisi.'), { status: 400 });
+    assertSafeBaseUrl(baseUrl);
+    if (!modelChoice) throw Object.assign(new Error('Model wajib diisi untuk provider kustom (maks 120 karakter).'), { status: 400 });
+  }
+  if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
+  if (provider === 'custom') {
+    // Tes koneksi kustom = daftar model harus bisa diambil dengan key ini (GET /models).
+    try { await fetchProviderModels('custom', key, baseUrl); }
+    catch (e) { throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. Endpoint kustom menjawab: ${e.message}`), { status: 400 }); }
   } else {
     const probe = await probeProviderKey(provider, key).catch((e) => ({ ok: false, error: e.message }));
     if (!probe.ok) throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
   }
-  if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
   const enc = encryptSecret(key);
   // Satu kunci per provider: hapus kunci lama milik akun ini (RLS owner) dulu.
   await supabase.from('ai_provider_keys').delete().eq('provider', provider);
@@ -443,9 +465,9 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
     user_id, provider, key_name: 'pribadi',
     ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag, last4: enc.last4,
     priority: 100, is_active: true,
-    health_status: provider === 'custom' ? 'unknown' : 'ok',
+    health_status: 'ok',
     consecutive_failures: 0, last_failure_at: null, last_error: null,
-    base_url: baseUrl, model: customModel,
+    base_url: baseUrl, model: modelChoice || null,
   };
   const { data, error } = await supabase.from('ai_provider_keys').insert(row).select('id,provider,last4,base_url,model,created_at').single();
   if (error) throw Object.assign(new Error(error.message), { status: 400 });
