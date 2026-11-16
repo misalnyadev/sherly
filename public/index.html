@@ -118,6 +118,10 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 @media(max-width:1000px){.profile-grid{grid-template-columns:1fr}}
 .profile-kicker{color:#ff72c5;font-size:10px;letter-spacing:.22em;font-weight:700;display:flex;align-items:center;gap:9px}
 .profile-kicker::after{content:"";width:64px;height:1px;background:linear-gradient(90deg,#f044a8,transparent)}
+.ss-tier-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 12px;font-size:9.5px;font-weight:800;letter-spacing:.16em;cursor:default;user-select:none;flex:none}
+.ss-tier-badge.owner{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;box-shadow:0 4px 14px #f044a833}
+.ss-tier-badge.member{border:1px solid #74436c;color:#ff9bdc;background:#111a2e}
+.ss-tier-badge.guest{border:1px solid #49334e;color:#a9b8cd;background:#111a2e}
 .profile-card-main{background:radial-gradient(ellipse at 88% -25%,#311738 0,transparent 48%),linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e}
 .profile-card-side{background:linear-gradient(165deg,#160f20,#0c1422 70%);border:1px solid #49334e}
 .profile-card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
@@ -695,7 +699,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div class="page-heading"><div><h1>Profil Pengguna</h1><p>Identitas &amp; kontak kerja sama — data ini dibaca Chat Sherly untuk mengenali lawan bicaranya, dan dipakai untuk portofolio, proposal, serta komunikasi dengan client.</p></div></div>
   <div class="profile-grid">
    <div class="panel profile-card-main">
-    <div class="profile-card-head"><div><small class="profile-kicker">PROFIL PENGGUNA</small><h2>Identitas &amp; Kontak Kerja Sama</h2><p class="profile-sub">Disimpan di browser ini — tidak dipublikasikan otomatis. Hanya ringkasan (nama, peran, perusahaan, bio) yang dikirim ke Chat Sherly saat Anda mengirim pesan.</p></div>
+    <div class="profile-card-head"><div><small class="profile-kicker">PROFIL PENGGUNA<span class="ss-tier-badge" id="pfTierBadge" hidden title="Status yang dikenali Sherly saat chat"></span></small><h2>Identitas &amp; Kontak Kerja Sama</h2><p class="profile-sub">Disimpan di browser ini — tidak dipublikasikan otomatis. Hanya ringkasan (nama, peran, perusahaan, bio) yang dikirim ke Chat Sherly saat Anda mengirim pesan.</p></div>
      <div class="profile-avatar-wrap"><img id="pfAvatar" class="profile-avatar" alt="Foto profil"></div></div>
     <div class="form-grid">
       <div class="form-field"><label for="pfFullName">Nama lengkap</label><input id="pfFullName" maxlength="120" placeholder="Hana Syahira"></div>
