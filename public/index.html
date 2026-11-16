@@ -836,8 +836,11 @@ function clearStoredSession(){try{localStorage.removeItem(SESSION_KEY)}catch{}}
 async function refreshStoredSession(){const s=readStoredSession();if(!s?.refresh_token){sessionToken=null;return null}try{const r=await fetch('/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.access_token){clearStoredSession();sessionToken=null;window.sherlyUser=null;window.sherlyApplyRole?.();return null}const next={access_token:d.access_token,refresh_token:d.refresh_token||s.refresh_token,expires_at:d.expires_at||null,user:d.user||s.user||null};writeStoredSession(next);sessionToken=next.access_token;window.sherlyUser=next.user||null;return next}catch{window.sherlyApplyRole?.();return null}}
 window.sherlyStoredToken=()=>readStoredSession();
 const PROFILE_KEY='sherly.profile.v1';
-window.sherlyReadProfile=()=>{try{return JSON.parse(localStorage.getItem(PROFILE_KEY)||'null')}catch{return null}};
-window.sherlyWriteProfile=(p)=>{try{localStorage.setItem(PROFILE_KEY,JSON.stringify(p));return true}catch(e){if(typeof toast==='function')toast('Profil tidak bisa disimpan — penyimpanan browser penuh/diblokir.');return false}};
+// D-119: cache profil ditandai per akun (uid) — logout/ganti akun tidak boleh
+// meninggalkan data profil akun sebelumnya di browser.
+const profileCacheUid=()=>window.sherlyUser?.id||null;
+window.sherlyReadProfile=()=>{try{const s=JSON.parse(localStorage.getItem(PROFILE_KEY)||'null');return s&&s.uid===profileCacheUid()?s.profile:null}catch{return null}};
+window.sherlyWriteProfile=(p)=>{try{localStorage.setItem(PROFILE_KEY,JSON.stringify({uid:profileCacheUid(),profile:p}));return true}catch(e){if(typeof toast==='function')toast('Profil tidak bisa disimpan — penyimpanan browser penuh/diblokir.');return false}};
 window.sherlyRemoveProfile=()=>{try{localStorage.removeItem(PROFILE_KEY)}catch{}};
 window.sherlyGetAccessToken=async()=>{const s=readStoredSession();if(!s)return null;const now=Math.floor(Date.now()/1000);if(s.expires_at&&s.expires_at-now<60){const next=await refreshStoredSession();return next?.access_token||null}return s.access_token};
 const storedSession=readStoredSession();

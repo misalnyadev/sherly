@@ -65,7 +65,7 @@
   function applyProfileUI() {
     const p = window.sherlyReadProfile?.() || {};
     const user = window.sherlyUser || null;
-    const name = p.displayName || p.fullName || user?.email?.split('@')[0] || null;
+    const name = p.displayName || p.fullName || user?.display_name || user?.email?.split('@')[0] || null;
     const owner = document.querySelector('.topbar .owner');
     const b = owner?.querySelector('b');
     const small = owner?.querySelector('small');
@@ -73,7 +73,7 @@
     if (small) {
       if (user) {
         const sub = [p.accountType, p.role].filter(Boolean).join(' · ').toUpperCase();
-        small.textContent = sub || 'ADMIN';
+        small.textContent = sub || (user.role === 'admin' ? 'ADMIN' : user.role === 'member' ? 'KLIEN · SHERLYSTUDIO' : 'TAMU · SHERLYSTUDIO');
       } else small.textContent = 'LOGIN · SHERLYSTUDIO';
     }
     owner?.classList.toggle('is-guest', !user);
@@ -90,6 +90,13 @@
   }
 
   window.sherlyApplyProfile = applyProfileUI;
+  // D-119: bersihkan jejak profil akun sebelumnya — dipanggil saat logout / ganti akun.
+  window.sherlyResetLocalProfile = function () {
+    window.sherlyRemoveProfile?.();
+    window.__pfPhoto = null;
+    window.__pfPosition = POSITIONS[0].v;
+    applyProfileUI();
+  };
   // DB <-> form mapping (snake_case <-> camelCase)
   const dbToForm = (r) => ({
     fullName: r.full_name || '', displayName: r.display_name || '', gender: r.gender || '', accountType: r.account_type || 'Kreator',

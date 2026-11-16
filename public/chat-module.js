@@ -366,6 +366,9 @@
       window.sherlySetAuthSession?.({ access_token: d.access_token, refresh_token: d.refresh_token || null, expires_at: d.expires_at || null, user: d.user || null });
       window.sherlyApplyRole?.();
       window.sherlyApplyProfile?.();
+      // D-119: profil per akun — admin menarik ulang dari DB; tamu/klien bersihkan sisa akun sebelumnya.
+      if ((d.user?.role || 'guest') === 'admin') Promise.resolve(window.loadProfile?.()).catch(() => {});
+      else window.sherlyResetLocalProfile?.();
       $('ssLogin').classList.remove('open');
       await loadConversations();
       if (!conversationId) empty();
@@ -380,7 +383,7 @@
     try { localStorage.removeItem('sherly.forceNewChat'); } catch {}
     window.sherlyClearAuthSession?.();
     setProfile(null);
-    window.sherlyApplyProfile?.();
+    window.sherlyResetLocalProfile?.(); // D-119: hapus cache profil akun ini dari browser
     $('ssPassword').value=''; $('ssLoginError').textContent=''; setAuthMode('login');
     closeChat();
     if (typeof window.go === 'function') window.go('Beranda');
