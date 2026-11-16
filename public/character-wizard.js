@@ -20,6 +20,10 @@
   const PACKAGE_FORMAT = 'character-package';
   // D-105: gender & tinggi (form basics, ala AK Talent) disimpan di traits — bukan field vision.
   const TRAIT_EXTRA = ['gender', 'height'];
+  // D-110: TRAIT_FIELDS berupa pasangan [kunci, label] — iterasi kunci WAJIB lewat TRAIT_KEYS.
+  // (Bug lama: saveDraft/collect iterate pasangan array -> traits[['hair','Rambut']] = undefined
+  //  -> hanya gender+height yang tersimpan -> "kurang: Detail fisik" di setiap simpan.)
+  const TRAIT_KEYS = TRAIT_FIELDS.map((f) => f[0]);
 
   let traits = {};
   let bible = '';
@@ -94,7 +98,7 @@
     draftTimer = setTimeout(() => {
       try {
         const cleanT = {};
-        for (const k of [...TRAIT_FIELDS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
+        for (const k of [...TRAIT_KEYS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v; }
         const cleanV = {};
         for (const k of ['name', 'style', 'script']) { const v = String(voice[k] || '').trim(); if (v) cleanV[k] = v; }
         const cleanG = {};
@@ -687,7 +691,7 @@ All skin is unretouched and natural: pores distinctly visible with subtle variat
   };
   window.sherlyWizardCollect = () => {
     const cleanT = {};
-    for (const k of [...TRAIT_FIELDS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v.slice(0, 300); }
+    for (const k of [...TRAIT_KEYS, ...TRAIT_EXTRA]) { const v = String(traits[k] || '').trim(); if (v) cleanT[k] = v.slice(0, 300); }
     const ta = $('wizBible'); if (ta) bible = ta.value;
     voice = { name: ($('wizVoiceName')?.value || '').trim(), style: ($('wizVoiceStyle')?.value || '').trim(), script: ($('wizVoiceScript')?.value || '').trim() };
     const cleanV = {};
