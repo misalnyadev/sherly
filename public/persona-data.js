@@ -26,11 +26,11 @@ window.SHERLY_PERSONA = {
   visual: {
     mood: ['Minimalist', 'Warm & cozy', 'Timeless', 'Natural light', 'Clean composition'],
     palette: [
-      { hex: '#F6F1E7', name: 'Cream' },
-      { hex: '#E9DCC7', name: 'Beige' },
-      { hex: '#C9B49A', name: 'Mocha' },
-      { hex: '#8A7360', name: 'Warm Taupe' },
-      { hex: '#F3CBD3', name: 'Blush' }
+      { hex: '#f4f5fb', name: 'Cream' },
+      { hex: '#cfd6e4', name: 'Beige' },
+      { hex: '#a9b8cd', name: 'Mocha' },
+      { hex: '#5d6f88', name: 'Warm Taupe' },
+      { hex: '#ffd0ec', name: 'Blush' }
     ],
     foto: 'Foto bernuansa cream & beige dengan cahaya alami; komposisi bersih dengan ruang bernapas; subjek tenang dan natural \u2014 tidak ramai, tapi selalu punya sudut pandang.'
   },
