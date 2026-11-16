@@ -17,16 +17,11 @@
   .ss-verified{color:#ff72c5;display:inline-flex}.ss-verified svg{width:13px;height:13px}
   .ss-chat-status{font-size:10.5px;line-height:1.35;color:#91a2b9;display:flex;align-items:center;gap:5px;margin-top:1px;letter-spacing:.01em}
   .ss-status-dot{width:6px;height:6px;border-radius:50%;background:#ff72c5;display:inline-block}
-  .ss-tier-badge{flex:none;display:inline-flex;align-items:center;border-radius:999px;padding:4px 12px;font-size:9.5px;font-weight:800;letter-spacing:.16em;cursor:default;user-select:none}
-  .ss-tier-badge.owner{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;box-shadow:0 4px 14px #f044a833}
-  .ss-tier-badge.member{border:1px solid #74436c;color:#ff9bdc;background:#111a2e}
-  .ss-tier-badge.guest{border:1px solid #49334e;color:#a9b8cd;background:#111a2e}
   .ss-bubble-meta small.ss-tier-tag{font-weight:800;letter-spacing:.14em;color:#ff9bdc}
   /* D-115: layar kecil (±5.8", chat ~316px) — badge & tombol + tidak boleh terpotong:
      toolbar lebih rapat, badge kompak, teks status menyusut, rantai min-width:0 tuntas. */
   @media(max-width:700px){
     .ss-chat-toolbar{gap:7px;padding:10px}
-    .ss-tier-badge{padding:3px 8px;font-size:8px;letter-spacing:.1em}
     .ss-status-text{max-width:104px}
     .ss-chat-status{min-width:0}
   }
@@ -125,7 +120,6 @@
           </button>
         </div>
         <span class="ss-spacer"></span>
-        <span class="ss-tier-badge" id="ssTierBadge" hidden title="Status yang dikenali Sherly"></span>
         <button type="button" class="ss-newchat" id="ssNewChat" title="Percakapan baru" aria-label="Percakapan baru"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       </header>
       <div class="ss-chat-messages" id="ssMessages" aria-live="polite"><div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div></div>
@@ -158,8 +152,9 @@
   function voicePrefs(){ try { const p = JSON.parse(localStorage.getItem('sherly.voicePrefs') || '{}'); return { voice: VOICE_CHOICES.some(v=>v[0]===p.voice) ? p.voice : 'Zephyr', style: typeof p.style === 'string' ? p.style.slice(0,180) : '', mode: p?.mode === 'device' ? 'device' : 'gemini', deviceVoiceURI: typeof p?.deviceVoiceURI === 'string' ? p.deviceVoiceURI : '', rate: Math.min(1.3, Math.max(0.7, Number(p?.rate) || 1)) }; } catch { return { voice: 'Zephyr', style: '', mode: 'gemini', deviceVoiceURI: '', rate: 1 }; } }
   function saveVoicePrefs(prefs){ try { const cur = voicePrefs(); localStorage.setItem('sherly.voicePrefs', JSON.stringify({ voice: prefs.voice ?? cur.voice, style: String(prefs.style ?? cur.style).slice(0,180), mode: prefs.mode ?? cur.mode, deviceVoiceURI: prefs.deviceVoiceURI ?? cur.deviceVoiceURI, rate: prefs.rate ?? cur.rate })); } catch {} }
   let profileRole = 'guest';
-  // D-114: label tier — Sherly mengenali status lawan bicaranya (server juga mengirimnya
-  // sebagai konteks terverifikasi); badge ini membuat statusnya terlihat di UI.
+  // D-114/D-116: label tier — Sherly mengenali status lawan bicaranya (server mengirimnya
+  // sebagai konteks terverifikasi). Penanda visual di chat = meta pesan pertama di bawah;
+  // badge kapsulnya ada di halaman Profil Pengguna (diisi profile.js).
   const tierInfo = (r) => r === 'admin' ? { cls: 'owner', label: 'OWNER', title: 'Sherly mengenalimu: pemilik SherlyStudio — partner satu tim' }
     : r === 'member' ? { cls: 'member', label: 'KLIEN', title: 'Sherly mengenalimu: klien terdaftar SherlyStudio' }
     : { cls: 'guest', label: 'TAMU', title: 'Sherly mengenalimu: tamu (buku tamu) — belum berlangganan' };
@@ -171,11 +166,6 @@
     const r = (user && user.role) || 'guest';
     if (small) small.textContent = user ? (r === 'admin' ? 'ADMIN' : r === 'member' ? 'KLIEN · SHERLYSTUDIO' : 'TAMU · SHERLYSTUDIO') : 'LOGIN · SHERLYSTUDIO';
     profileRole = r;
-    const tb = $('ssTierBadge');
-    if (tb) {
-      if (user) { const t = tierInfo(r); tb.hidden = false; tb.className = 'ss-tier-badge ' + t.cls; tb.textContent = t.label; tb.title = t.title; }
-      else { tb.hidden = true; }
-    }
     owner?.classList.toggle('is-guest', !user);
   }
   let authMode = 'login';
@@ -327,7 +317,7 @@
     const text=document.createElement('span');text.className='ss-bubble-text';text.textContent=content;el.appendChild(text);
     const withTts = role==='assistant' && opts.tts !== false;
     const needsMeta = meta || withTts;
-    if(needsMeta){const footer=document.createElement('div');footer.className='ss-bubble-meta';if(meta){const small=document.createElement('small');small.textContent=meta;footer.appendChild(small)}
+    if(needsMeta){const footer=document.createElement('div');footer.className='ss-bubble-meta';if(meta){const small=document.createElement('small');if(/dikenali Sherly$/.test(meta))small.className='ss-tier-tag';small.textContent=meta;footer.appendChild(small)}
       if(withTts){const tts=document.createElement('button');tts.type='button';tts.className='ss-tts-btn';tts.setAttribute('aria-label','Dengarkan jawaban');tts.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 010 7.07"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg><span>Dengarkan</span>';footer.appendChild(tts)}
       el.appendChild(footer)}
     row.appendChild(el);box.appendChild(row);box.scrollTop=box.scrollHeight;return el;}

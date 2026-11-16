@@ -76,6 +76,15 @@
       } else small.textContent = 'LOGIN · SHERLYSTUDIO';
     }
     owner?.classList.toggle('is-guest', !user);
+    // D-116: badge tier di halaman profil — status yang dikenali Sherly saat chat (server-side).
+    const tb = $('pfTierBadge');
+    if (tb) {
+      const r = user?.role || 'guest';
+      const t = r === 'admin' ? { c: 'owner', l: 'OWNER', d: 'Sherly mengenalimu: pemilik SherlyStudio — partner satu tim' }
+        : r === 'member' ? { c: 'member', l: 'KLIEN', d: 'Sherly mengenalimu: klien terdaftar SherlyStudio' }
+        : { c: 'guest', l: 'TAMU', d: 'Sherly mengenalimu: tamu (buku tamu) — belum punya akun klien' };
+      tb.hidden = false; tb.className = 'ss-tier-badge ' + t.c; tb.textContent = t.l; tb.title = t.d;
+    }
     renderAvatar();
   }
 
