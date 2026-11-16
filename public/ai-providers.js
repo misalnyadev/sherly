@@ -460,14 +460,14 @@
     const btn = $('cpAddBtn'), msg = $('cpMsg');
     const name = $('cpName')?.value.trim(), base = $('cpBase')?.value.trim(), model = $('cpModel')?.value.trim(), key = $('cpKey')?.value;
     msg.textContent = '';
-    if (!name || !base || !key) { msg.style.color = '#ff9ebd'; msg.textContent = 'Nama, base URL, dan API key wajib diisi.'; return; }
+    if (!name || !base || !key) { msg.style.color = '#ff9bdc'; msg.textContent = 'Nama, base URL, dan API key wajib diisi.'; return; }
     btn.disabled = true; btn.textContent = 'Menyimpan...';
     try {
       await cpApi('/api/custom-providers', { method: 'POST', body: JSON.stringify({ name, base_url: base, model, api_key: key }) });
       window.toast?.('Provider kustom ditambahkan \u2014 pilih di pil Mesin halaman Studio.');
       $('cpName').value = ''; $('cpBase').value = ''; $('cpModel').value = ''; $('cpKey').value = '';
       loadCustomProviders();
-    } catch (e) { msg.style.color = '#ff9ebd'; msg.textContent = e.message; }
+    } catch (e) { msg.style.color = '#ff9bdc'; msg.textContent = e.message; }
     finally { btn.disabled = false; btn.innerHTML = '<span data-icon="plus"></span> Tambah Provider'; window.injectIcons?.(); }
   });
 })();

@@ -16,7 +16,7 @@
   const KEY = 'sherly.planner.v1';
   const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   const DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-  const STATUS_META = { ide: ['Ide', '#8fa4bd'], draft: ['Draft', '#c9a8f2'], terjadwal: ['Terjadwal', '#ff6fc3'], tayang: ['Tayang', '#7ee2ae'] };
+  const STATUS_META = { ide: ['Ide', '#91a2b9'], draft: ['Draft', '#ff9bdc'], terjadwal: ['Terjadwal', '#ff72c5'], tayang: ['Tayang', '#ffd0ec'] };
 
   function loadItems() {
     try { const arr = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(arr) ? arr : []; } catch { return []; }
@@ -43,7 +43,7 @@
       const dISO = iso(viewYear, viewMonth, d);
       const dayItems = byDate[dISO] || [];
       const chips = dayItems.slice(0, 3).map((it) =>
-        '<button type="button" class="cal-chip" data-id="' + esc(it.id) + '" title="' + esc(it.title) + ' \u2014 ' + (STATUS_META[it.status] ? STATUS_META[it.status][0] : 'Konten') + '"><i style="background:' + (STATUS_META[it.status] ? STATUS_META[it.status][1] : '#8fa4bd') + '"></i><span>' + esc(it.title) + '</span></button>').join('');
+        '<button type="button" class="cal-chip" data-id="' + esc(it.id) + '" title="' + esc(it.title) + ' \u2014 ' + (STATUS_META[it.status] ? STATUS_META[it.status][0] : 'Konten') + '"><i style="background:' + (STATUS_META[it.status] ? STATUS_META[it.status][1] : '#91a2b9') + '"></i><span>' + esc(it.title) + '</span></button>').join('');
       const more = dayItems.length > 3 ? '<span class="cal-more">+' + (dayItems.length - 3) + ' lagi</span>' : '';
       cells += '<div class="cal-cell' + (dISO === todayISO ? ' today' : '') + '">'
         + '<span class="cal-num">' + d + '</span>'
