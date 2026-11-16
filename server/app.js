@@ -9,7 +9,7 @@ import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImag
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
-import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 
@@ -369,7 +369,7 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     let message = typeof rawMessage === 'string' ? rawMessage.trim() : '';
     if (!message && image) message = 'Tolong analisis gambar ini.';
     if (!message || message.length > 12000) return res.status(400).json({ error: 'Pesan wajib diisi dan maksimal 12.000 karakter (atau lampirkan gambar).' });
-    if (!['auto','gemini','groq','openrouter'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
+    if (!['auto','gemini','groq','openrouter','custom'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
     const userId = req.user.id;
     let conversationId = requestedId;
     if (conversationId) {
@@ -407,7 +407,12 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     res.json({ ok: true, conversation_id: conversationId, reply: assistantContent, bubbles: cleanBubbles.length ? cleanBubbles : [assistantContent], provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
-    res.status(status).json({ ok: false, error: error.message || 'AI provider request failed.', ...(error.details ? { details: error.details } : {}) });
+    let errorMsg = error.message || 'AI provider request failed.';
+    // D-142: tamu/klien tanpa kunci pribadi -> arahkan ke menu Kunci AI Pribadi.
+    if (status === 503 && (req.user?.app_metadata?.role || 'guest') !== 'admin') {
+      errorMsg = 'Belum ada API key AI untuk akunmu. Buka halaman Profil, bagian "Kunci AI Pribadi", lalu simpan key milikmu (gemini / groq / openrouter / kustom) supaya bisa chat dengan Sherly.';
+    }
+    res.status(status).json({ ok: false, error: errorMsg, ...(error.details ? { details: error.details } : {}) });
   }
 });
 
@@ -608,6 +613,23 @@ app.delete('/api/ai-keys/group', requireUser, requireAdmin, wrapKeyRoute(async (
 app.put('/api/ai-provider-settings', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const { provider, model } = req.body || {};
   return { settings: await saveProviderModel(req.supabase, provider, model, req.accessToken) };
+}));
+
+// ==== Kunci AI pribadi (BYOK) — tamu & klien. Baris vault di-scope RLS ke akun sendiri. ====
+const requireMemberOnly = (req, res, next) => {
+  if ((req.user?.app_metadata?.role || 'guest') === 'admin') return res.status(403).json({ error: 'Admin memakai Pengaturan utama (Provider & API Key) untuk mengelola kunci.' });
+  next();
+};
+app.get('/api/my/keys', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  return { keys: await listPersonalKeys(req.supabase) };
+}));
+app.post('/api/my/keys', requireUser, requireChatUser, requireMemberOnly, requireVault, wrapKeyRoute(async (req) => {
+  const { provider, api_key, base_url, model } = req.body || {};
+  return { key: await savePersonalKey(req.supabase, { provider, api_key, base_url, model, user_id: req.user.id }) };
+}));
+app.delete('/api/my/keys/:id', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  await deletePersonalKey(req.supabase, req.params.id);
+  return { ok: true };
 }));
 app.get('/api/ai-provider-models/:provider', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const provider = String(req.params.provider || '');
