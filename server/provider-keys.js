@@ -7,7 +7,7 @@ export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
 export const PERSONAL_PROVIDERS = ['gemini', 'groq', 'openrouter', 'custom'];
 // D-146: multi key per provider per akun (fallback otomatis antar key saat chat).
-export const MAX_PERSONAL_KEYS_PER_PROVIDER = 5;
+export const MAX_PERSONAL_KEYS_PER_PROVIDER = 100;
 export const AUTO_DISABLE_AFTER = 5;
 
 // ---------- Capability taxonomy (API key categories) ----------

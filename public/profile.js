@@ -273,7 +273,7 @@
       if (!groups.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
       list.innerHTML = groups.map((g) => {
         const gHealth = g.health_status === 'ok' ? 'sehat' : (g.health_status === 'failing' ? 'gangguan' : (g.active_count ? 'siap' : 'nonaktif'));
-        const head = '<div class="mykey-group-head"><b>' + (PC_KEY_PROVIDERS[g.provider] || esc(g.provider)) + ' · ' + esc(g.key_name) + '</b><span class="mykey-gcount">' + g.total + ' key · ' + g.active_count + ' aktif · ' + gHealth + '</span><button type="button" class="mykey-gdel" data-act="delgroup" data-provider="' + esc(g.provider) + '" data-label="' + esc(g.key_name) + '">Hapus Grup</button></div>';
+        const head = '<div class="mykey-group-head"><b>' + (PC_KEY_PROVIDERS[g.provider] || esc(g.provider)) + ' · ' + esc(g.key_name) + '</b><span class="mykey-gcount">' + g.total + ' key · ' + g.active_count + ' aktif · ' + gHealth + '</span><button type="button" class="mykey-gadd" data-act="addkey" data-provider="' + esc(g.provider) + '" data-label="' + esc(g.key_name) + '">+ Key</button><button type="button" class="mykey-gdel" data-act="delgroup" data-provider="' + esc(g.provider) + '" data-label="' + esc(g.key_name) + '">Hapus Grup</button></div>';
         const rows = (g.keys || []).map((k) => {
           const bad = k.is_active === false || k.health_status === 'failing';
           const st = k.is_active === false ? 'nonaktif' : (k.health_status === 'failing' ? 'gangguan' : 'aktif');
@@ -349,6 +349,15 @@
           await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id), 'DELETE');
           window.toast?.('Kunci dihapus.');
           await loadPcKeys();
+        } else if (act === 'addkey') {
+          const provider = btn.getAttribute('data-provider') || '';
+          const label = btn.getAttribute('data-label') || '';
+          const sel = $('pcKeyProvider');
+          if (sel && provider && sel.value !== provider) { sel.value = provider; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+          const lab = $('pcKeyLabel'); if (lab) lab.value = label;
+          $('pcKeyForm')?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+          $('pcKeySecret')?.focus();
+          window.toast?.('Form siap utk grup "' + label + '" — tempel key barunya.');
         } else if (act === 'delgroup') {
           const provider = btn.getAttribute('data-provider') || '';
           const label = btn.getAttribute('data-label') || '';
@@ -413,28 +422,61 @@
       } catch (e) { window.toast?.(e.message); }
       finally { btn.disabled = false; if (label) label.textContent = oldLabel; }
     });
+    // D-148 (ala aira): tombol + di bawah key 1 — key 2, 3, dst. sekali submit, satu grup.
+    const PC_KEY_MAX_EXTRAS = 20;
+    function pcRenumberKeyInputs() {
+      const secret = $('pcKeySecret'); if (secret) secret.placeholder = 'API key 1';
+      Array.from($('pcKeyExtraList')?.querySelectorAll('.pc-key-extra-input') || []).forEach((inp, i) => { inp.placeholder = 'API key ' + (i + 2); });
+    }
+    function pcAddKeyInput() {
+      const list = $('pcKeyExtraList'); if (!list) return;
+      if (list.querySelectorAll('.pc-key-extra-input').length >= PC_KEY_MAX_EXTRAS) { window.toast?.('Maksimal ' + (PC_KEY_MAX_EXTRAS + 1) + ' key sekali submit — simpan dulu, lalu tambah lagi.'); return; }
+      const wrap = document.createElement('div'); wrap.className = 'pc-key-extra';
+      const inp = document.createElement('input'); inp.type = 'password'; inp.maxLength = 400; inp.autocomplete = 'off'; inp.className = 'pc-key-extra-input';
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'pc-key-extra-del'; del.setAttribute('aria-label', 'Hapus key ini'); del.textContent = '×';
+      del.addEventListener('click', () => { wrap.remove(); pcRenumberKeyInputs(); });
+      wrap.appendChild(inp); wrap.appendChild(del); list.appendChild(wrap);
+      pcRenumberKeyInputs(); inp.focus();
+    }
+    $('pcKeyAddBtn')?.addEventListener('click', pcAddKeyInput);
     $('pcKeyForm')?.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const btn = $('pcKeySaveBtn'); if (!btn || btn.disabled) return;
       const provider = $('pcKeyProvider')?.value || '';
-      const api_key = $('pcKeySecret')?.value.trim() || '';
       const base_url = $('pcKeyBaseUrl')?.value.trim() || '';
       const model = $('pcKeyModel')?.value.trim() || '';
-      if (!api_key) { window.toast?.('API key wajib diisi.'); return; }
+      const label = $('pcKeyLabel')?.value.trim() || '';
+      const entries = [$('pcKeySecret'), ...Array.from($('pcKeyExtraList')?.querySelectorAll('.pc-key-extra-input') || [])]
+        .filter(Boolean).map((inp) => ({ inp, val: inp.value.trim() })).filter((e) => e.val);
+      if (!entries.length) { window.toast?.('API key wajib diisi.'); return; }
       if (provider === 'custom' && !base_url) { window.toast?.('Base URL wajib diisi untuk provider kustom.'); return; }
       if (provider === 'custom' && !model) { window.toast?.('Nama model wajib diisi untuk provider kustom.'); return; }
-      btn.disabled = true; btn.textContent = 'Menambah & mengetes…';
-      try {
-        const h = { 'Content-Type': 'application/json' };
-        const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
-        const res = await fetch('/api/my/keys', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key, base_url, model, label: $('pcKeyLabel')?.value.trim() || '' }) });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
-        if ($('pcKeySecret')) $('pcKeySecret').value = '';
-        window.toast?.('Key ditambahkan & terverifikasi — Sherly akan otomatis fallback antar key-mu saat chat.');
-        await loadPcKeys();
-      } catch (e) { window.toast?.(e.message); }
-      finally { btn.disabled = false; btn.textContent = 'Tambah & Tes Key'; }
+      btn.disabled = true; btn.textContent = 'Mengetes 1/' + entries.length + '…';
+      const h = { 'Content-Type': 'application/json' };
+      const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+      let ok = 0; let firstErr = '';
+      for (let i = 0; i < entries.length; i++) {
+        btn.textContent = 'Mengetes ' + (i + 1) + '/' + entries.length + '…';
+        try {
+          const res = await fetch('/api/my/keys', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key: entries[i].val, base_url, model, label }) });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
+          ok++; entries[i].inp.value = '';
+        } catch (e) { entries[i].err = e.message; if (!firstErr) firstErr = e.message; }
+      }
+      if (ok === entries.length) {
+        if ($('pcKeyExtraList')) $('pcKeyExtraList').innerHTML = '';
+        pcRenumberKeyInputs();
+        window.toast?.(entries.length > 1
+          ? entries.length + ' key masuk' + (label ? ' grup "' + label + '"' : '') + ' & terverifikasi — Sherly otomatis fallback antar key-mu saat chat.'
+          : 'Key ditambahkan & terverifikasi — Sherly akan otomatis fallback antar key-mu saat chat.');
+      } else if (ok > 0) {
+        window.toast?.(ok + ' key tersimpan, ' + (entries.length - ok) + ' gagal: ' + firstErr + ' — key yang gagal tetap di kolomnya, periksa lalu submit ulang.');
+      } else {
+        window.toast?.('Gagal: ' + firstErr);
+      }
+      await loadPcKeys();
+      btn.disabled = false; btn.textContent = 'Tambah & Tes Key';
     });
 
     // D-143: pintasan ke halaman Pengaturan member & modal suara Sherly.
