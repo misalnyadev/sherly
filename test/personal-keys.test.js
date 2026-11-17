@@ -5,7 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.AI_ENCRYPTION_KEY = 'b'.repeat(64); // 32-byte hex for tests
-const { savePersonalKey, listPersonalKeys, PERSONAL_PROVIDERS, assertSafeBaseUrl, fetchProviderModels } = await import('../server/provider-keys.js');
+const { savePersonalKey, listPersonalKeys, PERSONAL_PROVIDERS, assertSafeBaseUrl, fetchProviderModels, setDefaultPersonalKey, deleteGroup, probeProviderKey, testKey } = await import('../server/provider-keys.js');
+const { encryptSecret } = await import('../server/vault.js');
 
 // Stub fetch untuk tes yang menyentuh jaringan (tes koneksi kustom / deteksi model).
 function withFetchStub(stub, fn) { const real = globalThis.fetch; globalThis.fetch = stub; return Promise.resolve(fn()).finally(() => { globalThis.fetch = real; }); }
@@ -182,4 +183,79 @@ test('savePersonalKey multi-key: cap 5 per provider, key lama TIDAK dihapus', as
     );
   });
   assert.equal(deletions.length, 0, 'multi-key: tidak ada delete saat menambah');
+});
+
+
+// ---------- D-147: grup, test, edit/ganti, set default, hapus grup ----------
+
+test('savePersonalKey: label grup opsional (default pribadi), maks 80 karakter', async () => {
+  await assert.rejects(
+    () => savePersonalKey(fakeSupabase(), { provider: 'gemini', api_key: 'g'.repeat(40), label: 'x'.repeat(81), user_id: 'u1' }),
+    /Label grup maksimal 80/
+  );
+  const inserted = [];
+  const sb = { from() { return this; }, select() { return this; }, eq() { return this; }, insert(row) { inserted.push(row); return this; }, single() { return Promise.resolve({ data: {}, error: null }); }, then(r) { r({ count: 0, error: null }); } };
+  await withFetchStub(async () => ({ ok: true, json: async () => ({ data: [{ id: 'm' }] }) }),
+    () => savePersonalKey(sb, { provider: 'custom', api_key: 'c'.repeat(44), base_url: 'https://api.example.com/v1', model: 'm1', label: 'Kantor', user_id: 'u1' }));
+  assert.equal(inserted[0].key_name, 'Kantor');
+});
+
+test('setDefaultPersonalKey: demote key lain provider, angkat terpilih jadi prioritas 1', async () => {
+  const updates = [];
+  const sb = {
+    from() { return this; },
+    select() { return this; },
+    eq() { return this; },
+    neq() { return this; },
+    maybeSingle() { return Promise.resolve({ data: { id: 'k1', provider: 'gemini' }, error: null }); },
+    update(patch) { updates.push(patch); return this; },
+    single() { return Promise.resolve({ data: { id: 'k1', provider: 'gemini', key_name: 'pribadi', last4: 'abcd', priority: 1, is_active: true, health_status: 'unknown', consecutive_failures: 0, base_url: null, model: null }, error: null }); },
+    then(r) { r({ data: null, error: null }); },
+  };
+  const out = await setDefaultPersonalKey(sb, 'k1');
+  assert.equal(updates.length, 2);
+  assert.equal(updates[0].priority, 100);
+  assert.equal(updates[1].priority, 1);
+  assert.equal(updates[1].is_active, true);
+  assert.equal(out.priority, 1);
+});
+
+test('deleteGroup menerima provider kustom (member)', async () => {
+  const del = [];
+  const sb = { from() { return this; }, delete() { del.push(1); return this; }, eq() { return this; }, then(r) { r({ error: null }); } };
+  await deleteGroup(sb, { provider: 'custom', key_name: 'kantor' });
+  assert.equal(del.length, 1);
+  await assert.rejects(() => deleteGroup(sb, { provider: 'aneh', key_name: 'x' }), /wajib valid/);
+});
+
+test('probeProviderKey custom: tanpa base URL gagal; dengan base URL GET {base}/models', async () => {
+  const noBase = await probeProviderKey('custom', 'k'.repeat(40));
+  assert.equal(noBase.ok, false);
+  const calls = [];
+  await withFetchStub(async (url, opts) => {
+    calls.push([String(url), opts?.headers?.Authorization]);
+    return { ok: true, status: 200, json: async () => ({ data: [] }) };
+  }, async () => {
+    const r = await probeProviderKey('custom', 'k'.repeat(40), 'https://api.example.com/v1/');
+    assert.equal(r.ok, true);
+  });
+  assert.deepEqual(calls, [['https://api.example.com/v1/models', 'Bearer ' + 'k'.repeat(40)]]);
+});
+
+test('testKey custom: mendekripsi & mengetes via base URL tersimpan', async () => {
+  const enc = encryptSecret('t'.repeat(40));
+  const sb = {
+    from() { return this; },
+    select() { return this; },
+    eq() { return this; },
+    maybeSingle() { return Promise.resolve({ data: { provider: 'custom', base_url: 'https://api.example.com/v1', ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag }, error: null }); },
+    update() { return this; },
+    then(r) { r({ data: null, error: null }); },
+  };
+  const calls = [];
+  await withFetchStub(async (url) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => ({ data: [{ id: 'm' }] }) }; }, async () => {
+    const probe = await testKey(sb, 'k1');
+    assert.equal(probe.ok, true);
+  });
+  assert.equal(calls[0], 'https://api.example.com/v1/models');
 });

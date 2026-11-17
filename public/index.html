@@ -144,6 +144,21 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .mykey-del:disabled{opacity:.5;cursor:wait}
 .mykey-status{display:inline-block;font-size:9.5px;border:1px solid #49334e;border-radius:999px;padding:1px 7px;margin-left:7px;color:#cfd6e4;vertical-align:1px}
 .mykey-status.bad{color:#ff9bdc;border-color:#9b1c67}
+.mykey-group{border:1px solid #49334e;border-radius:13px;background:#0c1422;margin-bottom:10px;overflow:hidden}
+.mykey-group-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #1c2b40;background:#111a2e;flex-wrap:wrap}
+.mykey-group-head b{font-size:12.5px;color:#ffd0ec}
+.mykey-gcount{font-size:10px;color:#91a2b9}
+.mykey-gdel{margin-left:auto;border:1px solid #49334e;background:transparent;color:#ff9bdc;border-radius:999px;padding:4px 10px;font-size:10px;cursor:pointer;font-family:inherit}
+.mykey-gdel:hover{border-color:#f044a8;background:#f044a81f;color:#ffd0ec}
+.mykey-group .mykey-row{border:0;border-radius:0;background:transparent;margin-bottom:0;border-bottom:1px solid #1c2b40}
+.mykey-group .mykey-row:last-of-type{border-bottom:0}
+.mykey-default{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.08em;border-radius:999px;padding:1px 8px;margin-left:7px;color:#fff;background:linear-gradient(100deg,#d82d91,#b02d80);vertical-align:1px}
+.mykey-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.mykey-act{border:1px solid #49334e;background:transparent;color:#cfd6e4;border-radius:999px;padding:4px 9px;font-size:10px;cursor:pointer;font-family:inherit}
+.mykey-act:hover{border-color:#f044a8;color:#ffd0ec;background:#f044a81f}
+.mykey-act:disabled{opacity:.5;cursor:wait}
+.mykey-edit-row{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid #1c2b40;background:#111a2e;flex-wrap:wrap;align-items:center}
+.mykey-edit-row input,.mykey-edit-row select{flex:1;min-width:130px;background:#0f1828;color:#fff;border:1px solid #24344e;border-radius:9px;padding:8px 10px;font:inherit;font-size:12px}
 .mykey-empty{font-size:12px;color:#91a2b9;padding:10px 12px;border:1px dashed #49334e;border-radius:12px;margin-bottom:10px;line-height:1.55}
 #pcKeyForm{margin-top:4px}
 #pcKeysCard .form-field{margin-bottom:10px}
@@ -776,10 +791,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     <div id="pcKeysList" aria-live="polite"></div>
     <form id="pcKeyForm" autocomplete="off">
      <div class="form-field"><label for="pcKeyProvider">1 · Pilih provider</label><select id="pcKeyProvider"><option value="gemini">Gemini (Google AI Studio)</option><option value="groq">Groq (console.groq.com)</option><option value="openrouter">OpenRouter (openrouter.ai)</option><option value="custom">Kustom (endpoint sendiri)</option></select></div>
+     <div class="form-field"><label for="pcKeyLabel">2 · Label grup (opsional)</label><input id="pcKeyLabel" maxlength="80" placeholder="Pribadi"><small>Key dengan label sama mengelompok jadi satu — mis. "Kantor" atau "Cadangan".</small></div>
      <div class="form-field" id="pcKeyCustomBase" hidden><label for="pcKeyBaseUrl">Base URL (OpenAI-compatible)</label><input id="pcKeyBaseUrl" maxlength="200" placeholder="https://provider-kamu.com/v1"><small>Alamat endpoint yang mendukung format OpenAI (/chat/completions) — kolom ini hanya muncul untuk provider kustom.</small></div>
-     <div class="form-field" id="pcKeyGetRow"><small class="pc-key-getlink">2 · Belum punya API key? <a id="pcKeyGetLink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Ambil gratis di Google AI Studio</a></small></div>
-     <div class="form-field"><label for="pcKeySecret">3 · Tempel API key</label><input id="pcKeySecret" type="password" maxlength="400" placeholder="Tempel API key-mu di sini"></div>
-     <div class="form-field"><label for="pcKeyModel">4 · Model</label><div class="pc-key-model-row"><input id="pcKeyModel" maxlength="120" list="pcKeyModelList" placeholder="Kosongkan = model andalan Sherly"><datalist id="pcKeyModelList"></datalist><button type="button" class="outline-btn" id="pcKeyDetectBtn"><span data-icon="refresh-cw"></span> <span id="pcKeyDetectLabel">Deteksi</span></button></div><small id="pcKeyModelHint">Opsional — kosongkan untuk memakai model andalan Sherly. Klik Deteksi untuk melihat model yang tersedia di key-mu.</small></div>
+     <div class="form-field" id="pcKeyGetRow"><small class="pc-key-getlink">3 · Belum punya API key? <a id="pcKeyGetLink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Ambil gratis di Google AI Studio</a></small></div>
+     <div class="form-field"><label for="pcKeySecret">4 · Tempel API key</label><input id="pcKeySecret" type="password" maxlength="400" placeholder="Tempel API key-mu di sini"></div>
+     <div class="form-field"><label for="pcKeyModel">5 · Model</label><div class="pc-key-model-row"><input id="pcKeyModel" maxlength="120" list="pcKeyModelList" placeholder="Kosongkan = model andalan Sherly"><datalist id="pcKeyModelList"></datalist><button type="button" class="outline-btn" id="pcKeyDetectBtn"><span data-icon="refresh-cw"></span> <span id="pcKeyDetectLabel">Deteksi</span></button></div><small id="pcKeyModelHint">Opsional — kosongkan untuk memakai model andalan Sherly. Klik Deteksi untuk melihat model yang tersedia di key-mu.</small></div>
      <div class="profile-actions"><button type="submit" class="pink-btn" id="pcKeySaveBtn">Tambah &amp; Tes Key</button></div>
      <p class="inline-note" id="pcKeyNote">Gemini &amp; Groq punya tier gratis. Simpan beberapa key sekaligus (maks. 5 per provider) — kalau satu gagal atau kena limit saat chat, Sherly otomatis pindah ke key lainmu, lalu ke provider berikutnya.</p>
     </form>
