@@ -272,7 +272,12 @@
       } catch (e) { list.innerHTML = '<p class="mykey-empty">Kunci AI belum bisa dimuat: ' + esc(e.message) + '</p>'; return; }
       if (!keys.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
       list.innerHTML = keys.map((k) => (
-        '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + '</b><small>•••• ' + esc(k.last4 || '????') + (k.model ? ' · ' + esc(k.model) : '') + (k.provider === 'custom' ? ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>'
+        (() => {
+          const bad = k.is_active === false || k.health_status === 'failing';
+          const label = k.is_active === false ? 'nonaktif' : (k.health_status === 'failing' ? 'gangguan' : 'aktif');
+          const status = '<span class="mykey-status' + (bad ? ' bad' : '') + '" title="Kesehatan key ini dipantau otomatis — nonaktif setelah gagal 5x beruntun">' + label + '</span>';
+          return '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + status + '</b><small>•••• ' + esc(k.last4 || '????') + (k.model ? ' · ' + esc(k.model) : '') + (k.provider === 'custom' ? ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>';
+        })()
       )).join('');
     }
     $('pcKeysList')?.addEventListener('click', async (ev) => {
@@ -350,7 +355,7 @@
       if (!api_key) { window.toast?.('API key wajib diisi.'); return; }
       if (provider === 'custom' && !base_url) { window.toast?.('Base URL wajib diisi untuk provider kustom.'); return; }
       if (provider === 'custom' && !model) { window.toast?.('Nama model wajib diisi untuk provider kustom.'); return; }
-      btn.disabled = true; btn.textContent = 'Menyimpan & mengetes…';
+      btn.disabled = true; btn.textContent = 'Menambah & mengetes…';
       try {
         const h = { 'Content-Type': 'application/json' };
         const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
@@ -358,10 +363,10 @@
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
         if ($('pcKeySecret')) $('pcKeySecret').value = '';
-        window.toast?.('Kunci tersimpan & terverifikasi — sekarang kamu bisa chat dengan Sherly.');
+        window.toast?.('Key ditambahkan & terverifikasi — Sherly akan otomatis fallback antar key-mu saat chat.');
         await loadPcKeys();
       } catch (e) { window.toast?.(e.message); }
-      finally { btn.disabled = false; btn.textContent = 'Simpan & Tes Key'; }
+      finally { btn.disabled = false; btn.textContent = 'Tambah & Tes Key'; }
     });
 
     // D-143: pintasan ke halaman Pengaturan member & modal suara Sherly.

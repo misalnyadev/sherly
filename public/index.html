@@ -142,6 +142,8 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .mykey-del{flex-shrink:0;border:1px solid #49334e;background:transparent;color:#ff9bdc;border-radius:999px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:inherit}
 .mykey-del:hover{border-color:#f044a8;color:#ffd0ec;background:#f044a81f}
 .mykey-del:disabled{opacity:.5;cursor:wait}
+.mykey-status{display:inline-block;font-size:9.5px;border:1px solid #49334e;border-radius:999px;padding:1px 7px;margin-left:7px;color:#cfd6e4;vertical-align:1px}
+.mykey-status.bad{color:#ff9bdc;border-color:#9b1c67}
 .mykey-empty{font-size:12px;color:#91a2b9;padding:10px 12px;border:1px dashed #49334e;border-radius:12px;margin-bottom:10px;line-height:1.55}
 #pcKeyForm{margin-top:4px}
 #pcKeysCard .form-field{margin-bottom:10px}
@@ -778,8 +780,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
      <div class="form-field" id="pcKeyGetRow"><small class="pc-key-getlink">2 · Belum punya API key? <a id="pcKeyGetLink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Ambil gratis di Google AI Studio</a></small></div>
      <div class="form-field"><label for="pcKeySecret">3 · Tempel API key</label><input id="pcKeySecret" type="password" maxlength="400" placeholder="Tempel API key-mu di sini"></div>
      <div class="form-field"><label for="pcKeyModel">4 · Model</label><div class="pc-key-model-row"><input id="pcKeyModel" maxlength="120" list="pcKeyModelList" placeholder="Kosongkan = model andalan Sherly"><datalist id="pcKeyModelList"></datalist><button type="button" class="outline-btn" id="pcKeyDetectBtn"><span data-icon="refresh-cw"></span> <span id="pcKeyDetectLabel">Deteksi</span></button></div><small id="pcKeyModelHint">Opsional — kosongkan untuk memakai model andalan Sherly. Klik Deteksi untuk melihat model yang tersedia di key-mu.</small></div>
-     <div class="profile-actions"><button type="submit" class="pink-btn" id="pcKeySaveBtn">Simpan &amp; Tes Key</button></div>
-     <p class="inline-note" id="pcKeyNote">Gemini &amp; Groq punya tier gratis — cukup untuk chat sehari-hari dengan Sherly. Satu key per provider; menyimpan ulang mengganti yang lama.</p>
+     <div class="profile-actions"><button type="submit" class="pink-btn" id="pcKeySaveBtn">Tambah &amp; Tes Key</button></div>
+     <p class="inline-note" id="pcKeyNote">Gemini &amp; Groq punya tier gratis. Simpan beberapa key sekaligus (maks. 5 per provider) — kalau satu gagal atau kena limit saat chat, Sherly otomatis pindah ke key lainmu, lalu ke provider berikutnya.</p>
     </form>
    </div>
    <div class="panel profile-card-side" id="pcVoiceCard">
