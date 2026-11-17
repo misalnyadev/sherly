@@ -6,6 +6,8 @@ export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
 export const PERSONAL_PROVIDERS = ['gemini', 'groq', 'openrouter', 'custom'];
+// D-146: multi key per provider per akun (fallback otomatis antar key saat chat).
+export const MAX_PERSONAL_KEYS_PER_PROVIDER = 5;
 export const AUTO_DISABLE_AFTER = 5;
 
 // ---------- Capability taxonomy (API key categories) ----------
@@ -430,10 +432,11 @@ export function envFallbackStatus() {
 // Satu kunci per provider per akun; baris di-scope RLS ke pemilik (user_id = auth.uid()).
 export async function listPersonalKeys(supabase) {
   const { data, error } = await supabase.from('ai_provider_keys')
-    .select('id,provider,last4,base_url,model,created_at')
+    .select('id,provider,last4,base_url,model,is_active,health_status,consecutive_failures,created_at')
+    .order('provider', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) return [];
-  return (data || []).map((r) => ({ id: r.id, provider: r.provider, last4: r.last4, base_url: r.base_url || null, model: r.model || null, created_at: r.created_at }));
+  return (data || []).map((r) => ({ id: r.id, provider: r.provider, last4: r.last4, base_url: r.base_url || null, model: r.model || null, is_active: r.is_active !== false, health_status: r.health_status || 'unknown', consecutive_failures: r.consecutive_failures ?? 0, created_at: r.created_at }));
 }
 
 export async function savePersonalKey(supabase, { provider, api_key, base_url, model, user_id }) {
@@ -450,6 +453,12 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
     if (!modelChoice) throw Object.assign(new Error('Model wajib diisi untuk provider kustom (maks 120 karakter).'), { status: 400 });
   }
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
+  // D-146: multi key — tambah baru, jangan hapus yang lama; batasi per provider.
+  const { count, error: countError } = await supabase.from('ai_provider_keys')
+    .select('id', { count: 'exact', head: true }).eq('provider', provider);
+  if (!countError && (count || 0) >= MAX_PERSONAL_KEYS_PER_PROVIDER) {
+    throw Object.assign(new Error(`Maksimal ${MAX_PERSONAL_KEYS_PER_PROVIDER} key per provider untuk satu akun — hapus salah satu dulu kalau ingin menambah yang baru.`), { status: 400 });
+  }
   if (provider === 'custom') {
     // Tes koneksi kustom = daftar model harus bisa diambil dengan key ini (GET /models).
     try { await fetchProviderModels('custom', key, baseUrl); }
@@ -459,8 +468,6 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
     if (!probe.ok) throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
   }
   const enc = encryptSecret(key);
-  // Satu kunci per provider: hapus kunci lama milik akun ini (RLS owner) dulu.
-  await supabase.from('ai_provider_keys').delete().eq('provider', provider);
   const row = {
     user_id, provider, key_name: 'pribadi',
     ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag, last4: enc.last4,
@@ -469,7 +476,7 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
     consecutive_failures: 0, last_failure_at: null, last_error: null,
     base_url: baseUrl, model: modelChoice || null,
   };
-  const { data, error } = await supabase.from('ai_provider_keys').insert(row).select('id,provider,last4,base_url,model,created_at').single();
+  const { data, error } = await supabase.from('ai_provider_keys').insert(row).select('id,provider,last4,base_url,model,is_active,health_status,created_at').single();
   if (error) throw Object.assign(new Error(error.message), { status: 400 });
   return data;
 }

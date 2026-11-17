@@ -134,15 +134,52 @@ test('savePersonalKey tanpa user_id ditolak', async () => {
   );
 });
 
-test('listPersonalKeys memetakan baris ke bentuk aman (tanpa ciphertext)', async () => {
-  const sb = { from() { return this; }, select() { return this; }, order() { return Promise.resolve({ data: [{ id: 'k1', provider: 'gemini', last4: 'wxyz', base_url: null, model: null, created_at: 't1' }], error: null }); } };
+test('listPersonalKeys memetakan baris ke bentuk aman (tanpa ciphertext) + status kesehatan', async () => {
+  const sb = { from() { return this; }, select() { return this; }, order() { return this; }, then(resolve) { resolve({ data: [
+    { id: 'k1', provider: 'gemini', last4: 'wxyz', base_url: null, model: null, is_active: true, health_status: 'ok', consecutive_failures: 0, created_at: 't1' },
+    { id: 'k2', provider: 'gemini', last4: 'aaaa', base_url: null, model: 'gemini-3.8-flash', is_active: false, health_status: 'failing', consecutive_failures: 5, created_at: 't2' },
+  ], error: null }); } };
   const keys = await listPersonalKeys(sb);
-  assert.equal(keys.length, 1);
-  assert.deepEqual(keys[0], { id: 'k1', provider: 'gemini', last4: 'wxyz', base_url: null, model: null, created_at: 't1' });
-  assert.ok(!('ciphertext' in keys[0]));
+  assert.equal(keys.length, 2);
+  assert.deepEqual(keys[0], { id: 'k1', provider: 'gemini', last4: 'wxyz', base_url: null, model: null, is_active: true, health_status: 'ok', consecutive_failures: 0, created_at: 't1' });
+  assert.equal(keys[1].is_active, false);
+  assert.equal(keys[1].health_status, 'failing');
+  assert.ok(keys.every((k) => !('ciphertext' in k)));
 });
 
 test('listPersonalKeys error DB -> array kosong (anti-leak)', async () => {
-  const sb = { from() { return this; }, select() { return this; }, order() { return Promise.resolve({ data: null, error: new Error('rls') }); } };
+  const sb = { from() { return this; }, select() { return this; }, order() { return this; }, then(resolve) { resolve({ data: null, error: new Error('rls') }); } };
   assert.deepEqual(await listPersonalKeys(sb), []);
+});
+
+test('savePersonalKey multi-key: cap 5 per provider, key lama TIDAK dihapus', async () => {
+  // query count (from #1) menjawab 5 -> penolakan sebelum probe jaringan
+  const calls = [];
+  const sb = {
+    from() { calls.push('from'); return this; },
+    select() { return this; },
+    eq() { return this; },
+    delete() { calls.push('delete'); return this; },
+    insert() { calls.push('insert'); return this; },
+    single() { return Promise.resolve({ data: null, error: null }); },
+    then(resolve) { resolve({ count: 5, error: null }); },
+  };
+  await assert.rejects(
+    () => savePersonalKey(sb, { provider: 'gemini', api_key: 'g'.repeat(40), user_id: 'u1' }),
+    /Maksimal 5 key per provider/
+  );
+  assert.ok(!calls.includes('delete'), 'key lama tidak boleh dihapus');
+  assert.ok(!calls.includes('insert'), 'tidak ada insert saat melewati batas');
+
+  // count 4 -> lolos sampai probe gemini (yang stub-nya gagal -> tes koneksi gagal)
+  const sb2 = { from() { return this; }, select() { return this; }, eq() { return this; }, insert() { return this; }, single() { return Promise.resolve({ data: null, error: null }); }, then(resolve) { resolve({ count: 4, error: null }); } };
+  const deletions = [];
+  sb2.delete = () => { deletions.push(1); return this; };
+  await withFetchStub(async () => ({ ok: false, status: 401, json: async () => ({ error: { message: 'bad key' } }) }), async () => {
+    await assert.rejects(
+      () => savePersonalKey(sb2, { provider: 'custom', api_key: 'c'.repeat(44), base_url: 'https://api.example.com/v1', model: 'm1', user_id: 'u1' }),
+      /Tes koneksi gagal/
+    );
+  });
+  assert.equal(deletions.length, 0, 'multi-key: tidak ada delete saat menambah');
 });
