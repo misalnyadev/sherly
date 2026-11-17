@@ -163,17 +163,17 @@ test('savePersonalKey multi-key: cap 5 per provider, key lama TIDAK dihapus', as
     delete() { calls.push('delete'); return this; },
     insert() { calls.push('insert'); return this; },
     single() { return Promise.resolve({ data: null, error: null }); },
-    then(resolve) { resolve({ count: 5, error: null }); },
+    then(resolve) { resolve({ count: 100, error: null }); },
   };
   await assert.rejects(
     () => savePersonalKey(sb, { provider: 'gemini', api_key: 'g'.repeat(40), user_id: 'u1' }),
-    /Maksimal 5 key per provider/
+    /Maksimal 100 key per provider/
   );
   assert.ok(!calls.includes('delete'), 'key lama tidak boleh dihapus');
   assert.ok(!calls.includes('insert'), 'tidak ada insert saat melewati batas');
 
-  // count 4 -> lolos sampai probe gemini (yang stub-nya gagal -> tes koneksi gagal)
-  const sb2 = { from() { return this; }, select() { return this; }, eq() { return this; }, insert() { return this; }, single() { return Promise.resolve({ data: null, error: null }); }, then(resolve) { resolve({ count: 4, error: null }); } };
+  // count 99 -> lolos sampai probe gemini (yang stub-nya gagal -> tes koneksi gagal)
+  const sb2 = { from() { return this; }, select() { return this; }, eq() { return this; }, insert() { return this; }, single() { return Promise.resolve({ data: null, error: null }); }, then(resolve) { resolve({ count: 99, error: null }); } };
   const deletions = [];
   sb2.delete = () => { deletions.push(1); return this; };
   await withFetchStub(async () => ({ ok: false, status: 401, json: async () => ({ error: { message: 'bad key' } }) }), async () => {
