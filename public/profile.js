@@ -262,36 +262,104 @@
       const list = $('pcKeysList'); if (!list) return;
       const role = window.sherlyUser?.role || 'guest';
       if (!window.sherlyStoredToken?.() || role === 'admin') { list.innerHTML = ''; return; }
-      let keys = null;
+      let groups = null;
       try {
         const h = {}; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
         const res = await fetch('/api/my/keys', { headers: h });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || ('Gagal memuat kunci (' + res.status + ')'));
-        keys = Array.isArray(d.keys) ? d.keys : [];
+        groups = Array.isArray(d.groups) ? d.groups : [];
       } catch (e) { list.innerHTML = '<p class="mykey-empty">Kunci AI belum bisa dimuat: ' + esc(e.message) + '</p>'; return; }
-      if (!keys.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
-      list.innerHTML = keys.map((k) => (
-        (() => {
+      if (!groups.length) { list.innerHTML = '<p class="mykey-empty">Belum ada kunci tersimpan. Isi form di bawah — key gratis dari Google AI Studio (Gemini) atau Groq sudah cukup untuk mulai mengobrol dengan Sherly.</p>'; return; }
+      list.innerHTML = groups.map((g) => {
+        const gHealth = g.health_status === 'ok' ? 'sehat' : (g.health_status === 'failing' ? 'gangguan' : (g.active_count ? 'siap' : 'nonaktif'));
+        const head = '<div class="mykey-group-head"><b>' + (PC_KEY_PROVIDERS[g.provider] || esc(g.provider)) + ' · ' + esc(g.key_name) + '</b><span class="mykey-gcount">' + g.total + ' key · ' + g.active_count + ' aktif · ' + gHealth + '</span><button type="button" class="mykey-gdel" data-act="delgroup" data-provider="' + esc(g.provider) + '" data-label="' + esc(g.key_name) + '">Hapus Grup</button></div>';
+        const rows = (g.keys || []).map((k) => {
           const bad = k.is_active === false || k.health_status === 'failing';
-          const label = k.is_active === false ? 'nonaktif' : (k.health_status === 'failing' ? 'gangguan' : 'aktif');
-          const status = '<span class="mykey-status' + (bad ? ' bad' : '') + '" title="Kesehatan key ini dipantau otomatis — nonaktif setelah gagal 5x beruntun">' + label + '</span>';
-          return '<div class="mykey-row"><div class="mykey-meta"><b>' + (PC_KEY_PROVIDERS[k.provider] || esc(k.provider)) + status + '</b><small>•••• ' + esc(k.last4 || '????') + (k.model ? ' · ' + esc(k.model) : '') + (k.provider === 'custom' ? ' · ' + esc(k.base_url || '') : '') + '</small></div><button type="button" class="mykey-del" data-key-id="' + esc(k.id) + '">Hapus</button></div>';
-        })()
-      )).join('');
+          const st = k.is_active === false ? 'nonaktif' : (k.health_status === 'failing' ? 'gangguan' : 'aktif');
+          const isDefault = Number(k.priority) === 1;
+          const bits = [k.model ? esc(k.model) : '', k.provider === 'custom' ? esc(k.base_url || '') : ''].filter(Boolean).join(' · ');
+          return '<div class="mykey-row" data-key-id="' + esc(k.id) + '"><div class="mykey-meta"><b>•••• ' + esc(k.last4 || '????') + (isDefault ? '<span class="mykey-default" title="Dipakai lebih dulu untuk provider ini">DEFAULT</span>' : '') + '<span class="mykey-status' + (bad ? ' bad' : '') + '" title="Kesehatan key dipantau otomatis — nonaktif setelah gagal 5x beruntun">' + st + '</span></b><small>' + bits + '</small></div><div class="mykey-actions"><button type="button" class="mykey-act" data-act="test">Tes</button><button type="button" class="mykey-act" data-act="edit">Edit</button><button type="button" class="mykey-act" data-act="rotate">Ganti</button>' + (isDefault ? '' : '<button type="button" class="mykey-act" data-act="default">Default</button>') + '<button type="button" class="mykey-act" data-act="del">Hapus</button></div></div>'
+            + '<div class="mykey-edit-row" data-edit-for="' + esc(k.id) + '" hidden><input class="mykey-edit-label" maxlength="80" placeholder="Label grup"><select class="mykey-edit-active"><option value="1">Aktif</option><option value="0">Nonaktif</option></select><button type="button" class="mykey-act" data-act="saveEdit">Simpan</button><button type="button" class="mykey-act" data-act="cancel">Batal</button></div>'
+            + '<div class="mykey-edit-row" data-rotate-for="' + esc(k.id) + '" hidden><input class="mykey-rotate-key" type="password" maxlength="400" placeholder="API key baru (di-tes dulu sebelum diganti)"><button type="button" class="mykey-act" data-act="saveRotate">Ganti Key</button><button type="button" class="mykey-act" data-act="cancel">Batal</button></div>';
+        }).join('');
+        return '<div class="mykey-group">' + head + rows + '</div>';
+      }).join('');
     }
+    async function pcKeyFetch(path, method, body) {
+      const h = {}; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
+      if (body !== undefined) h['Content-Type'] = 'application/json';
+      const res = await fetch(path, { method, headers: h, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || ('Permintaan gagal (' + res.status + ')'));
+      return d;
+    }
+    // D-147 (ala aira/HeyTalent): aksi per key — tes, edit, ganti, default, hapus; hapus per grup.
     $('pcKeysList')?.addEventListener('click', async (ev) => {
-      const btn = ev.target.closest('.mykey-del'); if (!btn) return;
-      const id = btn.getAttribute('data-key-id'); if (!id || btn.disabled) return;
-      btn.disabled = true;
+      const btn = ev.target.closest('button'); if (!btn || btn.disabled) return;
+      const act = btn.getAttribute('data-act'); if (!act) return;
+      const row = btn.closest('.mykey-row');
+      const editHost = btn.closest('.mykey-edit-row');
+      const id = row?.getAttribute('data-key-id') || editHost?.getAttribute('data-edit-for') || editHost?.getAttribute('data-rotate-for') || '';
+      const busy = (on) => { btn.disabled = on; };
       try {
-        const h = {}; const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
-        const res = await fetch('/api/my/keys/' + encodeURIComponent(id), { method: 'DELETE', headers: h });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(d.error || 'Gagal menghapus kunci.');
-        window.toast?.('Kunci dihapus.');
-        await loadPcKeys();
-      } catch (e) { btn.disabled = false; window.toast?.(e.message); }
+        if (act === 'test') {
+          busy(true);
+          const d = await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id) + '/test', 'POST');
+          window.toast?.(d.ok ? 'Key sehat — siap dipakai Sherly.' : 'Key bermasalah: ' + (d.error || 'tidak diketahui'));
+          await loadPcKeys();
+        } else if (act === 'default') {
+          busy(true);
+          await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id) + '/default', 'PUT');
+          window.toast?.('Key ini jadi default — dipakai paling awal untuk providernya.');
+          await loadPcKeys();
+        } else if (act === 'edit') {
+          const kid = row?.getAttribute('data-key-id') || '';
+          const rotRow = $('pcKeysList').querySelector('[data-rotate-for="' + kid + '"]');
+          const editRow = $('pcKeysList').querySelector('[data-edit-for="' + kid + '"]');
+          if (rotRow) rotRow.hidden = true;
+          if (editRow) { editRow.hidden = !editRow.hidden; }
+        } else if (act === 'rotate') {
+          const kid = row?.getAttribute('data-key-id') || '';
+          const rotRow = $('pcKeysList').querySelector('[data-rotate-for="' + kid + '"]');
+          const editRow = $('pcKeysList').querySelector('[data-edit-for="' + kid + '"]');
+          if (editRow) editRow.hidden = true;
+          if (rotRow) { rotRow.hidden = !rotRow.hidden; }
+        } else if (act === 'cancel') {
+          const host = btn.closest('.mykey-edit-row'); if (host) host.hidden = true;
+        } else if (act === 'saveEdit') {
+          const host = btn.closest('.mykey-edit-row');
+          const label = host?.querySelector('.mykey-edit-label')?.value.trim() || 'pribadi';
+          const isActive = host?.querySelector('.mykey-edit-active')?.value !== '0';
+          busy(true);
+          await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id), 'PUT', { label, is_active: isActive });
+          window.toast?.('Perubahan tersimpan.');
+          await loadPcKeys();
+        } else if (act === 'saveRotate') {
+          const host = btn.closest('.mykey-edit-row');
+          const apiKey = host?.querySelector('.mykey-rotate-key')?.value.trim() || '';
+          if (!apiKey) { window.toast?.('Tempel API key barunya dulu.'); return; }
+          busy(true);
+          await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id) + '/rotate', 'PUT', { api_key: apiKey });
+          window.toast?.('Key berhasil diganti & terverifikasi.');
+          await loadPcKeys();
+        } else if (act === 'del') {
+          if (!window.confirm('Hapus key ini dari vault-mu?')) return;
+          busy(true);
+          await pcKeyFetch('/api/my/keys/' + encodeURIComponent(id), 'DELETE');
+          window.toast?.('Kunci dihapus.');
+          await loadPcKeys();
+        } else if (act === 'delgroup') {
+          const provider = btn.getAttribute('data-provider') || '';
+          const label = btn.getAttribute('data-label') || '';
+          if (!window.confirm('Hapus SEMUA key di grup "' + label + '"?')) return;
+          busy(true);
+          await pcKeyFetch('/api/my/keys/group', 'DELETE', { provider, key_name: label });
+          window.toast?.('Grup dihapus.');
+          await loadPcKeys();
+        }
+      } catch (e) { window.toast?.(e.message); }
+      finally { busy(false); }
     });
     // D-144: alur form jelas — pilih provider → ambil key (link) → tempel → deteksi model → simpan.
     const PC_KEY_LINKS = {
@@ -359,7 +427,7 @@
       try {
         const h = { 'Content-Type': 'application/json' };
         const t = await window.sherlyGetAccessToken?.(); if (t) h.Authorization = 'Bearer ' + t;
-        const res = await fetch('/api/my/keys', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key, base_url, model }) });
+        const res = await fetch('/api/my/keys', { method: 'POST', headers: h, body: JSON.stringify({ provider, api_key, base_url, model, label: $('pcKeyLabel')?.value.trim() || '' }) });
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
         if ($('pcKeySecret')) $('pcKeySecret').value = '';

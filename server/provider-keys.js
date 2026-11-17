@@ -57,6 +57,8 @@ export function toMeta(row) {
     id: row.id,
     provider: row.provider,
     key_name: row.key_name,
+    base_url: row.base_url || null,
+    model: row.model || null,
     last4: row.last4,
     priority: row.priority,
     is_active: row.is_active,
@@ -108,7 +110,7 @@ export function groupKeyRows(rows) {
 export async function listKeyRows(supabase) {
   const { data, error } = await supabase
     .from('ai_provider_keys')
-    .select('id,provider,key_name,last4,priority,is_active,health_status,consecutive_failures,last_used_at,last_failure_at,last_error,created_at,updated_at')
+    .select('id,provider,key_name,last4,priority,is_active,health_status,consecutive_failures,last_used_at,last_failure_at,last_error,created_at,updated_at,base_url,model')
     .order('provider', { ascending: true })
     .order('priority', { ascending: true })
     .order('created_at', { ascending: true });
@@ -177,7 +179,7 @@ export async function updateKey(supabase, id, { key_name, priority, is_active })
 }
 
 export async function deleteGroup(supabase, { provider, key_name }) {
-  if (!PROVIDERS.includes(provider) || typeof key_name !== 'string' || !key_name.trim()) {
+  if (![...PROVIDERS, ...PERSONAL_PROVIDERS].includes(provider) || typeof key_name !== 'string' || !key_name.trim()) {
     throw Object.assign(new Error('provider & key_name wajib valid.'), { status: 400 });
   }
   const { error } = await supabase.from('ai_provider_keys').delete().eq('provider', provider).eq('key_name', key_name);
@@ -186,9 +188,9 @@ export async function deleteGroup(supabase, { provider, key_name }) {
 }
 
 export async function rotateKey(supabase, id, api_key) {
-  const { data: current, error: getError } = await supabase.from('ai_provider_keys').select('provider').eq('id', id).maybeSingle();
+  const { data: current, error: getError } = await supabase.from('ai_provider_keys').select('provider,base_url').eq('id', id).maybeSingle();
   if (getError || !current) throw Object.assign(new Error('Key tidak ditemukan.'), { status: 404 });
-  const probe = await probeProviderKey(current.provider, api_key).catch(e => ({ ok: false, error: e.message }));
+  const probe = await probeProviderKey(current.provider, api_key, current.base_url).catch(e => ({ ok: false, error: e.message }));
   if (!probe.ok) {
     throw Object.assign(new Error(`Tes koneksi gagal — key lama TIDAK diganti. ${PROBE_LABEL[current.provider] || current.provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
   }
@@ -370,7 +372,7 @@ export async function pickReplacementModel(provider, apiKey, failedModel) {
 
 /** Connection test that needs NO specific model: lists models with the key (≈zero tokens).
  *  A key that is valid passes even if a particular model (e.g. gemini-2.5-flash) is retired. */
-export async function probeProviderKey(provider, apiKey) {
+export async function probeProviderKey(provider, apiKey, baseUrl) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 8) return { ok: false, error: 'API key tidak valid (kosong/terlalu pendek).' };
   const controller = AbortSignal.timeout(20000);
   const key = apiKey.trim();
@@ -386,7 +388,11 @@ export async function probeProviderKey(provider, apiKey) {
         signal: controller,
       });
     } else {
-      const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+      let base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1';
+      if (provider === 'custom') {
+        if (!baseUrl) return { ok: false, error: 'Base URL kustom tidak tersimpan pada key ini.' };
+        base = assertSafeBaseUrl(String(baseUrl).trim().replace(/\/+$/, '')).href.replace(/\/+$/, '');
+      }
       res = await fetch(`${base}/models`, {
         headers: {
           Authorization: `Bearer ${key}`,
@@ -405,7 +411,7 @@ export async function probeProviderKey(provider, apiKey) {
 }
 
 export async function testKey(supabase, id) {
-  const { data, error } = await supabase.from('ai_provider_keys').select('provider,ciphertext,iv,auth_tag').eq('id', id).maybeSingle();
+  const { data, error } = await supabase.from('ai_provider_keys').select('provider,base_url,ciphertext,iv,auth_tag').eq('id', id).maybeSingle();
   if (error || !data) throw Object.assign(new Error('Key tidak ditemukan.'), { status: 404 });
   let apiKey;
   try { apiKey = decryptSecret(data); }
@@ -413,7 +419,7 @@ export async function testKey(supabase, id) {
     await recordFailure(supabase, id, decryptError.message);
     return { ok: false, error: decryptError.message };
   }
-  const probe = await probeProviderKey(data.provider, apiKey);
+  const probe = await probeProviderKey(data.provider, apiKey, data.base_url);
   if (probe.ok) await recordSuccess(supabase, id);
   else await recordFailure(supabase, id, probe.error);
   return probe;
@@ -439,10 +445,12 @@ export async function listPersonalKeys(supabase) {
   return (data || []).map((r) => ({ id: r.id, provider: r.provider, last4: r.last4, base_url: r.base_url || null, model: r.model || null, is_active: r.is_active !== false, health_status: r.health_status || 'unknown', consecutive_failures: r.consecutive_failures ?? 0, created_at: r.created_at }));
 }
 
-export async function savePersonalKey(supabase, { provider, api_key, base_url, model, user_id }) {
+export async function savePersonalKey(supabase, { provider, api_key, base_url, model, label, user_id }) {
   if (!PERSONAL_PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus gemini, groq, openrouter, atau custom.'), { status: 400 });
   const key = String(api_key || '').trim();
   if (!key || key.length < 20 || key.length > 400) throw Object.assign(new Error('API key tidak valid (panjang 20-400 karakter).'), { status: 400 });
+  const labelChoice = String(label || '').trim() || 'pribadi';
+  if (labelChoice.length > 80) throw Object.assign(new Error('Label grup maksimal 80 karakter.'), { status: 400 });
   const modelChoice = String(model || '').trim();
   if (modelChoice.length > 120) throw Object.assign(new Error('Nama model maksimal 120 karakter.'), { status: 400 });
   let baseUrl = null;
@@ -469,7 +477,7 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
   }
   const enc = encryptSecret(key);
   const row = {
-    user_id, provider, key_name: 'pribadi',
+    user_id, provider, key_name: labelChoice,
     ciphertext: enc.ciphertext, iv: enc.iv, auth_tag: enc.auth_tag, last4: enc.last4,
     priority: 100, is_active: true,
     health_status: 'ok',
@@ -479,6 +487,19 @@ export async function savePersonalKey(supabase, { provider, api_key, base_url, m
   const { data, error } = await supabase.from('ai_provider_keys').insert(row).select('id,provider,last4,base_url,model,is_active,health_status,created_at').single();
   if (error) throw Object.assign(new Error(error.message), { status: 400 });
   return data;
+}
+
+// D-147: tandai satu key sebagai default provider-nya (prioritas 1, diaktifkan kembali).
+export async function setDefaultPersonalKey(supabase, id) {
+  const { data: current, error } = await supabase.from('ai_provider_keys').select('id,provider').eq('id', id).maybeSingle();
+  if (error || !current) throw Object.assign(new Error('Key tidak ditemukan.'), { status: 404 });
+  // turunkan semua key provider ini milik akun (RLS owner), lalu angkat key terpilih.
+  await supabase.from('ai_provider_keys').update({ priority: 100 }).eq('provider', current.provider).neq('id', id);
+  const { data, error: updError } = await supabase.from('ai_provider_keys')
+    .update({ priority: 1, is_active: true, consecutive_failures: 0, health_status: 'unknown', last_error: null })
+    .eq('id', id).select().single();
+  if (updError) throw Object.assign(new Error(updError.message), { status: 400 });
+  return toMeta(data);
 }
 
 export async function deletePersonalKey(supabase, id) {

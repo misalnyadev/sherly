@@ -9,7 +9,7 @@ import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImag
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
-import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 
@@ -410,7 +410,7 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     let errorMsg = error.message || 'AI provider request failed.';
     // D-142: tamu/klien tanpa kunci pribadi -> arahkan ke menu Kunci AI Pribadi.
     if (status === 503 && (req.user?.app_metadata?.role || 'guest') !== 'admin') {
-      errorMsg = 'Belum ada API key AI untuk akunmu. Buka halaman Profil, bagian "Kunci AI Pribadi", lalu simpan key milikmu (gemini / groq / openrouter / kustom) supaya bisa chat dengan Sherly.';
+      errorMsg = 'Belum ada API key AI untuk akunmu. Buka halaman Pengaturan Saya, bagian "Kunci AI Pribadi", lalu simpan key milikmu (gemini / groq / openrouter / kustom) supaya bisa chat dengan Sherly.';
     }
     res.status(status).json({ ok: false, error: errorMsg, ...(error.details ? { details: error.details } : {}) });
   }
@@ -621,11 +621,31 @@ const requireMemberOnly = (req, res, next) => {
   next();
 };
 app.get('/api/my/keys', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
-  return { keys: await listPersonalKeys(req.supabase) };
+  return { groups: await listKeyGroups(req.supabase) };
 }));
 app.post('/api/my/keys', requireUser, requireChatUser, requireMemberOnly, requireVault, wrapKeyRoute(async (req) => {
-  const { provider, api_key, base_url, model } = req.body || {};
-  return { key: await savePersonalKey(req.supabase, { provider, api_key, base_url, model, user_id: req.user.id }) };
+  const { provider, api_key, base_url, model, label } = req.body || {};
+  return { key: await savePersonalKey(req.supabase, { provider, api_key, base_url, model, label, user_id: req.user.id }) };
+}));
+// D-147 (ala aira/HeyTalent): test / edit / ganti key / set default / hapus grup.
+app.post('/api/my/keys/:id/test', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  return await testKey(req.supabase, req.params.id);
+}));
+app.put('/api/my/keys/:id', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  const { label, is_active } = req.body || {};
+  return { key: await updateKey(req.supabase, req.params.id, { key_name: label, is_active }) };
+}));
+app.put('/api/my/keys/:id/rotate', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  const { api_key } = req.body || {};
+  return await rotateKey(req.supabase, req.params.id, api_key);
+}));
+app.put('/api/my/keys/:id/default', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  return { key: await setDefaultPersonalKey(req.supabase, req.params.id) };
+}));
+app.delete('/api/my/keys/group', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
+  const { provider, key_name } = req.body || {};
+  await deleteGroup(req.supabase, { provider, key_name });
+  return { ok: true };
 }));
 app.delete('/api/my/keys/:id', requireUser, requireChatUser, requireMemberOnly, wrapKeyRoute(async (req) => {
   await deletePersonalKey(req.supabase, req.params.id);
