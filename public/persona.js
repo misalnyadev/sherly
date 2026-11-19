@@ -18,13 +18,13 @@
     // D-192: tata letak blogazine — masthead editorial, bio drop-cap, pilar bernomor.
     const mast =
       '<div class="bz-mast">'
-      + '<div class="bz-mast-top"><span class="bz-kicker">Brand &amp; Media Kit</span><span class="bz-script">' + esc(p.handle || '') + ' \u2726</span></div>'
+      + '<div class="bz-mast-top"><span class="bz-kicker">Brand &amp; Media Kit</span><span class="bz-script">' + esc(p.handle || '') + ' ' + icon('sherlyheart') + '</span></div>'
       + '<div class="bz-mast-main">'
       + '<img class="pe-ava" src="assets/sherly-portrait.png" alt="Sherly">'
       + '<div class="bz-mast-txt">'
-      + '<h1 class="bz-name">' + esc(p.name || 'Sherly') + ' <span class="star">\u2726</span></h1>'
+      + '<h1 class="bz-name">' + esc(p.name || 'Sherly') + ' ' + icon('sherlyheart') + '</h1>'
       + '<p class="bz-tagline">\u201c' + esc(p.tagline || '') + '\u201d</p>'
-      + '<div class="bz-byline"><span>' + esc(p.role || '') + '</span><i>\u2726</i><span>' + esc(p.location || '') + '</span><i>\u2726</i><span>' + esc(p.handle || '') + '</span></div>'
+      + '<div class="bz-byline"><span>' + esc(p.role || '') + '</span><i>' + icon('sherlyheart') + '</i><span>' + esc(p.location || '') + '</span><i>' + icon('sherlyheart') + '</i><span>' + esc(p.handle || '') + '</span></div>'
       + '<div class="pe-cta">'
       + '<a class="pink-btn" href="' + esc(p.instagram || '#') + '" target="_blank" rel="noopener">' + icon('arrow-up-right') + ' Instagram</a>'
       + '<button type="button" class="outline-btn" id="pePortfolioBtn">' + icon('gallery') + ' Lihat Portfolio</button>'
@@ -65,7 +65,7 @@
       + '</section>'
       + '</div>';
 
-    root.innerHTML = mast + bio + scriptDiv + grid + '<div class="bz-close">with love, ' + esc(p.name || 'Sherly') + ' \u2726</div>';
+    root.innerHTML = mast + bio + scriptDiv + grid + '<div class="bz-close">with love, ' + esc(p.name || 'Sherly') + ' ' + icon('sherlyheart') + '</div>';
 
     document.getElementById('pePortfolioBtn')?.addEventListener('click', () => window.go?.('Portfolio'));
     document.getElementById('peChatBtn')?.addEventListener('click', () => window.go?.('Chat Sherly'));
