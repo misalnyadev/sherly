@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Galeri Karya — SherlyStudio</title>
+<meta name="description" content="Galeri karya publik SherlyStudio — foto, reels, dan artikel hasil karya kreator.">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#170f20">
+<style>
+:root{--bg:#070b14;--panel:#101b2c;--panel2:#0a1220;--line:#1c2b40;--line2:#24344e;--pink:#f044a8;--pink2:#d82d91;--pinkdeep:#b02d80;--pinksoft:#ffd0ec;--text:#f4f5fb;--muted:#91a2b9;--muted2:#cfd6e4}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 500px at 80% -10%,#24142a,transparent),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--pinksoft);text-decoration:none}
+.g-head{padding:26px 20px 18px;max-width:1080px;margin:0 auto;width:100%}
+.g-brand{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:19px;letter-spacing:.2px;color:var(--text)}
+.g-brand b{background:linear-gradient(100deg,#ff72c5,#f044a8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.g-head p{color:var(--muted);font-size:13px;margin:8px 0 0}
+main{flex:1;width:100%;max-width:1080px;margin:0 auto;padding:10px 20px 40px}
+.g-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.g-card{display:flex;flex-direction:column;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;overflow:hidden;transition:transform .18s,border-color .18s}
+.g-card:hover{transform:translateY(-3px);border-color:var(--line2)}
+.g-card img,.g-ph{width:100%;aspect-ratio:4/3;object-fit:cover;background:#0f1828;display:block}
+.g-ph{display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--pink);background:linear-gradient(145deg,#160f20,#0f1828)}
+.g-info{padding:13px 14px 15px}
+.g-info h3{margin:0;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-info p{margin:5px 0 0;color:var(--muted);font-size:12.5px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.g-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:11px;color:var(--muted)}
+.g-chip{border:1px solid #49334e;border-radius:30px;padding:2px 9px;color:var(--pinksoft);font-size:10px}
+.g-empty{grid-column:1/-1;border:1px dashed #49334e;border-radius:14px;padding:40px 20px;text-align:center;color:var(--muted)}
+.g-detail{max-width:760px;margin:0 auto}
+.g-back{display:inline-block;margin-bottom:16px;font-size:13px;color:var(--muted)}
+.g-back:hover{color:var(--pinksoft)}
+.g-hero{width:100%;max-height:480px;object-fit:cover;border-radius:16px;border:1px solid var(--line);background:#0f1828}
+.g-detail h1{font-size:27px;margin:18px 0 8px;line-height:1.25}
+.g-caption{color:var(--muted2);font-size:15px;margin:14px 0 0}
+.g-body{margin-top:18px;border-top:1px solid var(--line);padding-top:6px}
+.g-body p{color:var(--muted2);font-size:15px;line-height:1.85;margin:14px 0}
+.g-share{display:flex;gap:9px;margin-top:24px;flex-wrap:wrap}
+.g-share button{border:0;border-radius:10px;padding:11px 18px;font:inherit;font-size:13.5px;cursor:pointer}
+#gCopyBtn{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff}
+#gShareBtn{background:transparent;border:1px solid var(--line2);color:var(--pinksoft)}
+.g-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0c1422f7;border:1px solid var(--line2);color:var(--text);border-radius:12px;padding:11px 18px;font-size:13px;z-index:50;box-shadow:0 10px 40px #0009;max-width:88vw;text-align:center}
+.g-foot{padding:20px;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+@media(max-width:560px){.g-detail h1{font-size:22px}}
+</style>
+</head>
+<body>
+<header class="g-head">
+  <a class="g-brand" href="/">✦ <b>SherlyStudio</b></a>
+  <p>Galeri karya publik — foto, reels, dan artikel. Dikelola lewat Cloud Publish.</p>
+</header>
+<main id="gMain"><div id="gFeed" class="g-grid"></div></main>
+<footer class="g-foot">Dibuat dengan SherlyStudio · <a href="/">Masuk ke Studio</a></footer>
+<div id="gToast" class="g-toast" hidden></div>
+<script src="/galeri.js"></script>
+</body>
+</html>

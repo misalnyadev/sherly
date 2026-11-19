@@ -1,6 +1,7 @@
-// Cloud Publish — galeri karya & jadwal tayang admin (D-155, PR 1).
+// Cloud Publish — galeri karya & jadwal tayang admin (D-155).
 // Sumber: Supabase published_posts (RLS owner) + bucket publik 'published' via /api/publish/posts.
 // Dipanggil go('Cloud Publish') -> window.loadPublish().
+// Editor & Planner memanggil window.sherlyPublishOpen({...}) untuk buka modal terisi (PR 2).
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -34,6 +35,24 @@
     if (p.status === 'scheduled' && p.publish_at) return 'tayang ' + new Date(p.publish_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     return 'diperbarui ' + relTime(p.updated_at);
   }
+  // Karya yang sudah terlihat di halaman publik (live, atau terjadwal yang waktunya tiba).
+  function isPubliclyVisible(p) {
+    if (p.status === 'live') return true;
+    if (p.status === 'scheduled' && p.publish_at) { const d = new Date(p.publish_at); return !isNaN(d) && d.getTime() <= Date.now(); }
+    return false;
+  }
+  function shareUrl(id) { return (location.origin || '') + '/galeri.html?id=' + encodeURIComponent(id); }
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch { return false; }
+  }
 
   function renderFilters() {
     const wrap = $('pbFilters'); if (!wrap) return;
@@ -51,19 +70,22 @@
       list.innerHTML = '<div class="empty-state">Belum ada karya di sini. Klik \u201CPublikasikan Karya\u201D untuk mengunggah hasil Editor/Studio-mu — atur jadwal tayangnya sekalian.</div>';
       return;
     }
-    list.innerHTML = shown.map((p) =>
-      '<div class="pb-card" data-id="' + esc(p.id) + '">'
+    list.innerHTML = shown.map((p) => {
+      const pub = isPubliclyVisible(p);
+      return '<div class="pb-card" data-id="' + esc(p.id) + '">'
       + (p.publicUrl ? '<img class="pb-thumb" src="' + esc(p.publicUrl) + '" alt="' + esc(p.title) + '" loading="lazy">' : '<div class="pb-thumb"></div>')
       + '<div class="pb-main"><h3>' + esc(p.title) + '</h3>'
       + (p.caption ? '<p>' + esc(p.caption) + '</p>' : '')
       + '<div class="pb-meta"><span class="chip">' + esc(CATEGORY_LABEL[p.category] || p.category) + '</span>'
       + '<span class="pb-st st-' + esc(p.status) + '">' + esc(STATUS_LABEL[p.status] || p.status) + '</span>'
-      + '<span class="pb-when">' + esc(whenLabel(p)) + '</span></div></div>'
+      + '<span class="pb-when">' + esc(whenLabel(p)) + (pub && p.viewCount ? ' · ' + Number(p.viewCount).toLocaleString('id-ID') + '× dilihat' : '') + '</span></div></div>'
       + '<div class="pb-side">'
       + (p.status !== 'live' ? '<button type="button" class="pb-act pb-live-act" data-act="live">Tayangkan</button>' : '')
       + (p.status === 'live' ? '<button type="button" class="pb-act" data-act="archive">Arsipkan</button>' : '')
+      + (pub ? '<button type="button" class="pb-act" data-act="share">Salin Link</button>' : '')
       + '<button type="button" class="pb-act" data-act="edit">Edit</button>'
-      + '</div></div>').join('');
+      + '</div></div>';
+    }).join('');
   }
 
   async function loadPublish() {
@@ -82,40 +104,52 @@
   window.loadPublish = loadPublish;
 
   // ---------- modal ----------
-  function applyStatusUi() {
+  function applyFormUi() {
     const st = $('pbStatus')?.value || 'draft';
     if ($('pbScheduleRow')) $('pbScheduleRow').hidden = st !== 'scheduled';
+    if ($('pbBodyRow')) $('pbBodyRow').hidden = ($('pbCategory')?.value || 'foto') !== 'artikel';
   }
-  function openModal(id) {
+  function openModal(id, prefill) {
     editingId = id || null;
     const p = id ? posts.find((x) => x.id === id) : null;
     $('pbModalTitle').textContent = p ? 'Edit Karya' : 'Publikasikan Karya';
-    $('pbTitle').value = p?.title || '';
-    $('pbCaption').value = p?.caption || '';
-    $('pbCategory').value = p?.category || 'foto';
+    $('pbTitle').value = (p?.title ?? prefill?.title ?? '') || '';
+    $('pbCaption').value = (p?.caption ?? prefill?.caption ?? '') || '';
+    $('pbCategory').value = p?.category || prefill?.category || 'foto';
     $('pbStatus').value = p?.status || 'draft';
     if (p?.publish_at) {
       const d = new Date(p.publish_at);
       $('pbPublishAt').value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     } else $('pbPublishAt').value = '';
-    pendingImage = null;
+    $('pbBody').value = (p?.body ?? prefill?.body ?? '') || '';
+    pendingImage = prefill?.image || null;
     if ($('pbImage')) $('pbImage').value = '';
     const hint = $('pbImageHint');
-    if (hint) hint.textContent = p ? 'Biarkan kosong untuk memakai gambar yang sudah ada.' : 'JPG/PNG/WebP maks 5 MB — hasil unduhan dari Editor juga bisa langsung diunggah.';
-    if ($('pbPreviewRow')) $('pbPreviewRow').hidden = true;
-    if ($('pbPreview')) $('pbPreview').removeAttribute('src');
+    if (hint) hint.textContent = p ? 'Biarkan kosong untuk memakai gambar yang sudah ada.' : (pendingImage ? 'Gambar sudah terlampir dari ' + (prefill?.from || 'karya') + ' — bisa diganti kalau mau.' : 'JPG/PNG/WebP maks 5 MB — hasil unduhan dari Editor juga bisa langsung diunggah.');
+    if (pendingImage) {
+      if ($('pbPreview')) $('pbPreview').src = pendingImage;
+      if ($('pbPreviewRow')) $('pbPreviewRow').hidden = false;
+    } else {
+      if ($('pbPreviewRow')) $('pbPreviewRow').hidden = true;
+      if ($('pbPreview')) $('pbPreview').removeAttribute('src');
+    }
     $('pbDeleteBtn').hidden = !p;
-    applyStatusUi();
+    applyFormUi();
     $('pbModal').classList.add('open');
     $('pbTitle')?.focus();
   }
   function closeModal() { $('pbModal')?.classList.remove('open'); editingId = null; pendingImage = null; }
 
+  // pintasan global: Editor (gambar hasil export) & Planner (naskah -> artikel).
+  window.sherlyPublishOpen = function sherlyPublishOpen(opts) { openModal(null, opts || {}); };
+
   $('pbAddBtn')?.addEventListener('click', () => openModal(null));
+  $('pbPublicLinkBtn')?.addEventListener('click', () => window.open('/galeri.html', '_blank'));
   $('pbCancelBtn')?.addEventListener('click', closeModal);
   $('pbModal')?.addEventListener('click', (e) => { if (e.target === $('pbModal')) closeModal(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
-  $('pbStatus')?.addEventListener('change', applyStatusUi);
+  $('pbStatus')?.addEventListener('change', applyFormUi);
+  $('pbCategory')?.addEventListener('change', applyFormUi);
   $('pbImage')?.addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) { pendingImage = null; if ($('pbPreviewRow')) $('pbPreviewRow').hidden = true; return; }
@@ -138,6 +172,7 @@
       category: $('pbCategory').value,
       status: $('pbStatus').value,
       publish_at: $('pbPublishAt').value || null,
+      body: ($('pbBody')?.value || '').trim() || null,
     };
     if (!payload.title) { window.toast?.('Judul karya belum diisi ya.'); $('pbTitle')?.focus(); return; }
     if (payload.status === 'scheduled' && !payload.publish_at) { window.toast?.('Pilih tanggal & jam tayangnya dulu.'); return; }
@@ -152,7 +187,7 @@
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
-      window.toast?.(payload.status === 'live' ? 'Karya tayang! 🎉' : payload.status === 'scheduled' ? 'Karya terjadwal — tayang otomatis di waktunya.' : 'Karya tersimpan.');
+      window.toast?.(payload.status === 'live' ? 'Karya tayang! Link publiknya bisa dibagikan.' : payload.status === 'scheduled' ? 'Karya terjadwal — tayang otomatis di waktunya.' : 'Karya tersimpan.');
       closeModal();
       await loadPublish();
     } catch (e) { window.toast?.(e.message); }
@@ -174,12 +209,17 @@
     finally { btn.disabled = false; }
   });
 
-  // aksi cepat kartu: Tayangkan / Arsipkan / Edit
+  // aksi cepat kartu: Tayangkan / Arsipkan / Salin Link / Edit
   $('pbList')?.addEventListener('click', async (e) => {
     const b = e.target.closest('.pb-act'); if (!b) return;
     const card = b.closest('.pb-card'); const id = card?.dataset.id || '';
     const act = b.dataset.act;
     if (act === 'edit') { openModal(id); return; }
+    if (act === 'share') {
+      const ok = await copyText(shareUrl(id));
+      window.toast?.(ok ? 'Link publik tersalin — tinggal dibagikan!' : 'Link: ' + shareUrl(id));
+      return;
+    }
     const p = posts.find((x) => x.id === id); if (!p) return;
     const next = act === 'live' ? 'live' : 'archived';
     b.disabled = true;
@@ -187,11 +227,11 @@
       const res = await fetch('/api/publish/posts/' + encodeURIComponent(id), {
         method: 'PUT',
         headers: await authHeaders(true),
-        body: JSON.stringify({ title: p.title, caption: p.caption || '', category: p.category, status: next, publish_at: p.publish_at || null }),
+        body: JSON.stringify({ title: p.title, caption: p.caption || '', category: p.category, status: next, publish_at: p.publish_at || null, body: p.body || null }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Gagal mengubah status.');
-      window.toast?.(next === 'live' ? 'Karya tayang! 🎉' : 'Karya diarsipkan.');
+      window.toast?.(next === 'live' ? 'Karya tayang! Link publiknya bisa dibagikan.' : 'Karya diarsipkan.');
       await loadPublish();
     } catch (e) { window.toast?.(e.message); b.disabled = false; }
   });

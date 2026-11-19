@@ -13,7 +13,7 @@ import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup,
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
-import { sanitizePostInput, parseImageDataUrl } from './published-posts.js';
+import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -879,14 +879,20 @@ app.delete('/api/planner/docs/:id', requireUser, requireAdmin, async (req, res) 
 });
 // ---------- Cloud Publish: galeri karya & jadwal (D-155) ----------
 const PUBLISH_BUCKET = 'published';
-const PUBLISH_COLS = 'id,title,caption,category,status,publish_at,storage_path,created_at,updated_at';
+const PUBLISH_COLS = 'id,title,caption,category,status,publish_at,storage_path,view_count,body,created_at,updated_at';
 function publishRow(r, supabase) {
   let publicUrl = '';
   try { const { data } = supabase.storage.from(PUBLISH_BUCKET).getPublicUrl(r.storage_path); publicUrl = (data && data.publicUrl) || ''; } catch {}
-  return { id: r.id, title: r.title, caption: r.caption, category: r.category, status: r.status, publish_at: r.publish_at, storage_path: r.storage_path, created_at: r.created_at, updated_at: r.updated_at, publicUrl };
+  return { id: r.id, title: r.title, caption: r.caption, category: r.category, status: r.status, publish_at: r.publish_at, storage_path: r.storage_path, viewCount: Number(r.view_count) || 0, body: r.body || null, created_at: r.created_at, updated_at: r.updated_at, publicUrl };
 }
 app.get('/api/publish/posts', requireUser, requireAdmin, async (req, res) => {
   try {
+    // Auto-live: karya terjadwal yang waktunya sudah lewat -> tandai Live (best effort).
+    try {
+      await req.supabase.from('published_posts')
+        .update({ status: 'live', updated_at: new Date().toISOString() })
+        .eq('user_id', req.user.id).eq('status', 'scheduled').lte('publish_at', new Date().toISOString());
+    } catch {}
     const { data, error } = await req.supabase.from('published_posts')
       .select(PUBLISH_COLS).eq('user_id', req.user.id).order('updated_at', { ascending: false }).limit(200);
     if (error) throw new Error('Tabel published_posts belum bisa diakses. Jalankan supabase/published_posts.sql di SQL Editor dulu.');
@@ -947,6 +953,39 @@ app.delete('/api/publish/posts/:id', requireUser, requireAdmin, async (req, res)
     const { error } = await req.supabase.from('published_posts').delete().eq('id', req.params.id).eq('user_id', req.user.id);
     if (error) return res.status(500).json({ error: error.message });
     if (existing.storage_path) { try { await req.supabase.storage.from(PUBLISH_BUCKET).remove([existing.storage_path]); } catch {} }
+    res.json({ ok: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+// ---------- Cloud Publish: feed publik tanpa login (D-155 PR 2) ----------
+const PUBLIC_FEED_COLS = 'id,title,caption,category,publish_at,storage_path,created_at,view_count,body';
+function publicBucketBase() { return String(process.env.SUPABASE_URL || '').replace(/\/+$/, ''); }
+app.get('/api/public/posts', async (req, res) => {
+  try {
+    if (!supabaseConfigured()) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
+    const sb = createPublicClient();
+    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    if (id) {
+      if (!isValidPostId(id)) return res.status(404).json({ error: 'Karya tidak ditemukan atau belum tayang.' });
+      const { data, error } = await sb.from('published_posts_public').select(PUBLIC_FEED_COLS).eq('id', id).maybeSingle();
+      if (error) throw new Error('Galeri publik belum bisa diakses. Jalankan supabase/published_posts_public.sql di SQL Editor dulu.');
+      if (!data) return res.status(404).json({ error: 'Karya tidak ditemukan atau belum tayang.' });
+      return res.json({ post: publicFeedRow(data, publicBucketBase()) });
+    }
+    const { data, error } = await sb.from('published_posts_public').select(PUBLIC_FEED_COLS).order('created_at', { ascending: false }).limit(60);
+    if (error) throw new Error('Galeri publik belum bisa diakses. Jalankan supabase/published_posts_public.sql di SQL Editor dulu.');
+    res.json({ posts: (data || []).map((r) => publicFeedRow(r, publicBucketBase())) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/public/posts/:id/view', async (req, res) => {
+  try {
+    if (!isValidPostId(req.params.id)) return res.status(404).json({ error: 'Karya tidak ditemukan.' });
+    if (!supabaseConfigured()) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
+    const sb = createPublicClient();
+    const { error } = await sb.rpc('increment_post_view', { p_id: req.params.id });
+    if (error) {
+      if (/does not exist|permission denied|row-level security/i.test(error.message)) return res.status(503).json({ error: 'Penayangan belum bisa dicatat. Jalankan supabase/published_posts_public.sql di SQL Editor dulu.' });
+      return res.status(500).json({ error: error.message });
+    }
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });

@@ -71,6 +71,7 @@
     if ($('edExportBtn')) $('edExportBtn').disabled = false;
     if ($('edChangeBtn')) $('edChangeBtn').hidden = false;
     if ($('edResetBtn')) $('edResetBtn').hidden = false;
+    if ($('edPublishBtn')) $('edPublishBtn').hidden = false;
     renderAll();
     window.toast?.('Foto masuk — atur rasio, filter, teks, dan sticker-mu.');
   };
@@ -348,49 +349,71 @@
     window.toast?.('Editing direset — foto kembali seperti awal.');
   });
 
+  // Render hasil akhir ke canvas — dipakai Unduh Hasil & Publikasikan (D-155 PR 2).
+  async function buildExportCanvas() {
+    const rw = RATIO_MAP[S.ratio] || [1, 1];
+    const LONG = 1440;
+    let W, H;
+    if (rw[0] >= rw[1]) { W = LONG; H = Math.round(LONG * rw[1] / rw[0]); } else { H = LONG; W = Math.round(LONG * rw[0] / rw[1]); }
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return { error: 'Browser ini tidak mendukung canvas — coba Chrome, Edge, atau Firefox terbaru.' };
+    const base = Math.max(W / S.imgW, H / S.imgH);
+    const t = base * S.zoom;
+    const panScale = W / fw;
+    const tx = (W - S.imgW * t) / 2 + S.x * panScale;
+    const ty = (H - S.imgH * t) / 2 + S.y * panScale;
+    let filterDipakai = true;
+    if ('filter' in ctx) { try { ctx.filter = buildFilter(); } catch { filterDipakai = false; } }
+    else filterDipakai = false;
+    ctx.drawImage($('edPhoto'), tx, ty, S.imgW * t, S.imgH * t);
+    if ('filter' in ctx) { try { ctx.filter = 'none'; } catch {} }
+    try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch {}
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    S.texts.forEach((it) => {
+      ctx.font = (FONT_WEIGHT[it.font] || 700) + ' ' + Math.round(it.size * H) + 'px ' + CANVAS_FONT[it.font];
+      ctx.fillStyle = it.color;
+      it.str.split('\n').forEach((line, i, arr) => ctx.fillText(line, it.x * W, it.y * H + (i - (arr.length - 1) / 2) * it.size * H * 1.15));
+    });
+    S.sticks.forEach((it) => {
+      ctx.font = Math.round(it.size * H) + 'px serif';
+      ctx.fillText(it.ch, it.x * W, it.y * H);
+    });
+    return { canvas, W, H, filterDipakai };
+  }
+
   $('edExportBtn')?.addEventListener('click', async () => {
     if (!S) return;
     const btn = $('edExportBtn');
     btn.disabled = true; btn.textContent = 'Menyiapkan…';
     try {
-      const rw = RATIO_MAP[S.ratio] || [1, 1];
-      const LONG = 1440;
-      let W, H;
-      if (rw[0] >= rw[1]) { W = LONG; H = Math.round(LONG * rw[1] / rw[0]); } else { H = LONG; W = Math.round(LONG * rw[0] / rw[1]); }
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext && canvas.getContext('2d');
-      if (!ctx) { window.toast?.('Browser ini tidak mendukung canvas — coba Chrome, Edge, atau Firefox terbaru.'); return; }
-      const base = Math.max(W / S.imgW, H / S.imgH);
-      const t = base * S.zoom;
-      const panScale = W / fw;
-      const tx = (W - S.imgW * t) / 2 + S.x * panScale;
-      const ty = (H - S.imgH * t) / 2 + S.y * panScale;
-      let filterDipakai = true;
-      if ('filter' in ctx) { try { ctx.filter = buildFilter(); } catch { filterDipakai = false; } }
-      else filterDipakai = false;
-      ctx.drawImage($('edPhoto'), tx, ty, S.imgW * t, S.imgH * t);
-      if ('filter' in ctx) { try { ctx.filter = 'none'; } catch {} }
-      try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch {}
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      S.texts.forEach((it) => {
-        ctx.font = (FONT_WEIGHT[it.font] || 700) + ' ' + Math.round(it.size * H) + 'px ' + CANVAS_FONT[it.font];
-        ctx.fillStyle = it.color;
-        it.str.split('\n').forEach((line, i, arr) => ctx.fillText(line, it.x * W, it.y * H + (i - (arr.length - 1) / 2) * it.size * H * 1.15));
-      });
-      S.sticks.forEach((it) => {
-        ctx.font = Math.round(it.size * H) + 'px serif';
-        ctx.fillText(it.ch, it.x * W, it.y * H);
-      });
-      const url = canvas.toDataURL('image/jpeg', 0.92);
+      const out = await buildExportCanvas();
+      if (out.error) { window.toast?.(out.error); return; }
+      const url = out.canvas.toDataURL('image/jpeg', 0.92);
       const a = document.createElement('a');
       a.href = url; a.download = 'sherly-editor-' + new Date().toISOString().slice(0, 10) + '-' + Date.now().toString(36) + '.jpg';
       document.body.appendChild(a); a.click(); a.remove();
-      window.toast?.('Hasil editing terunduh (' + W + '×' + H + ' px) — cek folder Download-mu.');
-      if (!filterDipakai) window.toast?.('Catatan: browser ini menerapkan filter di pratinjau saja.');
+      window.toast?.('Hasil editing terunduh (' + out.W + '×' + out.H + ' px) — cek folder Download-mu.');
+      if (!out.filterDipakai) window.toast?.('Catatan: browser ini menerapkan filter di pratinjau saja.');
     } finally {
       btn.disabled = false; btn.textContent = 'Unduh Hasil';
     }
+  });
+
+  // Publikasikan: hasil render Editor dibawa ke modal Cloud Publish (D-155 PR 2).
+  $('edPublishBtn')?.addEventListener('click', async () => {
+    if (!S) return;
+    if (!window.sherlyPublishOpen) { window.toast?.('Modul Cloud Publish belum siap.'); return; }
+    const btn = $('edPublishBtn');
+    btn.disabled = true;
+    try {
+      const out = await buildExportCanvas();
+      if (out.error) { window.toast?.(out.error); return; }
+      const url = out.canvas.toDataURL('image/jpeg', 0.92);
+      window.sherlyPublishOpen({ image: url, from: 'Editor' });
+      window.toast?.('Hasil Editor dilampirkan — lengkapi judulnya lalu Simpan.');
+    } finally { btn.disabled = false; }
   });
 
   // ---------- init statis ----------
