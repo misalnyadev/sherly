@@ -206,12 +206,8 @@
     const it = selectedItem();
     bar.hidden = !it;
     if (!it) return;
-    const isText = V.texts.some((x) => x.id === it.id);
-    if ($('veItemTextRow')) $('veItemTextRow').hidden = !isText;
-    if ($('veItemFontRow')) $('veItemFontRow').hidden = !isText;
-    if ($('veItemColors')) $('veItemColors').hidden = !isText;
-    if (isText && $('veItemText') && document.activeElement !== $('veItemText')) $('veItemText').value = it.str;
-    if (isText && $('veItemFont')) $('veItemFont').value = it.font;
+    if ($('veItemText') && document.activeElement !== $('veItemText')) $('veItemText').value = it.str;
+    if ($('veItemFont')) $('veItemFont').value = it.font;
     if ($('veItemSize')) $('veItemSize').value = String(Math.round(it.size * 1000) / 1000);
   }
 
@@ -327,8 +323,10 @@
       const [rw, rh] = String(V.ratio).split(':').map(Number);
       const avail = (stage.parentElement && stage.parentElement.clientWidth) || 360;
       const maxW = rw >= 1 ? avail : Math.min(400, avail);
-      // Tinggi pratinjau dibatasi ±44% layar (D-161) biar video & penggaris timeline terlihat bersamaan.
-      const maxH = Math.max(200, Math.round((window.innerHeight || 700) * 0.44));
+      // Tinggi pratinjau dibatasi biar video & penggaris timeline terlihat bersamaan:
+      // desktop (layout 2 kolom ala CapCut/OpenCut, D-162) ±60% layar, HP ±44% (D-161).
+      const desktop = (window.innerWidth || 0) >= 1024;
+      const maxH = Math.max(200, Math.round((window.innerHeight || 700) * (desktop ? 0.6 : 0.44)));
       const w = Math.max(120, Math.min(maxW, Math.round(maxH * rw / rh)));
       stage.style.width = w + 'px';
       stage.style.aspectRatio = String(V.ratio).replace(':', ' / ');
