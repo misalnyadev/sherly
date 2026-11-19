@@ -9,12 +9,23 @@
   const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', texts: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
 
   const readyClips = () => V.clips.filter((c) => c.ready);
   const fmtT = (x) => (CORE().fmtTime ? CORE().fmtTime(x) : String(x));
-  const filterCss = () => ((CORE().VE_FILTERS || []).find((f) => f[0] === V.filter) || ['', '', ''])[2];
+  // Filter = preset (chip ala CapCut) + penyesuaian manual (slider Cerah/Kontras/Saturasi/Rona).
+  const filterCss = () => {
+    const pre = ((CORE().VE_FILTERS || []).find((f) => f[0] === V.filter) || ['', '', ''])[2];
+    const a = V.adjust || {};
+    const parts = [];
+    if (pre) parts.push(pre);
+    if (Math.abs((a.bright ?? 1) - 1) > 1e-9) parts.push('brightness(' + a.bright + ')');
+    if (Math.abs((a.contrast ?? 1) - 1) > 1e-9) parts.push('contrast(' + a.contrast + ')');
+    if (Math.abs((a.sat ?? 1) - 1) > 1e-9) parts.push('saturate(' + a.sat + ')');
+    if (a.hue) parts.push('hue-rotate(' + a.hue + 'deg)');
+    return parts.join(' ');
+  };
 
   // ---------- tambah klip ----------
   function addFiles(files) {
@@ -181,6 +192,7 @@
       e.preventDefault();
       V.selItem = it.id;
       V.selClip = null;
+      setVeTab('text');
       renderOverlays(); renderClipBar();
       node.setPointerCapture?.(e.pointerId);
       const move = (ev) => {
@@ -312,9 +324,37 @@
 
   // ---------- bars & rows ----------
   function renderFilterRow() {
-    const sel = $('veFilter'); if (!sel) return;
-    sel.innerHTML = (CORE().VE_FILTERS || []).map(([k, l]) =>
-      '<option value="' + k + '"' + (k === V.filter ? ' selected' : '') + '>' + l + '</option>').join('');
+    const row = $('vePresets'); if (!row) return;
+    row.innerHTML = (CORE().VE_FILTERS || []).map(([k, l]) =>
+      '<button type="button" class="ve-fchip' + (k === V.filter ? ' active' : '') + '" data-f="' + k + '">' + l + '</button>').join('');
+    row.querySelectorAll('.ve-fchip').forEach((b) => b.addEventListener('click', () => {
+      V.filter = b.dataset.f;
+      applyStage();
+      renderFilterRow();
+    }));
+  }
+
+  // ---------- tab panel kanan (ala CapCut) ----------
+  function setVeTab(name) {
+    V.tab = name;
+    document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    const f = $('veTabFilter'); if (f) f.hidden = name !== 'filter';
+    const t = $('veTabText'); if (t) t.hidden = name !== 'text';
+  }
+
+  // ---------- penyesuaian manual (slider) ----------
+  const ADJ_SLIDERS = [
+    ['veAdjBright', 'bright', 'veAdjBrightVal', 2],
+    ['veAdjContrast', 'contrast', 'veAdjContrastVal', 2],
+    ['veAdjSat', 'sat', 'veAdjSatVal', 2],
+    ['veAdjHue', 'hue', 'veAdjHueVal', 0],
+  ];
+  function syncAdjustUi() {
+    for (const [sid, key, vid, dec] of ADJ_SLIDERS) {
+      const inp = $(sid); const lab = $(vid);
+      if (inp) inp.value = String(V.adjust[key]);
+      if (lab) lab.textContent = Number(V.adjust[key]).toFixed(dec);
+    }
   }
   function applyStage() {
     const stage = $('veStage'); const el = $('veVideo');
@@ -551,7 +591,20 @@
   $('veAddInline')?.addEventListener('click', () => $('veFile')?.click());
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
-  $('veFilter')?.addEventListener('change', (e) => { V.filter = e.target.value || 'normal'; applyStage(); });
+  document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.addEventListener('click', () => setVeTab(b.dataset.tab)));
+  for (const [sid, key, vid, dec] of ADJ_SLIDERS) {
+    const inp = $(sid); if (!inp) continue;
+    inp.addEventListener('input', () => {
+      V.adjust[key] = Number(inp.value) || 0;
+      const lab = $(vid); if (lab) lab.textContent = V.adjust[key].toFixed(dec);
+      applyStage();
+    });
+  }
+  $('veAdjReset')?.addEventListener('click', () => {
+    V.filter = 'normal';
+    V.adjust = { bright: 1, contrast: 1, sat: 1, hue: 0 };
+    renderFilterRow(); syncAdjustUi(); applyStage();
+  });
   $('veExportBtn')?.addEventListener('click', () => exportVideo());
   $('vePlayBtn')?.addEventListener('click', () => {
     const ready = readyClips();
@@ -570,6 +623,7 @@
   $('veAddText')?.addEventListener('click', () => {
     V.texts.push({ id: 't' + (++uid), str: 'Teks baru', font: 'Inter', size: 0.06, color: '#ffffff', x: 0.5, y: 0.82 });
     V.selItem = V.texts[V.texts.length - 1].id;
+    setVeTab('text');
     renderOverlays();
     $('veItemText')?.focus();
   });
@@ -649,6 +703,7 @@
     const sel = $('veItemFont');
     if (sel) sel.innerHTML = ((CORE().VFONTS || {}).list || []).map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('');
     renderFilterRow();
+    syncAdjustUi();
     requestAnimationFrame(tick);
   })();
 })();

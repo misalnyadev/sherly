@@ -334,7 +334,17 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-panel{background:#0f1828;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .ve-panel-title{font-size:10px;color:#91a2b9;text-transform:uppercase;letter-spacing:.6px;margin:0}
 .ve-field{display:flex;flex-direction:column;gap:4px}
-.ve-field>label{font-size:11px;color:#cfd6e4}
+.ve-field>label{font-size:11px;color:#cfd6e4;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ve-tabs{display:flex;gap:6px;background:#0a1220;border:1px solid var(--line);border-radius:10px;padding:4px}
+.ve-tab{flex:1;border:0;background:transparent;color:#91a2b9;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
+.ve-tab.active{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;font-weight:700}
+.ve-tabpane{display:flex;flex-direction:column;gap:10px}
+.ve-presets{display:flex;flex-wrap:wrap;gap:6px}
+.ve-fchip{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:6px 13px;font:inherit;font-size:11.5px;cursor:pointer}
+.ve-fchip.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent}
+.ve-adj-val{color:#ffd0ec;font-variant-numeric:tabular-nums}
+.ve-tab-hint{font-size:11px;color:#91a2b9;margin:0}
+#veItemBar{display:flex;flex-direction:column;gap:10px}
 .ve-field .ve-item-select,.ve-field .ve-item-input{width:100%}
 .ve-tl-zone{display:flex;flex-direction:column;gap:6px;order:2}
 .ve-tl-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
@@ -957,18 +967,30 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     </div>
     <aside class="ve-side">
       <div class="ve-panel">
-        <h3 class="ve-panel-title">Opsi Video</h3>
         <div class="ve-field"><label for="veRatio">Rasio kanvas</label><select id="veRatio" class="ve-item-select" aria-label="Rasio video"><option value="9:16">9:16 · Reels</option><option value="1:1">1:1 · Feed</option><option value="4:5">4:5 · Feed</option><option value="16:9">16:9 · YouTube</option></select></div>
-        <div class="ve-field"><label for="veFilter">Filter</label><select id="veFilter" class="ve-item-select" aria-label="Filter video"></select></div>
-        <button type="button" class="ve-btn" id="veAddText">+ Teks</button>
-      </div>
-      <div class="ve-panel" id="veItemBar" hidden>
-        <h3 class="ve-panel-title">Edit Teks</h3>
-        <div class="ve-field"><label for="veItemText">Tulis teksnya</label><input id="veItemText" class="ve-item-input" maxlength="300" placeholder="Teks di video…"></div>
-        <div class="ve-field"><label for="veItemFont">Font</label><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></div>
-        <div class="ve-field"><label>Warna</label><div class="ve-row" id="veItemColors" style="gap:5px"></div></div>
-        <div class="ve-field"><label for="veItemSize">Ukuran</label><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:100%" aria-label="Ukuran"></div>
-        <button type="button" class="ve-btn danger" id="veItemDel">Hapus teks</button>
+        <div class="ve-tabs">
+          <button type="button" class="ve-tab active" data-tab="filter">Filter</button>
+          <button type="button" class="ve-tab" data-tab="text">Teks</button>
+        </div>
+        <div class="ve-tabpane" id="veTabFilter">
+          <div class="ve-presets" id="vePresets"></div>
+          <div class="ve-field"><label>Cerah <span class="ve-adj-val" id="veAdjBrightVal">1.00</span></label><input id="veAdjBright" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-label="Cerah"></div>
+          <div class="ve-field"><label>Kontras <span class="ve-adj-val" id="veAdjContrastVal">1.00</span></label><input id="veAdjContrast" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-label="Kontras"></div>
+          <div class="ve-field"><label>Saturasi <span class="ve-adj-val" id="veAdjSatVal">1.00</span></label><input id="veAdjSat" type="range" min="0" max="2" step="0.05" value="1" aria-label="Saturasi"></div>
+          <div class="ve-field"><label>Rona warna <span class="ve-adj-val" id="veAdjHueVal">0</span></label><input id="veAdjHue" type="range" min="-30" max="30" step="1" value="0" aria-label="Rona warna"></div>
+          <button type="button" class="ve-btn" id="veAdjReset">↺ Reset filter</button>
+        </div>
+        <div class="ve-tabpane" id="veTabText" hidden>
+          <button type="button" class="ve-btn" id="veAddText">+ Tambah teks</button>
+          <div id="veItemBar" hidden>
+            <div class="ve-field"><label for="veItemText">Tulis teksnya</label><input id="veItemText" class="ve-item-input" maxlength="300" placeholder="Teks di video…"></div>
+            <div class="ve-field"><label for="veItemFont">Font</label><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></div>
+            <div class="ve-field"><label>Warna</label><div class="ve-row" id="veItemColors" style="gap:5px"></div></div>
+            <div class="ve-field"><label for="veItemSize">Ukuran</label><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:100%" aria-label="Ukuran"></div>
+            <button type="button" class="ve-btn danger" id="veItemDel">Hapus teks</button>
+          </div>
+          <p class="ve-tab-hint">Tambah teks, lalu seret teksnya di video untuk memindahkan.</p>
+        </div>
       </div>
     </aside>
     <div class="ve-tl-zone">
