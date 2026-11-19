@@ -7,6 +7,18 @@
   const CORE = () => window.VE_CORE || {};
   const COLORS = ['#ffffff', '#0a1220', '#ffd0ec', '#f044a8'];
   const pxPerSec = () => (V.zoom || 90); // lebar timeline per detik — diatur zoom (D-167)
+  // Ikon outline konsisten (D-169): konten dinamis pakai data-icon lalu dipasang svg-nya di sini
+  // (renderer global di index.html hanya jalan sekali saat halaman dimuat).
+  const veIcon = (k) => '<span data-icon="' + k + '" aria-hidden="true"></span>';
+  function paintVeIcons(scope) {
+    (scope || document).querySelectorAll('[data-icon]').forEach((el) => {
+      const key = el.getAttribute('data-icon');
+      if (!key || el.firstChild) return;
+      const table = (typeof ICONS !== 'undefined' && ICONS) || window.ICONS || {};
+      const paths = table[key];
+      if (paths) el.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+    });
+  }
   // Durasi efektif di timeline = (end-start)/kecepatan (D-168). Core tetap murni (unit test utuh).
   const effDur = (c) => Math.max(0, ((Number(c.end) || 0) - (Number(c.start) || 0))) / (c.rate || 1);
   const effList = () => readyClips().map((c) => ({ start: 0, end: effDur(c) }));
@@ -186,7 +198,8 @@
 
   function updatePlayBtn() {
     const b = $('vePlayBtn'); if (!b) return;
-    b.textContent = V.playing ? '⏸' : '▶';
+    b.innerHTML = veIcon(V.playing ? 'pause' : 'play');
+    paintVeIcons(b);
     b.setAttribute('aria-label', V.playing ? 'Jeda' : 'Putar');
   }
 
@@ -340,11 +353,11 @@
     const sel = V.selClip === c.id ? ' sel' : '';
     const inner = c.ready
       ? (c.thumb ? '<img src="' + c.thumb + '" alt="" draggable="false">' : '')
-        + (c.muted ? '<span class="ve-mute-badge">🔇</span>' : '')
+        + (c.muted ? '<span class="ve-mute-badge">' + veIcon('volume-x') + '</span>' : '')
         + '<span class="ve-clip-len">' + fmtT(len) + '</span>'
       : '<span class="ve-clip-len">Memuat…</span>';
     return '<div class="ve-clip' + sel + '" data-i="' + i + '" style="width:' + w + 'px">' + inner
-      + (c.ready ? '<span class="ve-grip grip-l" data-grip="l" title="Tarik untuk potong awal">⋮⋮</span><span class="ve-grip grip-r" data-grip="r" title="Tarik untuk potong akhir">⋮⋮</span>' : '')
+      + (c.ready ? '<span class="ve-grip grip-l" data-grip="l" data-icon="grip-vertical" title="Tarik untuk potong awal"></span><span class="ve-grip grip-r" data-grip="r" data-icon="grip-vertical" title="Tarik untuk potong akhir"></span>' : '')
       + '</div>';
   }
   // Penggaris waktu ala CapCut di atas timeline + garis playhead.
@@ -423,6 +436,7 @@
         });
       });
     });
+    paintVeIcons($('veTlBody'));
     renderClipBar();
     renderBin();
     renderRuler();
@@ -438,8 +452,9 @@
       return '<button type="button" class="ve-bin-item' + (V.selClip === c.id ? ' sel' : '') + '" data-i="' + i + '">'
         + '<img src="' + (c.thumb || '') + '" alt="">'
         + '<span class="ve-bin-meta"><span class="ve-bin-name">' + (c.name || 'klip') + '</span>'
-        + '<span class="ve-bin-sub">' + len + (c.muted ? ' · 🔇' : '') + '</span></span></button>';
+        + '<span class="ve-bin-sub">' + len + (c.muted ? ' · ' + veIcon('volume-x') : '') + '</span></span></button>';
     }).join('');
+    paintVeIcons(list);
     list.querySelectorAll('.ve-bin-item').forEach((b) => b.addEventListener('click', () => {
       const c = V.clips[Number(b.dataset.i)]; if (!c || !c.ready) return;
       V.selClip = c.id; V.selItem = null;
@@ -453,21 +468,20 @@
     const c = V.clips.find((x) => x.id === V.selClip);
     bar.hidden = !c;
     if (!c) return;
-    if ($('veClipMute')) $('veClipMute').textContent = c.muted ? '🔇 Suara mati' : '🔊 Ada suara';
+    const mb = $('veClipMute');
+    if (mb) { mb.innerHTML = veIcon(c.muted ? 'volume-x' : 'volume-2') + ' ' + (c.muted ? 'Suara mati' : 'Ada suara'); paintVeIcons(mb); }
     if ($('veClipRate')) $('veClipRate').value = String(c.rate || 1);
     if ($('veClipFade')) $('veClipFade').classList.toggle('on', !!c.fade);
   }
 
   // ---------- bars & rows ----------
   function renderFilterRow() {
-    const row = $('vePresets'); if (!row) return;
-    row.innerHTML = (CORE().VE_FILTERS || []).map(([k, l]) =>
-      '<button type="button" class="ve-fchip' + (k === V.filter ? ' active' : '') + '" data-f="' + k + '">' + l + '</button>').join('');
-    row.querySelectorAll('.ve-fchip').forEach((b) => b.addEventListener('click', () => {
-      V.filter = b.dataset.f;
-      applyStage();
-      renderFilterRow();
-    }));
+    const sel = $('veFilterSel'); if (!sel) return;
+    const fs = CORE().VE_FILTERS || [];
+    if (sel.options.length !== fs.length) {
+      sel.innerHTML = fs.map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('');
+    }
+    sel.value = V.filter || 'normal';
   }
 
   // ---------- tab panel kanan (ala CapCut) ----------
@@ -780,7 +794,7 @@
     V.clips.splice(i + 1, 0, { ...c, id: 'c' + (++uid), start: parts.right.start, end: parts.right.end });
     V.selClip = c.id;
     renderAll();
-    window.toast?.('Klip dibagi dua ✂ — tap bagian yang tidak perlu lalu Hapus, atau trim lagi.');
+    window.toast?.('Klip dibagi dua — tap bagian yang tidak perlu lalu Hapus, atau trim lagi.');
   });
 
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
@@ -793,6 +807,11 @@
   $('veZoom')?.addEventListener('input', (e) => setZoom(Number(e.target.value) || 90));
   $('veZoomIn')?.addEventListener('click', () => setZoom((V.zoom || 90) + 30));
   $('veZoomOut')?.addEventListener('click', () => setZoom((V.zoom || 90) - 30));
+  $('veFilterSel')?.addEventListener('change', (e) => {
+    V.filter = e.target.value || 'normal';
+    applyStage();
+    window.toast?.('Filter "' + (e.target.selectedOptions && e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : V.filter) + '" dipakai di pratinjau & ekspor.');
+  });
 
   // ---------- musik & volume (D-168) ----------
   function addMusicFile(f) {
@@ -890,7 +909,7 @@
       if (!blob || !blob.size) { window.toast?.('Rekaman kosong — coba lagi.'); return; }
       const f = new File([blob], 'rekaman-kamera.' + (type.indexOf('mp4') >= 0 ? 'mp4' : 'webm'), { type: type.split(';')[0] });
       addFiles([f]);
-      window.toast?.('Rekaman jadi klip baru — potong & susun di timeline ✨');
+      window.toast?.('Rekaman jadi klip baru — potong & susun di timeline.');
     };
     camRec.start(500);
     if ($('veCamRec')) $('veCamRec').hidden = true;
