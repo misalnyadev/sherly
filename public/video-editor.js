@@ -1,16 +1,15 @@
 // Editor Video ala CapCut/IG Edits (D-158) — HP-friendly, semua diproses di perangkat.
-// Multi-klip + trim + filter + teks/sticker + ekspor via MediaRecorder (webm/mp4).
+// Multi-klip + trim + filter + teks + ekspor via MediaRecorder (webm/mp4).
 // Helper murni ada di video-editor-core.js (window.VE_CORE). Dipanggil go('Editor Video') -> window.renderVideoEditor().
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const CORE = () => window.VE_CORE || {};
-  const EMOJIS = ['😍', '🥰', '😂', '😎', '🤍', '✨', '🔥', '💖', '🌸', '🎀', '🦋', '💫', '🖤', '🌝', '🥂', '☕'];
   const COLORS = ['#ffffff', '#0a1220', '#ffd0ec', '#f044a8'];
   const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], sticks: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
 
   const readyClips = () => V.clips.filter((c) => c.ready);
@@ -154,26 +153,20 @@
     b.setAttribute('aria-label', V.playing ? 'Jeda' : 'Putar');
   }
 
-  // ---------- overlay teks & sticker ----------
+  // ---------- overlay teks ----------
   function renderOverlays() {
     const stage = $('veStage'); if (!stage) return;
     stage.querySelectorAll('.ve-it').forEach((n) => n.remove());
     const H = stage.clientHeight || 1;
-    const items = [
-      ...V.texts.map((it) => ({ it, kind: 'text' })),
-      ...V.sticks.map((it) => ({ it, kind: 'stick' })),
-    ];
-    for (const { it, kind } of items) {
+    for (const it of V.texts) {
       const d = document.createElement('div');
       d.className = 've-it' + (V.selItem === it.id ? ' sel' : '');
       d.dataset.veId = it.id;
-      if (kind === 'text') {
-        d.textContent = it.str;
-        const F = CORE().VFONTS || { family: {}, weight: {} };
-        d.style.fontFamily = F.family[it.font] || 'Inter, Arial, sans-serif';
-        d.style.fontWeight = F.weight[it.font] || 700;
-        d.style.color = it.color;
-      } else { d.textContent = it.ch; }
+      d.textContent = it.str;
+      const F = CORE().VFONTS || { family: {}, weight: {} };
+      d.style.fontFamily = F.family[it.font] || 'Inter, Arial, sans-serif';
+      d.style.fontWeight = F.weight[it.font] || 700;
+      d.style.color = it.color;
       d.style.fontSize = Math.max(10, Math.round(it.size * H)) + 'px';
       d.style.left = (it.x * 100) + '%';
       d.style.top = (it.y * 100) + '%';
@@ -206,7 +199,7 @@
   }
 
   function selectedItem() {
-    return V.texts.find((x) => x.id === V.selItem) || V.sticks.find((x) => x.id === V.selItem) || null;
+    return V.texts.find((x) => x.id === V.selItem) || null;
   }
   function renderItemBar() {
     const bar = $('veItemBar'); if (!bar) return;
@@ -324,30 +317,22 @@
 
   // ---------- bars & rows ----------
   function renderFilterRow() {
-    const row = $('veFilters'); if (!row) return;
-    row.innerHTML = (CORE().VE_FILTERS || []).map(([k, l]) =>
-      '<button type="button" class="ve-fchip' + (k === V.filter ? ' active' : '') + '" data-f="' + k + '">' + l + '</button>').join('');
-    row.querySelectorAll('.ve-fchip').forEach((b) => b.addEventListener('click', () => {
-      V.filter = b.dataset.f;
-      applyStage();
-      renderFilterRow();
-    }));
-  }
-  function renderStickerRow() {
-    const row = $('veStickers'); if (!row) return;
-    row.innerHTML = EMOJIS.map((c) => '<button type="button" class="ve-emoji" data-ch="' + c + '">' + c + '</button>').join('');
-    row.querySelectorAll('.ve-emoji').forEach((b) => b.addEventListener('click', () => {
-      V.sticks.push({ id: 's' + (++uid), ch: b.dataset.ch, size: 0.12, x: 0.5, y: 0.5 });
-      V.selItem = V.sticks[V.sticks.length - 1].id;
-      renderOverlays();
-    }));
+    const sel = $('veFilter'); if (!sel) return;
+    sel.innerHTML = (CORE().VE_FILTERS || []).map(([k, l]) =>
+      '<option value="' + k + '"' + (k === V.filter ? ' selected' : '') + '>' + l + '</option>').join('');
   }
   function applyStage() {
     const stage = $('veStage'); const el = $('veVideo');
     if (stage) {
+      const [rw, rh] = String(V.ratio).split(':').map(Number);
+      const avail = (stage.parentElement && stage.parentElement.clientWidth) || 360;
+      const maxW = rw >= 1 ? avail : Math.min(400, avail);
+      // Tinggi pratinjau dibatasi ±44% layar (D-161) biar video & penggaris timeline terlihat bersamaan.
+      const maxH = Math.max(200, Math.round((window.innerHeight || 700) * 0.44));
+      const w = Math.max(120, Math.min(maxW, Math.round(maxH * rw / rh)));
+      stage.style.width = w + 'px';
       stage.style.aspectRatio = String(V.ratio).replace(':', ' / ');
-      const [rw] = String(V.ratio).split(':').map(Number);
-      stage.style.maxWidth = rw >= 1 ? '100%' : '400px';
+      stage.style.maxWidth = 'none';
     }
     if (el) el.style.filter = filterCss() || 'none';
   }
@@ -392,10 +377,6 @@
       ctx.font = (F.weight[it.font] || 700) + ' ' + Math.round(it.size * H) + 'px ' + (F.family[it.font] || 'Inter, Arial, sans-serif');
       ctx.fillStyle = it.color;
       it.str.split('\n').forEach((line, i, arr) => ctx.fillText(line, it.x * W, it.y * H + (i - (arr.length - 1) / 2) * it.size * H * 1.15));
-    });
-    V.sticks.forEach((it) => {
-      ctx.font = Math.round(it.size * H) + 'px serif';
-      ctx.fillText(it.ch, it.x * W, it.y * H);
     });
   }
   async function exportVideo() {
@@ -572,6 +553,7 @@
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
+  $('veFilter')?.addEventListener('change', (e) => { V.filter = e.target.value || 'normal'; applyStage(); });
   $('veExportBtn')?.addEventListener('click', () => exportVideo());
   $('vePlayBtn')?.addEventListener('click', () => {
     const ready = readyClips();
@@ -620,7 +602,6 @@
   })();
   $('veItemDel')?.addEventListener('click', () => {
     V.texts = V.texts.filter((x) => x.id !== V.selItem);
-    V.sticks = V.sticks.filter((x) => x.id !== V.selItem);
     V.selItem = null;
     renderOverlays();
   });
@@ -663,13 +644,12 @@
     else used = false;
     if (used) { e.preventDefault(); renderOverlays(); }
   });
-  window.addEventListener('resize', () => { if ($('veWrap') && !$('veWrap').hidden) renderOverlays(); });
+  window.addEventListener('resize', () => { if ($('veWrap') && !$('veWrap').hidden) { applyStage(); renderOverlays(); } });
 
   // label grip & hint interaktif
   (function init() {
     const sel = $('veItemFont');
     if (sel) sel.innerHTML = ((CORE().VFONTS || {}).list || []).map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('');
-    renderStickerRow();
     renderFilterRow();
     requestAnimationFrame(tick);
   })();
