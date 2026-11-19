@@ -180,6 +180,7 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .pc-key-getlink a:hover{color:#ffd0ec}
 .profile-actions{display:flex;gap:10px;flex-wrap:wrap}
 #pfClientGrid input:disabled{opacity:.6;cursor:not-allowed}
+#pfAccountType:disabled{opacity:.75;cursor:not-allowed;border-style:dashed}
 .side-nav-btn{display:flex;align-items:center;gap:12px;width:100%;background:transparent;border:1px solid transparent;border-radius:9px;padding:8px 11px;color:#cfd6e4;cursor:pointer;font:inherit;font-size:13px;text-align:left;transition:border-color .18s,background .18s,box-shadow .18s}
 .side-nav-btn:hover{background:#111a2e;border-color:#49334e;box-shadow:0 0 0 3px #f044a814;color:#fff}
 .side-nav-btn.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);box-shadow:0 7px 24px #f044a825;color:white;border-color:transparent}
@@ -756,7 +757,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
       <div class="form-field"><label for="pfFullName">Nama lengkap</label><input id="pfFullName" maxlength="120" placeholder="Hana Syahira"></div>
       <div class="form-field"><label for="pfDisplayName">Nama tampil</label><input id="pfDisplayName" maxlength="80" placeholder="Hansya"></div>
       <div class="form-field"><label for="pfGender">Jenis kelamin</label><select id="pfGender"><option value="">— pilih —</option><option value="pria">Pria</option><option value="wanita">Wanita</option></select></div>
-      <div class="form-field"><label for="pfAccountType">Jenis akun</label><select id="pfAccountType"><option>Kreator</option><option>Client</option><option>Brand</option><option>Tim Internal</option></select></div>
+      <div class="form-field"><label for="pfAccountType">Jenis akun</label><input id="pfAccountType" disabled><small>Otomatis — terkunci mengikuti jenis akun login-mu: Pemilik, Klien, atau Tamu.</small></div>
       <div class="form-field"><label for="pfRole">Peran / Jabatan</label><input id="pfRole" maxlength="120" placeholder="Owner"></div>
       <div class="form-field full"><label for="pfCompany">Perusahaan / Brand</label><input id="pfCompany" maxlength="120" placeholder="AK Production"></div>
       <div class="form-field full"><label for="pfBio">Bio singkat</label><textarea id="pfBio" maxlength="600" placeholder="Synthetic fictional persona · AI Influencer&#10;Built with SherlyStudio · Career developed in AK Production&#10;Stories and collaborations are creative works."></textarea></div>
