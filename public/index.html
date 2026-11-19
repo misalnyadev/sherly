@@ -14,6 +14,9 @@
 <style>
 :root{--bg:#070b14;--panel:#0c1422;--panel2:#101b2c;--line:#1c2b40;--muted:#91a2b9;--text:#f4f5fb;--pink:#f044a8;--pink2:#ff72c5;--shadow:0 16px 42px #0008;--panel-hover:#111a2e;--well:#0f1828;--panel-deep:#0a1220;--plum:#24142a;--plum-deep:#160f20;--pink-ink:#311738;--plum-nav:#5b1f4e;--line-2:#24344e;--line-pink:#49334e;--line-btn:#74436c;--pink3:#ff9bdc;--pink-soft:#ffd0ec;--pink-hot:#d82d91;--pink-deep:#b02d80;--pink-royal:#9b1c67;--text2:#cfd6e4;--muted2:#a9b8cd;--dim:#5d6f88}
 @font-face{font-family:'Sacramento';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/sacramento-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Bebas Neue';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/bebas-neue-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Lora';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/lora-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Archivo Black';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/archivo-black-latin-400-normal.woff2') format('woff2')}
 @font-face{font-family:'Caveat';font-style:normal;font-weight:700;font-display:swap;src:url('assets/fonts/caveat-latin-700-normal.woff2') format('woff2')}
 @font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('assets/fonts/inter-latin-wght-normal.woff2') format('woff2-variations')}
 *{box-sizing:border-box}::-webkit-scrollbar{width:0;height:0;display:none}html{scrollbar-width:none;-ms-overflow-style:none}*{scrollbar-width:none;-ms-overflow-style:none}body{margin:0;background:radial-gradient(ellipse at 56% -20%,#24142a 0,transparent 38%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -303,11 +306,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .pl-tab.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent;box-shadow:0 7px 24px #f044a825}
 .ed-work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
 .ed-stage-wrap{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.ed-stage{position:relative;overflow:hidden;border-radius:12px;background:#0a1220;user-select:none;touch-action:none;cursor:grab;max-width:100%}
+.ed-stage{position:relative;overflow:hidden;border-radius:12px;background:#0a1220;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;cursor:grab;max-width:100%}
 .ed-stage:active{cursor:grabbing}
 .ed-stage img{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;max-width:none;image-rendering:auto}
 .ed-ol{position:absolute;inset:0}
-.ed-it{position:absolute;transform:translate(-50%,-50%);cursor:move;line-height:1.12;white-space:pre;text-shadow:0 1px 6px #00000080}
+.ed-it{position:absolute;transform:translate(-50%,-50%);cursor:move;line-height:1.12;white-space:pre;text-shadow:0 1px 6px #00000080;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .ed-it.sel{outline:1.5px dashed #ff9bdc;outline-offset:4px;border-radius:2px}
 .ed-stage-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;width:100%}
 .ed-ratio{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:10px;padding:5px 10px;font:inherit;font-size:10.5px;cursor:pointer;text-align:center}
@@ -336,6 +339,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ed-selbox{display:grid;gap:8px}
 .ed-selbox input[type=text]{background:#0f1828;color:#fff;border:1px solid #24344e;border-radius:9px;padding:8px 10px;font:inherit;font-size:12px}
 .ed-swatches{display:flex;gap:6px}
+.ed-nudge{display:flex;gap:6px;margin-top:2px}
+.ed-nudge button{flex:1;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:8px;padding:8px 0;font-size:11px;cursor:pointer;font-family:inherit}
+.ed-nudge button:hover{border-color:#f044a8;color:#ffd0ec}
+.ed-nudge-hint{font-size:9.5px;color:#91a2b9;text-align:center;margin-top:5px}
 .ed-swatch{width:26px;height:26px;border-radius:50%;border:2px solid #24344e;cursor:pointer}
 .ed-swatch.active{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
 .ed-empty{border:1.5px dashed #49334e;border-radius:15px;padding:38px 20px;text-align:center;color:#91a2b9;font-size:12.5px;line-height:1.7;cursor:pointer;transition:border-color .18s,box-shadow .18s}
@@ -825,6 +832,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
         <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#cfd6e4"><span style="min-width:44px">Ukuran</span><input type="range" id="edSelSize" min="3" max="40" value="7"><small id="edSelSizeVal"></small></label>
         <div id="edSelFontRow"><select id="edSelFont" aria-label="Font teks"></select></div>
         <div class="ed-swatches" id="edSelColors"></div>
+        <div class="ed-nudge" id="edNudge">
+          <button type="button" data-nudge="left" aria-label="Geser kiri">&#9664;</button>
+          <button type="button" data-nudge="up" aria-label="Geser naik">&#9650;</button>
+          <button type="button" data-nudge="center" aria-label="Tengahkan">&#8857;</button>
+          <button type="button" data-nudge="down" aria-label="Geser turun">&#9660;</button>
+          <button type="button" data-nudge="right" aria-label="Geser kanan">&#9654;</button>
+        </div>
+        <p class="ed-nudge-hint">Geser pelan 1% per klik — di HP juga bisa langsung seret itemnya.</p>
         <button type="button" class="outline-btn danger-btn" id="edSelDel" style="width:100%">Hapus item ini</button>
       </div>
     </div>
