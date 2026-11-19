@@ -13,6 +13,7 @@ import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup,
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
+import { sanitizePostInput, parseImageDataUrl } from './published-posts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -873,6 +874,79 @@ app.delete('/api/planner/docs/:id', requireUser, requireAdmin, async (req, res) 
     const { error } = await req.supabase.from('planner_documents')
       .delete().eq('id', req.params.id).eq('user_id', req.user.id);
     if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+// ---------- Cloud Publish: galeri karya & jadwal (D-155) ----------
+const PUBLISH_BUCKET = 'published';
+const PUBLISH_COLS = 'id,title,caption,category,status,publish_at,storage_path,created_at,updated_at';
+function publishRow(r, supabase) {
+  let publicUrl = '';
+  try { const { data } = supabase.storage.from(PUBLISH_BUCKET).getPublicUrl(r.storage_path); publicUrl = (data && data.publicUrl) || ''; } catch {}
+  return { id: r.id, title: r.title, caption: r.caption, category: r.category, status: r.status, publish_at: r.publish_at, storage_path: r.storage_path, created_at: r.created_at, updated_at: r.updated_at, publicUrl };
+}
+app.get('/api/publish/posts', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await req.supabase.from('published_posts')
+      .select(PUBLISH_COLS).eq('user_id', req.user.id).order('updated_at', { ascending: false }).limit(200);
+    if (error) throw new Error('Tabel published_posts belum bisa diakses. Jalankan supabase/published_posts.sql di SQL Editor dulu.');
+    res.json({ posts: (data || []).map((r) => publishRow(r, req.supabase)) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/publish/posts', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const v = sanitizePostInput(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error });
+    const img = parseImageDataUrl((req.body || {}).image_data || '');
+    if (img.error) return res.status(400).json({ error: img.error });
+    const objectPath = req.user.id + '/' + randomUUID() + '.' + img.ext;
+    const { error: upErr } = await req.supabase.storage.from(PUBLISH_BUCKET).upload(objectPath, img.buffer, { contentType: img.mime, upsert: false });
+    if (upErr) return res.status(500).json({ error: 'Gagal mengunggah gambar (' + upErr.message + ').' });
+    const { data, error } = await req.supabase.from('published_posts')
+      .insert({ user_id: req.user.id, ...v.value, storage_path: objectPath })
+      .select(PUBLISH_COLS).single();
+    if (error) {
+      try { await req.supabase.storage.from(PUBLISH_BUCKET).remove([objectPath]); } catch {}
+      return res.status(500).json({ error: 'Gagal menyimpan post (' + error.message + ').' });
+    }
+    res.json({ ok: true, post: publishRow(data, req.supabase) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.put('/api/publish/posts/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const v = sanitizePostInput(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error });
+    const { data: existing, error: findErr } = await req.supabase.from('published_posts')
+      .select('id,storage_path').eq('id', req.params.id).eq('user_id', req.user.id).maybeSingle();
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!existing) return res.status(404).json({ error: 'Post tidak ditemukan.' });
+    let objectPath = existing.storage_path;
+    if ((req.body || {}).image_data) {
+      const img = parseImageDataUrl(req.body.image_data);
+      if (img.error) return res.status(400).json({ error: img.error });
+      const newPath = req.user.id + '/' + randomUUID() + '.' + img.ext;
+      const { error: upErr } = await req.supabase.storage.from(PUBLISH_BUCKET).upload(newPath, img.buffer, { contentType: img.mime, upsert: false });
+      if (upErr) return res.status(500).json({ error: 'Gagal mengunggah gambar (' + upErr.message + ').' });
+      objectPath = newPath;
+      if (existing.storage_path) { try { await req.supabase.storage.from(PUBLISH_BUCKET).remove([existing.storage_path]); } catch {} }
+    }
+    const { data, error } = await req.supabase.from('published_posts')
+      .update({ ...v.value, storage_path: objectPath, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).eq('user_id', req.user.id)
+      .select(PUBLISH_COLS).single();
+    if (error) return res.status(500).json({ error: 'Gagal memperbarui post (' + error.message + ').' });
+    res.json({ ok: true, post: publishRow(data, req.supabase) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.delete('/api/publish/posts/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { data: existing, error: findErr } = await req.supabase.from('published_posts')
+      .select('id,storage_path').eq('id', req.params.id).eq('user_id', req.user.id).maybeSingle();
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!existing) return res.status(404).json({ error: 'Post tidak ditemukan.' });
+    const { error } = await req.supabase.from('published_posts').delete().eq('id', req.params.id).eq('user_id', req.user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    if (existing.storage_path) { try { await req.supabase.storage.from(PUBLISH_BUCKET).remove([existing.storage_path]); } catch {} }
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });

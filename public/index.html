@@ -300,6 +300,22 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .pl-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .pl-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .pl-list{display:flex;flex-direction:column;gap:10px}
+.pb-list{display:flex;flex-direction:column;gap:10px}
+.pb-card{display:flex;gap:14px;align-items:center;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:12px 14px;flex-wrap:wrap}
+.pb-thumb{width:86px;height:86px;object-fit:cover;border-radius:10px;flex:none;background:#0f1828;border:1px solid #24344e}
+.pb-main{flex:1;min-width:210px}
+.pb-main h3{font-size:13.5px;color:#f4f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pb-main p{font-size:11.5px;color:#91a2b9;line-height:1.5;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pb-meta{display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap}
+.pb-st{font-size:9px;padding:1px 8px;border-radius:999px;border:1px solid #24344e;color:#cfd6e4}
+.pb-st.st-scheduled{border-color:#f044a880;color:#ffd0ec}
+.pb-st.st-live{background:#f044a826;border-color:#f044a8;color:#ffd0ec}
+.pb-st.st-archived{opacity:.65}
+.pb-when{font-size:9.5px;color:#91a2b9}
+.pb-side{display:flex;gap:6px;flex-wrap:wrap}
+.pb-act{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:5px 12px;font-size:10.5px;cursor:pointer;font-family:inherit}
+.pb-act:hover{border-color:#f044a8;color:#ffd0ec}
+.pb-act.pb-live-act{border-color:#f044a8;background:#f044a826;color:#ffd0ec}
 .pl-tabs{display:flex;gap:8px;margin-bottom:14px}
 .pl-tab{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 16px;font:inherit;font-size:12px;cursor:pointer;transition:border-color .18s,background .18s}
 .pl-tab:hover{border-color:#49334e;background:#111a2e}
@@ -568,6 +584,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    <button data-page="Karakter" title="Karakter"><span class="ico" data-icon="users"></span><span class="nav-label">Karakter</span></button>
    <button data-page="Studio" title="Studio"><span class="ico" data-icon="clapperboard"></span><span class="nav-label">Studio</span></button>
    <button data-page="Editor" title="Editor finishing konten"><span class="ico" data-icon="pencil"></span><span class="nav-label">Editor</span></button>
+   <button data-page="Cloud Publish" title="Cloud Publish — publikasikan karya"><span class="ico" data-icon="cloud"></span><span class="nav-label">Cloud Publish</span></button>
    <button data-page="Pengaturan" title="Pengaturan"><span class="ico" data-icon="sliders"></span><span class="nav-label">Pengaturan</span></button>
   </div>
  </nav>
@@ -848,6 +865,25 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   </div>
   <input type="file" id="edFileInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
 </section>
+<section id="publishView" class="page-view">
+  <div class="page-heading"><div><h1>Cloud Publish</h1><p>Publikasikan karya jadi ke cloud SherlyStudio — galeri pribadi, jadwal tayang, dan halaman publik karya (menyusul).</p></div><div class="pl-toolbar"><button type="button" class="pink-btn" id="pbAddBtn"><span data-icon="plus"></span> Publikasikan Karya</button></div></div>
+  <div class="pl-filters" id="pbFilters"></div>
+  <div class="pb-list" id="pbList"></div>
+  <div class="modal-backdrop" id="pbModal"><div class="modal">
+    <h2 id="pbModalTitle">Publikasikan Karya</h2>
+    <p class="modal-sub">Unggah karya jadi — atur judul, keterangan, kategori, dan status tayangnya. Status <b>Live</b> = tampil publik (halaman publik menyusul); <b>Terjadwal</b> = tayang otomatis di waktunya.</p>
+    <div class="form-grid">
+      <div class="form-field full"><label for="pbTitle">Judul karya</label><input id="pbTitle" maxlength="120" placeholder="Contoh: Reels skincare — night routine"></div>
+      <div class="form-field full"><label for="pbCaption">Keterangan / caption</label><textarea id="pbCaption" rows="3" maxlength="600" placeholder="Cerita singkat karya ini — tampil di halaman publik nantinya."></textarea></div>
+      <div class="form-field"><label for="pbCategory">Kategori</label><select id="pbCategory"><option value="foto">Foto</option><option value="reels">Reels / Video</option><option value="artikel">Artikel</option></select></div>
+      <div class="form-field"><label for="pbStatus">Status</label><select id="pbStatus"><option value="draft">Draft (privat)</option><option value="scheduled">Terjadwal</option><option value="live">Live — tayang sekarang</option><option value="archived">Arsip</option></select></div>
+      <div class="form-field full" id="pbScheduleRow" hidden><label for="pbPublishAt">Tayang pada</label><input id="pbPublishAt" type="datetime-local"><small>Karya tampil otomatis di halaman publik saat waktunya tiba.</small></div>
+      <div class="form-field full"><label for="pbImage">Gambar karya</label><input id="pbImage" type="file" accept="image/png,image/jpeg,image/webp"><small id="pbImageHint">JPG/PNG/WebP maks 5 MB — hasil unduhan dari Editor juga bisa langsung diunggah.</small></div>
+      <div class="form-field full" id="pbPreviewRow" hidden><img id="pbPreview" alt="Pratinjau gambar karya" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#0f1828"></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="outline-btn danger-btn" id="pbDeleteBtn" hidden>Hapus</button><button type="button" class="outline-btn" id="pbCancelBtn">Batal</button><button type="button" class="pink-btn" id="pbSaveBtn">Simpan</button></div>
+  </div></div>
+</section>
 <section id="personaView" class="page-view">
   <div class="page-heading"><div><h1>Persona</h1><p>Brand kit Sherly — identitas, suara, pilar konten, dan media kit kolaborasi.</p></div></div>
   <div id="personaRoot"></div>
@@ -1056,7 +1092,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
 const ADMIN_ONLY_PAGES=['Dashboard','Karakter','Studio','Editor','Aset','Planner','Kalender','Cloud Publish','Pengaturan'];
-function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}if(page==='Cloud Publish'){toast('Modul Cloud Publish segera hadir — masih dalam pengembangan.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const edv=document.getElementById('editorView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(edv)edv.classList.toggle('active',page==='Editor');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Editor')window.renderEditor?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Editor','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const edv=document.getElementById('editorView');const pbv=document.getElementById('publishView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(edv)edv.classList.toggle('active',page==='Editor');if(pbv)pbv.classList.toggle('active',page==='Cloud Publish');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Editor')window.renderEditor?.();if(page==='Cloud Publish')window.loadPublish?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Editor','Cloud Publish','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -1133,6 +1169,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/planner.js"></script>
 <script src="/editor.js"></script>
 <script src="/planner-docs.js"></script>
+<script src="/publish.js"></script>
 <script src="/calendar.js"></script>
 <script src="/studio.js"></script>
 <script src="/persona-data.js"></script>
