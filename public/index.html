@@ -355,7 +355,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-dot{width:22px;height:22px;border-radius:50%;border:2px solid #49334e;cursor:pointer;flex:none}
 .ve-dot:hover{border-color:#f044a8}
 .ve-tl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:0 0 6px}
-.ve-tl-inner{position:relative;min-width:100%;width:max-content;padding-right:24px}
+.ve-tl-inner{min-width:100%;width:max-content;padding-right:24px}
+.ve-tl-body{position:relative}
 .ve-ruler{position:relative;height:22px;touch-action:none;cursor:ew-resize}
 .ve-tick{position:absolute;bottom:0;width:1px;height:5px;background:#24344e}
 .ve-tick.big{height:10px;background:#49334e}
@@ -363,7 +364,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-playline{position:absolute;top:2px;bottom:6px;width:2px;margin-left:-1px;background:#f044a8;z-index:5;touch-action:none;cursor:ew-resize}
 .ve-pl-head{position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:7px;background:#f044a8;box-shadow:0 3px 10px #0009;cursor:grab}
 .ve-pl-time{position:absolute;top:24px;left:50%;transform:translateX(-50%);background:#f044a8;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap;pointer-events:none}
-.ve-timeline{display:flex;gap:8px;padding:2px 2px 8px}
+.ve-timeline{display:flex;gap:0;padding:2px 0 8px}
 .ve-clip{position:relative;flex:none;height:64px;background:#0f1828;border:2px solid #24344e;border-radius:10px;overflow:hidden;cursor:pointer}
 .ve-clip img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;opacity:.92}
 .ve-clip.sel{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
@@ -373,7 +374,6 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-grip{position:absolute;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;color:#ffd0ec;background:#f044a866;font-size:9px;letter-spacing:-1px;cursor:ew-resize;touch-action:none}
 .ve-grip.grip-l{left:0;border-radius:8px 0 0 8px}
 .ve-grip.grip-r{right:0;border-radius:0 8px 8px 0}
-.ve-add{flex:none;width:64px;height:64px;border:2px dashed #49334e;border-radius:10px;background:transparent;color:#ffd0ec;font-size:22px;cursor:pointer}
 .ve-prog{height:8px;background:#0f1828;border-radius:99px;overflow:hidden;border:1px solid #24344e}
 .ve-prog-bar{height:100%;width:0;background:linear-gradient(90deg,#ff72c5,#f044a8)}
 .ve-prog-label{font-size:11px;color:#91a2b9;margin:6px 0 0}
@@ -972,12 +972,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
       </div>
     </aside>
     <div class="ve-tl-zone">
-      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div></div>
+      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div><button type="button" class="ve-btn" id="veAddInline" title="Tambah klip video" style="margin-left:auto">＋ Klip</button></div>
       <div class="ve-tl-wrap" id="veTlWrap">
         <div class="ve-tl-inner" id="veTlInner">
-          <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
-          <div class="ve-timeline" id="veTimeline"></div>
-          <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>
+          <div class="ve-tl-body" id="veTlBody">
+            <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
+            <div class="ve-timeline" id="veTimeline"></div>
+            <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>
+          </div>
         </div>
       </div>
     </div>
