@@ -48,6 +48,7 @@
   .ss-chat-empty{margin:auto;text-align:center;max-width:520px;color:#91a2b9;padding:24px 12px}
   .ss-empty-ava{width:86px;height:86px;border-radius:50%;object-fit:cover;object-position:center 14%;border:1px solid rgba(255,114,197,.4);padding:4px;background:radial-gradient(circle at 50% 30%,rgba(216,45,145,.35),rgba(4,7,15,.9));box-shadow:0 0 44px rgba(216,45,145,.35)}
   .ss-chat-empty h2{color:#fff;font-size:24px;font-weight:500;margin:16px 0 8px;letter-spacing:.01em}
+  .ss-heart{width:16px;height:16px;fill:none;stroke:#ff72c5;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;filter:drop-shadow(0 0 5px #f044a866)}
   .ss-chat-empty p{line-height:1.75;font-size:13px;margin:0 auto}
   .ss-suggest{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:18px}
   .ss-suggest button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:#ffd0ec;border-radius:999px;padding:9px 15px;font-size:12px;transition:.18s;letter-spacing:.01em}
@@ -122,7 +123,7 @@
         <span class="ss-spacer"></span>
         <button type="button" class="ss-newchat" id="ssNewChat" title="Percakapan baru" aria-label="Percakapan baru"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       </header>
-      <div class="ss-chat-messages" id="ssMessages" aria-live="polite"><div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly ✦</h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div></div>
+      <div class="ss-chat-messages" id="ssMessages" aria-live="polite"><div class="ss-chat-empty"><img class="ss-empty-ava" src="assets/sherly-portrait.png" alt="Sherly"><h2>Halo, aku Sherly <svg class="ss-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.4C9 18.2 3.6 14.7 2.7 10.9 2 7.7 4.2 5.2 6.9 5.4c1.9.2 3.5 1.4 4.2 3 .2.4.7.4.9 0 .7-1.6 2.3-2.8 4.2-3 2.7-.2 4.9 2.3 4.2 5.5-.9 3.8-6.3 7.3-9.4 9.5Z"/><path d="M8.6 21.7c2.2.8 4.6.8 6.8 0"/></svg></h2><p>Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?</p><div class="ss-suggest"><button type="button" data-prompt="Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty">Ide konten 30 hari</button><button type="button" data-prompt="Buat caption plus hashtag untuk Reels terbaru Sherly tentang skincare routine">Caption + hashtag Reels</button><button type="button" data-prompt="Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan">Strategi kolaborasi brand</button></div></div></div>
       <div class="ss-compose-wrap"><button type="button" class="ss-jump" id="ssJumpBtn" aria-label="Lompat ke pesan terakhir"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg></button><div class="ss-attach-chip" id="ssAttachChip" hidden><img id="ssAttachThumb" alt="Pratinjau lampiran"><span id="ssAttachName"></span><button type="button" id="ssAttachRemove" aria-label="Hapus lampiran"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div><form class="ss-compose" id="ssChatForm"><button type="button" class="ss-attach" id="ssAttachBtn" aria-label="Kirim gambar atau file"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l8.57-8.57A4 4 0 1118 8.84l-8.59 8.57a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button><input id="ssAttachInput" type="file" accept="image/*,.txt,.md,.csv,.json" hidden><textarea id="ssChatInput" rows="1" maxlength="12000" placeholder="Tulis pesan untuk Sherly..." aria-label="Pesan untuk Sherly"></textarea><button class="ss-send" id="ssSend" type="submit" aria-label="Kirim pesan"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button></form><div class="ss-chat-hint">Enter untuk mengirim · Shift + Enter untuk baris baru</div></div>
     </section>
   </section>
@@ -294,8 +295,9 @@
     const u = window.sherlyStoredToken?.()?.user || null;
     const role = u?.role || 'guest';
     const escX = (v) => String(v || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const SHERLY_HEART = '<svg class="ss-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.4C9 18.2 3.6 14.7 2.7 10.9 2 7.7 4.2 5.2 6.9 5.4c1.9.2 3.5 1.4 4.2 3 .2.4.7.4.9 0 .7-1.6 2.3-2.8 4.2-3 2.7-.2 4.9 2.3 4.2 5.5-.9 3.8-6.3 7.3-9.4 9.5Z"/><path d="M8.6 21.7c2.2.8 4.6.8 6.8 0"/></svg>';
     const nick = escX(u?.nickname || u?.display_name || (u?.email ? u.email.split('@')[0] : ''));
-    let head = '<h2>Halo, aku Sherly ✦</h2>';
+    let head = '<h2>Halo, aku Sherly ' + SHERLY_HEART + '</h2>';
     let sub = 'Tempat kamu nyusun ide konten, strategi, campaign, sampai rencana SherlyStudio. Mulai dari mana nih?';
     let buttons = [
       ['Susunkan ide konten 30 hari untuk akun Sherly berdasarkan niche lifestyle &amp; beauty', 'Ide konten 30 hari'],
@@ -303,7 +305,7 @@
       ['Rancang strategi kolaborasi brand untuk SherlyStudio bulan depan', 'Strategi kolaborasi brand']
     ];
     if (role === 'member') {
-      head = '<h2>Halo ' + (nick || 'kembali') + '! ✦</h2>';
+      head = '<h2>Halo ' + (nick || 'kembali') + '! ' + SHERLY_HEART + '</h2>';
       sub = 'Senang kamu kembali! Obrolan kita sebelumnya masih aku ingat. Ada kebutuhan konten hari ini?';
       buttons = [
         ['Aku mau bahas ide konten untuk brandku', 'Bahas ide konten'],
@@ -311,7 +313,7 @@
         ['Rekomendasikan konten Reels yang lagi relevan ya', 'Rekomendasi Reels']
       ];
     } else if (role === 'guest' && u) {
-      head = '<h2>Halo ' + (nick || 'teman baru') + '! ✦</h2>';
+      head = '<h2>Halo ' + (nick || 'teman baru') + '! ' + SHERLY_HEART + '</h2>';
       sub = 'Senang berkenalan! Aku Sherly — content creator di balik SherlyStudio. Ada yang bisa aku bantu?';
       buttons = [
         ['Sherly, kenalan dulu dong, kamu siapa?', 'Kenalan dulu'],
