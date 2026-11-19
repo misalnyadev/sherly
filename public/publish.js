@@ -83,6 +83,7 @@
       + (p.status !== 'live' ? '<button type="button" class="pb-act pb-live-act" data-act="live">Tayangkan</button>' : '')
       + (p.status === 'live' ? '<button type="button" class="pb-act" data-act="archive">Arsipkan</button>' : '')
       + (pub ? '<button type="button" class="pb-act" data-act="share">Salin Link</button>' : '')
+      + (p.status === 'scheduled' ? '<button type="button" class="pb-act" data-act="remind" title="Tambah pengingat ke Google Calendar">Ingatkan</button><button type="button" class="pb-act" data-act="ig" title="Buka Instagram untuk posting manual">Buka IG</button>' : '')
       + '<button type="button" class="pb-act" data-act="edit">Edit</button>'
       + '</div></div>';
     }).join('');
@@ -218,6 +219,15 @@
     if (act === 'share') {
       const ok = await copyText(shareUrl(id));
       window.toast?.(ok ? 'Link publik tersalin — tinggal dibagikan!' : 'Link: ' + shareUrl(id));
+      return;
+    }
+    if (act === 'ig') { window.open('https://www.instagram.com/', '_blank', 'noopener'); return; }
+    if (act === 'remind') {
+      const p = posts.find((x) => x.id === id);
+      const url = window.PORTFOLIO_LIVE?.gcalEventUrl?.(p?.title, p?.publish_at, 'Jadwal tayang karya SherlyStudio \u2014 posting manual + cek halaman publik: ' + shareUrl(id));
+      if (!url) { window.toast?.('Jadwal tayangnya belum valid.'); return; }
+      window.open(url, '_blank', 'noopener');
+      window.toast?.('Pengingat disiapkan — simpan ke Google Calendar ya.');
       return;
     }
     const p = posts.find((x) => x.id === id); if (!p) return;
