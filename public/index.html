@@ -329,6 +329,15 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-pos{height:100%;width:0;background:linear-gradient(90deg,#ff72c5,#f044a8)}
 .ve-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 #veWrap{display:flex;flex-direction:column;gap:8px}
+.ve-bin{display:none}
+.ve-bin-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-height:0}
+.ve-bin-item{display:flex;gap:8px;align-items:center;border:1px solid #24344e;background:#0f1828;border-radius:10px;padding:6px;cursor:pointer;text-align:left;font:inherit;color:#cfd6e4}
+.ve-bin-item:hover{border-color:#f044a8}
+.ve-bin-item.sel{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
+.ve-bin-item img{width:46px;height:28px;object-fit:cover;border-radius:6px;flex:none;background:#0a1220}
+.ve-bin-meta{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.ve-bin-name{font-size:11.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ve-bin-sub{font-size:10px;color:#91a2b9}
 .ve-main{display:flex;flex-direction:column;order:1}
 .ve-side{display:flex;flex-direction:column;gap:10px;order:3}
 .ve-panel{background:#0f1828;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -355,7 +364,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-tl-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 #veProgWrap{order:4}
 @media (min-width:1024px){
-  #veWrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"main side" "tl tl" "prog prog";gap:14px}
+  #veWrap{display:grid;grid-template-columns:220px minmax(0,1fr) 300px;grid-template-areas:"bin main side" "tl tl tl" "prog prog prog";gap:14px}
+  .ve-bin{display:flex;flex-direction:column;grid-area:bin}
   .ve-main{grid-area:main}
   .ve-side{grid-area:side}
   .ve-tl-zone{grid-area:tl}
@@ -966,6 +976,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div class="page-heading"><div><h1>Editor Video</h1><p>Edits ala CapCut — gabung klip, buang adegan tak perlu lewat penggaris, filter &amp; teks, lalu ekspor. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="veExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Ekspor Video</button><button type="button" class="pink-btn" id="veAddBtn"><span data-icon="plus"></span> Tambah Klip</button><input type="file" id="veFile" accept="video/*" multiple hidden></div></div>
   <div class="empty-state" id="veEmpty">Belum ada klip.<br>Klik <b>Tambah Klip</b> — pilih video dari galeri HP-mu (bisa beberapa sekaligus), lalu potong &amp; susun di timeline bawah. Hasil ekspornya siap diunggah ke IG / edits-mu.</div>
   <div id="veWrap" hidden>
+    <aside class="ve-bin" id="veBin">
+      <div class="ve-panel">
+        <h3 class="ve-panel-title">Media Klip <span id="veBinCount"></span></h3>
+        <button type="button" class="ve-btn" id="veBinAdd">＋ Tambah Klip</button>
+        <div class="ve-bin-list" id="veBinList"></div>
+        <p class="ve-tab-hint">Klik klip untuk memuatnya di pratinjau. Susunan &amp; pemotongan tetap lewat timeline bawah.</p>
+      </div>
+    </aside>
     <div class="ve-main">
       <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video></div></div>
       <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span></div>
@@ -1012,7 +1030,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
       </div>
     </aside>
     <div class="ve-tl-zone">
-      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div><button type="button" class="ve-btn" id="veAddInline" title="Tambah klip video" style="margin-left:auto">＋ Klip</button></div>
+      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div></div>
       <div class="ve-tl-wrap" id="veTlWrap">
         <div class="ve-tl-inner" id="veTlInner">
           <div class="ve-tl-body" id="veTlBody">
