@@ -804,7 +804,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
        <div class="form-field"><label for="pdStatus">Status</label><select id="pdStatus"><option value="draft">Draft</option><option value="review">Review</option><option value="final">Final — siap pakai</option></select></div>
        <div class="form-field full"><label for="pdBody">Isi naskah</label><textarea id="pdBody" class="ed-body" maxlength="20000" placeholder="Tulis bebas — hook, isi, CTA&#10;&#10;Klik “Bantuan Sherly” untuk minta Sherly merapikan atau melanjutkan naskah ini."></textarea><small class="ed-count" id="pdCount">0 kata · 0 karakter</small></div>
       </div>
-      <div class="profile-actions"><button type="submit" class="pink-btn" id="pdSaveBtn">Simpan Naskah</button><button type="button" class="outline-btn" id="pdNewBtn">Naskah Baru</button><button type="button" class="outline-btn" id="pdAssistBtn"><span data-icon="sparkles"></span> Bantuan Sherly</button><button type="button" class="outline-btn danger-btn" id="pdDeleteBtn" hidden>Hapus</button></div>
+      <div class="profile-actions"><button type="submit" class="pink-btn" id="pdSaveBtn">Simpan Naskah</button><button type="button" class="outline-btn" id="pdNewBtn">Naskah Baru</button><button type="button" class="outline-btn" id="pdAssistBtn"><span data-icon="sparkles"></span> Bantuan Sherly</button><button type="button" class="outline-btn" id="pdPublishBtn"><span data-icon="cloud"></span> Publikasikan</button><button type="button" class="outline-btn danger-btn" id="pdDeleteBtn" hidden>Hapus</button></div>
      </form>
     </div>
    </div>
@@ -823,7 +823,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   </div></div>
 </section>
 <section id="editorView" class="page-view">
-  <div class="page-heading"><div><h1>Editor</h1><p>Finishing konten ala CapCut / ediats Instagram — atur rasio, filter, teks, dan sticker, lalu unduh hasilnya. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="edChangeBtn" hidden><span data-icon="images"></span> Ganti Foto</button><button type="button" class="outline-btn" id="edResetBtn" hidden><span data-icon="refresh-cw"></span> Reset</button><button type="button" class="pink-btn" id="edExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Unduh Hasil</button></div></div>
+  <div class="page-heading"><div><h1>Editor</h1><p>Finishing konten ala CapCut / ediats Instagram — atur rasio, filter, teks, dan sticker, lalu unduh hasilnya. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="edChangeBtn" hidden><span data-icon="images"></span> Ganti Foto</button><button type="button" class="outline-btn" id="edResetBtn" hidden><span data-icon="refresh-cw"></span> Reset</button><button type="button" class="outline-btn" id="edPublishBtn" hidden><span data-icon="cloud"></span> Publikasikan</button><button type="button" class="pink-btn" id="edExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Unduh Hasil</button></div></div>
   <div class="ed-work">
    <div class="ed-stage-wrap" id="edStageWrap">
     <div class="ed-empty" id="edEmpty" role="button" tabindex="0" aria-label="Pilih foto untuk diedit"><b>Seret foto ke sini</b>atau klik untuk memilih file<br><small>JPG · PNG · WebP — hasil generate dari Studio juga bisa langsung ditempel</small></div>
@@ -866,18 +866,19 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <input type="file" id="edFileInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
 </section>
 <section id="publishView" class="page-view">
-  <div class="page-heading"><div><h1>Cloud Publish</h1><p>Publikasikan karya jadi ke cloud SherlyStudio — galeri pribadi, jadwal tayang, dan halaman publik karya (menyusul).</p></div><div class="pl-toolbar"><button type="button" class="pink-btn" id="pbAddBtn"><span data-icon="plus"></span> Publikasikan Karya</button></div></div>
+  <div class="page-heading"><div><h1>Cloud Publish</h1><p>Publikasikan karya jadi ke cloud SherlyStudio — galeri cloud, jadwal tayang, dan halaman publik yang bisa dibuka siapa pun tanpa login.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="pbPublicLinkBtn"><span data-icon="images"></span> Lihat Halaman Publik</button><button type="button" class="pink-btn" id="pbAddBtn"><span data-icon="plus"></span> Publikasikan Karya</button></div></div>
   <div class="pl-filters" id="pbFilters"></div>
   <div class="pb-list" id="pbList"></div>
   <div class="modal-backdrop" id="pbModal"><div class="modal">
     <h2 id="pbModalTitle">Publikasikan Karya</h2>
-    <p class="modal-sub">Unggah karya jadi — atur judul, keterangan, kategori, dan status tayangnya. Status <b>Live</b> = tampil publik (halaman publik menyusul); <b>Terjadwal</b> = tayang otomatis di waktunya.</p>
+    <p class="modal-sub">Unggah karya jadi — atur judul, keterangan, kategori, dan status tayangnya. Status <b>Live</b> = tampil di halaman publik (bisa di-share); <b>Terjadwal</b> = tayang otomatis di waktunya.</p>
     <div class="form-grid">
       <div class="form-field full"><label for="pbTitle">Judul karya</label><input id="pbTitle" maxlength="120" placeholder="Contoh: Reels skincare — night routine"></div>
       <div class="form-field full"><label for="pbCaption">Keterangan / caption</label><textarea id="pbCaption" rows="3" maxlength="600" placeholder="Cerita singkat karya ini — tampil di halaman publik nantinya."></textarea></div>
       <div class="form-field"><label for="pbCategory">Kategori</label><select id="pbCategory"><option value="foto">Foto</option><option value="reels">Reels / Video</option><option value="artikel">Artikel</option></select></div>
       <div class="form-field"><label for="pbStatus">Status</label><select id="pbStatus"><option value="draft">Draft (privat)</option><option value="scheduled">Terjadwal</option><option value="live">Live — tayang sekarang</option><option value="archived">Arsip</option></select></div>
       <div class="form-field full" id="pbScheduleRow" hidden><label for="pbPublishAt">Tayang pada</label><input id="pbPublishAt" type="datetime-local"><small>Karya tampil otomatis di halaman publik saat waktunya tiba.</small></div>
+      <div class="form-field full" id="pbBodyRow" hidden><label for="pbBody">Isi artikel</label><textarea id="pbBody" rows="6" maxlength="20000" placeholder="Tulis atau tempel isi artikelnya — tampil utuh di halaman publik."></textarea></div>
       <div class="form-field full"><label for="pbImage">Gambar karya</label><input id="pbImage" type="file" accept="image/png,image/jpeg,image/webp"><small id="pbImageHint">JPG/PNG/WebP maks 5 MB — hasil unduhan dari Editor juga bisa langsung diunggah.</small></div>
       <div class="form-field full" id="pbPreviewRow" hidden><img id="pbPreview" alt="Pratinjau gambar karya" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#0f1828"></div>
     </div>

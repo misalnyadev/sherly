@@ -176,6 +176,15 @@
     finally { btn.disabled = false; }
   });
 
+  // Publikasikan: naskah (biasanya yang sudah Final) -> artikel publik via Cloud Publish (D-155 PR 2).
+  $('pdPublishBtn')?.addEventListener('click', () => {
+    const doc = currentDoc();
+    if (!doc.body.trim()) { window.toast?.('Naskahnya masih kosong — tulis dulu sebelum dipublikasikan.'); return; }
+    if (!window.sherlyPublishOpen) { window.toast?.('Modul Cloud Publish belum siap.'); return; }
+    if (doc.status !== 'final') window.toast?.('Tips: tandai naskah ini Final dulu biar makin yakin.');
+    window.sherlyPublishOpen({ title: doc.title, body: doc.body, category: 'artikel', from: 'Planner' });
+  });
+
   // Bantuan Sherly: bawa konteks naskah ke chat (pola "Minta ide" Planner).
   $('pdAssistBtn')?.addEventListener('click', () => {
     const doc = currentDoc();
