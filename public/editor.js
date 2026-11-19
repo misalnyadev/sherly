@@ -26,8 +26,16 @@
   ];
   const EMOJIS = ['😍', '🥰', '😂', '😎', '🤍', '✨', '🔥', '💖', '🌸', '🎀', '🦋', '💫', '🖤', '🌝', '🥂', '☕'];
   const COLORS = ['#ffffff', '#0a1220', '#ffd0ec', '#f044a8'];
-  const FONTS = [['Inter', 'Inter — rapi'], ['Caveat', 'Caveat — tulisan tangan'], ['Sacramento', 'Sacramento — mewah']];
-  const CANVAS_FONT = { Inter: 'Inter, Arial, sans-serif', Caveat: 'Caveat, cursive', Sacramento: 'Sacramento, cursive' };
+  const FONTS = [
+    ['Inter', 'Inter — rapi'],
+    ['Caveat', 'Caveat — tulisan tangan'],
+    ['Sacramento', 'Sacramento — mewah'],
+    ['Bebas Neue', 'Bebas Neue — tegas'],
+    ['Lora', 'Lora — serif'],
+    ['Archivo Black', 'Archivo Black — tebal'],
+  ];
+  const CANVAS_FONT = { Inter: 'Inter, Arial, sans-serif', Caveat: 'Caveat, cursive', Sacramento: 'Sacramento, cursive', 'Bebas Neue': "'Bebas Neue', sans-serif", Lora: 'Lora, Georgia, serif', 'Archivo Black': "'Archivo Black', sans-serif" };
+  const FONT_WEIGHT = { Inter: 700, Caveat: 700, Sacramento: 400, 'Bebas Neue': 400, Lora: 400, 'Archivo Black': 400 };
 
   let S = null;          // state editor (null = belum ada foto)
   let fw = 300, fh = 300; // ukuran panggung px terakhir (dipakai matematika drag/export)
@@ -286,6 +294,27 @@
     const it = S.texts.find((x) => x.id === S.sel.id); if (!it) return;
     it.color = b.dataset.color; renderOverlay(); renderSelBox();
   });
+  // D-154: geser presisi — tombol panah (HP-friendly) & keyboard; ⊙ = tengahkan.
+  function nudge(dx, dy, center) {
+    if (!S || !S.sel) return;
+    const it = (S.sel.type === 'text' ? S.texts : S.sticks).find((x) => x.id === S.sel.id); if (!it) return;
+    if (center) { it.x = 0.5; it.y = 0.5; }
+    else {
+      it.x = Math.min(0.98, Math.max(0.02, it.x + dx));
+      it.y = Math.min(0.98, Math.max(0.02, it.y + dy));
+    }
+    renderOverlay();
+  }
+  $('edNudge')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nudge]'); if (!b) return;
+    const n = b.dataset.nudge;
+    if (n === 'left') nudge(-0.01, 0);
+    else if (n === 'right') nudge(0.01, 0);
+    else if (n === 'up') nudge(0, -0.01);
+    else if (n === 'down') nudge(0, 0.01);
+    else if (n === 'center') nudge(0, 0, true);
+  });
+
   $('edSelDel')?.addEventListener('click', () => {
     if (!S || !S.sel) return;
     if (S.sel.type === 'text') S.texts = S.texts.filter((x) => x.id !== S.sel.id);
@@ -299,6 +328,11 @@
     const tag = (e.target && e.target.tagName) || '';
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
     if (e.key === 'Escape') { S.sel = null; renderOverlay(); renderSelBox(); }
+    if (S.sel && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault();
+      const step = e.shiftKey ? 0.05 : 0.01;
+      nudge(e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0, e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0);
+    }
     if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel) {
       if (S.sel.type === 'text') S.texts = S.texts.filter((x) => x.id !== S.sel.id);
       else S.sticks = S.sticks.filter((x) => x.id !== S.sel.id);
@@ -340,7 +374,7 @@
       try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch {}
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       S.texts.forEach((it) => {
-        ctx.font = '700 ' + Math.round(it.size * H) + 'px ' + CANVAS_FONT[it.font];
+        ctx.font = (FONT_WEIGHT[it.font] || 700) + ' ' + Math.round(it.size * H) + 'px ' + CANVAS_FONT[it.font];
         ctx.fillStyle = it.color;
         it.str.split('\n').forEach((line, i, arr) => ctx.fillText(line, it.x * W, it.y * H + (i - (arr.length - 1) / 2) * it.size * H * 1.15));
       });
@@ -366,7 +400,7 @@
     const cl = $('edSelColors');
     if (cl) cl.innerHTML = COLORS.map((c) => '<button type="button" class="ed-swatch' + (c === '#ffffff' ? ' active' : '') + '" data-color="' + c + '" style="background:' + c + '" aria-label="Warna ' + c + '"></button>').join('');
     const f = $('edSelFont');
-    if (f) f.innerHTML = FONTS.map(([k, l]) => '<option value="' + k + '">' + l + '</option>').join('');
+    if (f) f.innerHTML = FONTS.map(([k, l]) => '<option value="' + k + '" style="font-family:' + CANVAS_FONT[k] + '">' + l + '</option>').join('');
     const pick = $('edPickIco'); if (pick) pick.innerHTML = icon('images');
     const rst = $('edResetIco'); if (rst) rst.innerHTML = icon('refresh-cw');
     const add = $('edAddIco'); if (add) add.innerHTML = icon('plus');
