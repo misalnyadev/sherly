@@ -1,5 +1,6 @@
 // Portfolio — grid karya (foto / video / copy) + tampilan detail.
-// Data statis: portfolio-data.js (window.PORTFOLIO_ITEMS). Dipanggil go('Portfolio') -> window.renderPortfolio().
+// Sumber utama: feed live Cloud Publish (/api/public/posts, helper portfolio-live.js).
+// Kalau feed live kosong/gagal → fallback demo statis portfolio-data.js. Dipanggil go('Portfolio') -> window.renderPortfolio().
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -48,7 +49,7 @@
   function closeDetail() { $('pfDetail')?.classList.remove('open'); }
 
   function openDetail(id) {
-    const item = (window.PORTFOLIO_ITEMS || []).find((i) => String(i.id) === String(id));
+    const item = currentItems().find((i) => String(i.id) === String(id));
     const wrap = $('pfDetail'), card = $('pfDetailCard');
     if (!item || !wrap || !card) return;
     const t = TYPE_META[item.type] || TYPE_META.photo;
@@ -61,14 +62,14 @@
       media = '<img src="' + esc(item.img) + '" alt="' + esc(item.title) + '">';
     }
     const body = item.type === 'copy' ? (item.copy || item.desc || '') : (item.desc || '');
-    const sub = [t.label, item.client, item.date].filter(Boolean).map(esc).join(' \u00b7 ');
+    const sub = [t.label, item.client, item.date, (item.live && item.viewCount ? item.viewCount.toLocaleString('id-ID') + '\u00d7 dilihat' : '')].filter(Boolean).map(esc).join(' \u00b7 ');
     card.innerHTML = '<button type="button" class="pf-detail-close" id="pfDetailClose" aria-label="Tutup detail">' + icon('x') + '</button>'
       + (media ? '<div class="pf-detail-media">' + media + '</div>' : '')
       + '<div class="pf-detail-body">'
       + '<h2>' + esc(item.title) + '</h2>'
       + '<p class="pf-detail-sub">' + sub + '</p>'
       + (body ? '<div class="pf-detail-desc">' + esc(body) + '</div>' : '')
-      + (item.type === 'video' && !item.video ? '<p class="pf-detail-note">Slot video \u2014 isi field <code>video</code> di portfolio-data.js dengan file/URL video.</p>' : '')
+      + (item.type === 'video' && !item.video ? '<p class="pf-detail-note">' + (item.live ? 'Reels \u2014 versi videonya menyusul; yang tayang saat ini cover/teaser.' : 'Slot video \u2014 isi field <code>video</code> di portfolio-data.js dengan file/URL video.') + '</p>' : '')
       + tagsHTML(item.tags)
       + '</div>';
     wrap.classList.add('open');
@@ -76,13 +77,37 @@
     $('pfDetailClose')?.addEventListener('click', closeDetail);
   }
 
-  window.renderPortfolio = function renderPortfolio() {
+  // Feed live Cloud Publish: null = belum termuat (coba lagi nanti), [] = kosong/gagal → fallback demo.
+  let liveItems = null;
+  let fetching = false;
+  function currentItems() {
+    return (liveItems && liveItems.length) ? liveItems : (window.PORTFOLIO_ITEMS || []);
+  }
+  async function loadLiveItems() {
+    if (liveItems !== null || fetching) return;
+    fetching = true;
+    try {
+      const res = await fetch('/api/public/posts');
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(d.posts)) {
+        const toItem = window.PORTFOLIO_LIVE && window.PORTFOLIO_LIVE.postToPortfolioItem;
+        liveItems = toItem ? d.posts.map((p) => window.PORTFOLIO_LIVE.postToPortfolioItem(p)).filter(Boolean) : [];
+      }
+    } catch {}
+    fetching = false;
+  }
+
+  window.renderPortfolio = async function renderPortfolio() {
     const grid = $('pfGrid'), fWrap = $('pfFilters');
     if (!grid || !fWrap) return;
-    const items = (window.PORTFOLIO_ITEMS || []).filter((i) => filter === 'all' || i.type === filter);
+    await loadLiveItems();
+    const source = currentItems();
+    const live = source !== (window.PORTFOLIO_ITEMS || []);
+    const items = source.filter((i) => filter === 'all' || i.type === filter);
+    const fl = (FILTERS.find(([k]) => k === filter) || ['', 'kategori ini'])[1];
     grid.innerHTML = items.length
       ? items.map(cardHTML).join('')
-      : '<div class="empty-state">Belum ada karya di kategori ini \u2014 tambahkan di portfolio-data.js.</div>';
+      : '<div class="empty-state">' + (live ? 'Belum ada karya ' + fl.toLowerCase() + ' yang tayang \u2014 publikasikan lewat Cloud Publish.' : 'Belum ada karya di kategori ini \u2014 tambahkan di portfolio-data.js.') + '</div>';
     grid.querySelectorAll('.pf-card').forEach((b) => b.addEventListener('click', () => openDetail(b.dataset.id)));
     fWrap.innerHTML = FILTERS.map(([k, l]) => '<button type="button" class="pf-filter' + (k === filter ? ' active' : '') + '" data-filter="' + k + '">' + esc(l) + '</button>').join('');
     fWrap.querySelectorAll('.pf-filter').forEach((b) => b.addEventListener('click', () => { filter = b.dataset.filter; renderPortfolio(); }));
