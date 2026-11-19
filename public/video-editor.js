@@ -10,7 +10,7 @@
   const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], sticks: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], sticks: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
 
   const readyClips = () => V.clips.filter((c) => c.ready);
@@ -102,6 +102,25 @@
     const t = globalTime();
     const timeEl = $('veTime'); if (timeEl) timeEl.textContent = fmtT(t) + ' / ' + fmtT(total);
     const pos = $('vePos'); if (pos) pos.style.width = (total > 0 ? Math.min(100, (t / total) * 100) : 0) + '%';
+    // penggaris: garis playhead + gelembung waktu + klip tersorot (target ✂ Bagi)
+    const pl = $('vePlayline');
+    if (pl) {
+      pl.style.left = (total > 0 ? Math.min(100, (t / total) * 100) : 0) + '%';
+      const bub = $('vePlTime'); if (bub) bub.textContent = fmtT(t);
+      const at = (CORE().clipAt && total > 0) ? CORE().clipAt(ready, t) : null;
+      const idx = at ? at.index : -1;
+      if (idx !== V.underIdx || V.underEpoch !== V.tlEpoch) {
+        V.underIdx = idx;
+        V.underEpoch = V.tlEpoch;
+        document.querySelectorAll('#veTimeline .ve-clip').forEach((card) => {
+          card.classList.toggle('under', Number(card.dataset.i) === V.clips.indexOf(ready[idx]));
+        });
+      }
+      if (V.playing) {
+        const wrap = $('veTlWrap');
+        if (wrap && pl.offsetLeft > wrap.scrollLeft + wrap.clientWidth - 48) wrap.scrollLeft = pl.offsetLeft - 80;
+      }
+    }
     if (V.playing && V.cur >= 0 && ready[V.cur]) {
       const el = $('veVideo');
       const c = ready[V.cur];
@@ -217,8 +236,31 @@
       + (c.ready ? '<span class="ve-grip grip-l" data-grip="l" title="Tarik untuk potong awal">⋮⋮</span><span class="ve-grip grip-r" data-grip="r" title="Tarik untuk potong akhir">⋮⋮</span>' : '')
       + '</div>';
   }
+  // Penggaris waktu ala CapCut di atas timeline + garis playhead.
+  function renderRuler() {
+    const ruler = $('veRuler'); const pl = $('vePlayline');
+    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    if (!ruler) return;
+    if (pl) pl.hidden = total <= 0;
+    if (total <= 0) { ruler.innerHTML = ''; return; }
+    const labelStep = total <= 30 ? 5 : total <= 120 ? 10 : 30;
+    const tickStep = total <= 120 ? 1 : 5;
+    let html = '';
+    for (let t = 0; t <= total + 0.001; t += tickStep) {
+      const pct = (t / total) * 100;
+      const isLabel = Math.abs(t / labelStep - Math.round(t / labelStep)) < 1e-6;
+      html += '<span class="ve-tick' + (isLabel ? ' big' : '') + '" style="left:' + pct + '%"></span>';
+      if (isLabel) {
+        const lbl = Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+        html += '<span class="ve-tick-label" style="left:' + pct + '%">' + lbl + '</span>';
+      }
+    }
+    ruler.innerHTML = html;
+  }
+
   function renderTimeline() {
     const tl = $('veTimeline'); if (!tl) return;
+    V.tlEpoch++;
     tl.innerHTML = V.clips.map(clipCard).join('')
       + '<button type="button" class="ve-add" id="veAddInline" title="Tambah klip video">＋</button>';
     // pilih klip (bukan grip)
@@ -269,6 +311,7 @@
     const addBtn = tl.querySelector('#veAddInline');
     addBtn?.addEventListener('click', () => $('veFile')?.click());
     renderClipBar();
+    renderRuler();
   }
 
   function renderClipBar() {
@@ -319,6 +362,7 @@
     renderTimeline();
     renderFilterRow();
     const ex = $('veExportBtn'); if (ex) ex.disabled = !readyClips().length || V.exporting;
+    const sp = $('veSplitBtn'); if (sp) sp.hidden = !readyClips().length;
     if (V.cur < 0 && readyClips().length) loadClip(0, { localT: 0 });
   }
   window.renderVideoEditor = function renderVideoEditor() { renderAll(); };
@@ -474,8 +518,41 @@
     });
   })();
 
-  // ✂ Bagi: potong klip aktif di posisi playhead jadi dua segmen
-  $('veClipSplit')?.addEventListener('click', () => {
+  // Scrub ala CapCut: tarik garis playhead / ketuk-geser penggaris di atas timeline.
+  (() => {
+    const wrap = $('veTlWrap'); const inner = $('veTlInner');
+    if (!wrap || !inner) return;
+    const scrub = (ev) => {
+      const r = inner.getBoundingClientRect();
+      if (r.width < 2) return;
+      const frac = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      seekGlobal(frac * total);
+    };
+    const begin = (e) => {
+      if (!readyClips().length) return;
+      if (e.target.closest && e.target.closest('.ve-clip')) return; // area kartu klip punya aksinya sendiri
+      e.preventDefault();
+      if (V.playing) { $('veVideo')?.pause?.(); V.playing = false; updatePlayBtn(); }
+      wrap.setPointerCapture?.(e.pointerId);
+      scrub(e);
+      const move = (ev) => {
+        scrub(ev);
+        const wr = wrap.getBoundingClientRect();
+        if (ev.clientX > wr.right - 34) wrap.scrollLeft += 10;
+        else if (ev.clientX < wr.left + 34) wrap.scrollLeft -= 10;
+      };
+      const up = () => { wrap.removeEventListener('pointermove', move); wrap.removeEventListener('pointerup', up); wrap.removeEventListener('pointercancel', up); };
+      wrap.addEventListener('pointermove', move);
+      wrap.addEventListener('pointerup', up);
+      wrap.addEventListener('pointercancel', up);
+    };
+    $('vePlayline')?.addEventListener('pointerdown', begin);
+    $('veRuler')?.addEventListener('pointerdown', begin);
+  })();
+
+  // ✂ Bagi: potong klip di posisi garis playhead (tombol selalu terlihat di baris putar)
+  $('veSplitBtn')?.addEventListener('click', () => {
     const ready = readyClips();
     if (!ready.length) return;
     const at = CORE().clipAt ? CORE().clipAt(ready, globalTime()) : null;
