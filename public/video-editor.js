@@ -380,7 +380,28 @@
       });
     });
     renderClipBar();
+    renderBin();
     renderRuler();
+  }
+
+  // panel kiri: media bin — daftar klip sumber (klik untuk memuat di pratinjau)
+  function renderBin() {
+    const list = $('veBinList'); if (!list) return;
+    const countEl = $('veBinCount');
+    if (countEl) countEl.textContent = V.clips.length ? '(' + V.clips.length + ')' : '';
+    list.innerHTML = V.clips.map((c, i) => {
+      const len = c.ready ? fmtT(Math.max(0, c.end - c.start)) : 'memuat…';
+      return '<button type="button" class="ve-bin-item' + (V.selClip === c.id ? ' sel' : '') + '" data-i="' + i + '">'
+        + '<img src="' + (c.thumb || '') + '" alt="">'
+        + '<span class="ve-bin-meta"><span class="ve-bin-name">' + (c.name || 'klip') + '</span>'
+        + '<span class="ve-bin-sub">' + len + (c.muted ? ' · 🔇' : '') + '</span></span></button>';
+    }).join('');
+    list.querySelectorAll('.ve-bin-item').forEach((b) => b.addEventListener('click', () => {
+      const c = V.clips[Number(b.dataset.i)]; if (!c || !c.ready) return;
+      V.selClip = c.id; V.selItem = null;
+      loadClip(readyClips().indexOf(c), { localT: 0 });
+      renderTimeline(); renderOverlays(); renderClipBar();
+    }));
   }
 
   function renderClipBar() {
@@ -686,7 +707,7 @@
   });
 
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
-  $('veAddInline')?.addEventListener('click', () => $('veFile')?.click());
+  $('veBinAdd')?.addEventListener('click', () => $('veFile')?.click());
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
   document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.addEventListener('click', () => setVeTab(b.dataset.tab)));
