@@ -6,10 +6,10 @@
   const $ = (id) => document.getElementById(id);
   const CORE = () => window.VE_CORE || {};
   const COLORS = ['#ffffff', '#0a1220', '#ffd0ec', '#f044a8'];
-  const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
+  const pxPerSec = () => (V.zoom || 90); // lebar timeline per detik — diatur zoom (D-167)
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', texts: [], logos: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', zoom: 90, texts: [], logos: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
   let LOGO_IMGS = null; // id logo -> HTMLImageElement siap gambar (diisi saat ekspor)
 
@@ -295,7 +295,7 @@
   // ---------- timeline ----------
   function clipCard(c, i) {
     const len = Math.round(Math.max(0, c.end - c.start) * 1000) / 1000;
-    const w = Math.round(len * PX_PER_SEC);
+    const w = Math.round(len * pxPerSec());
     const sel = V.selClip === c.id ? ' sel' : '';
     const inner = c.ready
       ? (c.thumb ? '<img src="' + c.thumb + '" alt="" draggable="false">' : '')
@@ -310,13 +310,16 @@
   function renderRuler() {
     const ruler = $('veRuler'); const pl = $('vePlayline');
     const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const px = pxPerSec();
     const body = $('veTlBody');
-    if (body) body.style.width = Math.max(0, Math.round(total * PX_PER_SEC)) + 'px';
+    if (body) body.style.width = Math.max(0, Math.round(total * px)) + 'px';
     if (!ruler) return;
     if (pl) pl.hidden = total <= 0;
     if (total <= 0) { ruler.innerHTML = ''; return; }
-    const labelStep = total <= 30 ? 5 : total <= 120 ? 10 : 30;
-    const tickStep = total <= 120 ? 1 : 5;
+    // kepadatan tick/label menyesuaikan zoom (makin zoom-in makin rapat, ala CapCut)
+    let tickStep = [0.5, 1, 2, 5, 10, 30, 60].find((st) => st * px >= 50) || 60;
+    while (total / tickStep > 400) tickStep *= 2;
+    let labelStep = [1, 2, 5, 10, 15, 30, 60, 120, 300].find((st) => st >= tickStep && st % tickStep === 0 && st * px >= 190) || 300;
     let html = '';
     for (let t = 0; t <= total + 0.001; t += tickStep) {
       const pct = (t / total) * 100;
@@ -358,12 +361,12 @@
           const s0 = c.start, e0 = c.end;
           const lenEl = card.querySelector('.ve-clip-len');
           const move = (ev) => {
-            const ds = (ev.clientX - x0) / PX_PER_SEC;
+            const ds = (ev.clientX - x0) / pxPerSec();
             if (side === 'l') c.start = Math.min(s0 + ds, e0 - (CORE().MIN_SEG || 0.5));
             else c.end = Math.max(e0 + ds, s0 + (CORE().MIN_SEG || 0.5));
             c.start = Math.max(0, c.start); c.end = Math.min(c.dur, c.end);
             if (lenEl) lenEl.textContent = fmtT(Math.round(Math.max(0, c.end - c.start) * 1000) / 1000);
-            card.style.width = Math.round(Math.max(0, c.end - c.start) * PX_PER_SEC) + 'px';
+            card.style.width = Math.round(Math.max(0, c.end - c.start) * pxPerSec()) + 'px';
           };
           const up = () => {
             grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
@@ -453,10 +456,15 @@
       const [rw, rh] = String(V.ratio).split(':').map(Number);
       const avail = (stage.parentElement && stage.parentElement.clientWidth) || 360;
       const maxW = rw >= 1 ? avail : Math.min(400, avail);
-      // Tinggi pratinjau dibatasi biar video & penggaris timeline terlihat bersamaan:
-      // desktop (layout 2 kolom ala CapCut/OpenCut, D-162) ±60% layar, HP ±44% (D-161).
+      // Tinggi pratinjau: desktop (layout solid D-167) = tinggi area tengah yang tersedia,
+      // HP ±44% layar (D-161). Fallback ±60% layar bila area belum terukur.
       const desktop = (window.innerWidth || 0) >= 1024;
-      const maxH = Math.max(200, Math.round((window.innerHeight || 700) * (desktop ? 0.6 : 0.44)));
+      let maxH = Math.max(200, Math.round((window.innerHeight || 700) * (desktop ? 0.6 : 0.44)));
+      if (desktop) {
+        const mainEl = document.querySelector('.ve-main');
+        const availH = mainEl ? Math.round(mainEl.clientHeight - 70) : 0; // ~ baris putar + margin
+        if (availH > 220) maxH = availH;
+      }
       const w = Math.max(120, Math.min(maxW, Math.round(maxH * rw / rh)));
       stage.style.width = w + 'px';
       stage.style.aspectRatio = String(V.ratio).replace(':', ' / ');
@@ -708,6 +716,14 @@
 
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
   $('veBinAdd')?.addEventListener('click', () => $('veFile')?.click());
+  function setZoom(z) {
+    V.zoom = Math.min(280, Math.max(40, Math.round((Number(z) || 90) / 10) * 10));
+    const zl = $('veZoom'); if (zl) zl.value = String(V.zoom);
+    renderTimeline(); // kartu, penggaris & lebar timeline ikut skala baru
+  }
+  $('veZoom')?.addEventListener('input', (e) => setZoom(Number(e.target.value) || 90));
+  $('veZoomIn')?.addEventListener('click', () => setZoom((V.zoom || 90) + 30));
+  $('veZoomOut')?.addEventListener('click', () => setZoom((V.zoom || 90) - 30));
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
   document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.addEventListener('click', () => setVeTab(b.dataset.tab)));
