@@ -297,6 +297,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .pl-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .pl-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .pl-list{display:flex;flex-direction:column;gap:10px}
+.pl-tabs{display:flex;gap:8px;margin-bottom:14px}
+.pl-tab{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 16px;font:inherit;font-size:12px;cursor:pointer;transition:border-color .18s,background .18s}
+.pl-tab:hover{border-color:#49334e;background:#111a2e}
+.pl-tab.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent;box-shadow:0 7px 24px #f044a825}
 .ed-work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
 .ed-stage-wrap{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
 .ed-stage{position:relative;overflow:hidden;border-radius:12px;background:#0a1220;user-select:none;touch-action:none;cursor:grab;max-width:100%}
@@ -756,9 +760,31 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div class="pf-detail" id="pfDetail" role="dialog" aria-modal="true" aria-label="Detail karya"><div class="pf-detail-card" id="pfDetailCard"></div></div>
 </section>
 <section id="plannerView" class="page-view">
-  <div class="page-heading"><div><h1>Planner</h1><p>Rencana &amp; progres konten Sherly — ide, draft, jadwal, tayang.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="plIdeBtn"><span data-icon="sparkles"></span> Minta ide dari Sherly</button><button type="button" class="pink-btn" id="plAddBtn"><span data-icon="plus"></span> Tambah Konten</button></div></div>
-  <div class="pl-filters" id="plFilters"></div>
-  <div class="pl-list" id="plList"></div>
+  <div class="page-heading"><div><h1>Planner</h1><p>Rencana &amp; progres konten Sherly — board rencana, naskah, jadwal, tayang.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="plIdeBtn"><span data-icon="sparkles"></span> Minta ide dari Sherly</button><button type="button" class="pink-btn" id="plAddBtn"><span data-icon="plus"></span> Tambah Konten</button></div></div>
+  <div class="pl-tabs" id="plTabs" role="tablist" aria-label="Bagian Planner">
+    <button type="button" class="pl-tab active" data-tab="board" role="tab" aria-selected="true">Board Rencana</button>
+    <button type="button" class="pl-tab" data-tab="docs" role="tab" aria-selected="false">Naskah</button>
+  </div>
+  <div id="plBoardTab">
+   <div class="pl-filters" id="plFilters"></div>
+   <div class="pl-list" id="plList"></div>
+  </div>
+  <div id="plDocsTab" hidden>
+   <div class="ed-layout">
+    <aside class="ed-list" id="pdList" aria-label="Daftar naskah"></aside>
+    <div class="ed-main">
+     <form id="pdForm" autocomplete="off">
+      <div class="form-grid">
+       <div class="form-field full"><label for="pdTitle">Judul naskah</label><input id="pdTitle" maxlength="120" placeholder="Contoh: Reels skincare — hook &amp; CTA"><span class="ed-dirty" id="pdDirty" hidden>belum disimpan</span></div>
+       <div class="form-field"><label for="pdType">Jenis naskah</label><select id="pdType"></select></div>
+       <div class="form-field"><label for="pdStatus">Status</label><select id="pdStatus"><option value="draft">Draft</option><option value="review">Review</option><option value="final">Final — siap pakai</option></select></div>
+       <div class="form-field full"><label for="pdBody">Isi naskah</label><textarea id="pdBody" class="ed-body" maxlength="20000" placeholder="Tulis bebas — hook, isi, CTA&#10;&#10;Klik “Bantuan Sherly” untuk minta Sherly merapikan atau melanjutkan naskah ini."></textarea><small class="ed-count" id="pdCount">0 kata · 0 karakter</small></div>
+      </div>
+      <div class="profile-actions"><button type="submit" class="pink-btn" id="pdSaveBtn">Simpan Naskah</button><button type="button" class="outline-btn" id="pdNewBtn">Naskah Baru</button><button type="button" class="outline-btn" id="pdAssistBtn"><span data-icon="sparkles"></span> Bantuan Sherly</button><button type="button" class="outline-btn danger-btn" id="pdDeleteBtn" hidden>Hapus</button></div>
+     </form>
+    </div>
+   </div>
+  </div>
   <div class="modal-backdrop" id="plModal"><div class="modal">
     <h2 id="plModalTitle">Tambah Konten</h2>
     <p class="modal-sub">Rencanakan konten — judul, platform, tanggal, status, dan catatan.</p>
@@ -1091,6 +1117,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/portfolio.js"></script>
 <script src="/planner.js"></script>
 <script src="/editor.js"></script>
+<script src="/planner-docs.js"></script>
 <script src="/calendar.js"></script>
 <script src="/studio.js"></script>
 <script src="/persona-data.js"></script>
