@@ -343,6 +343,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-fchip{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:6px 13px;font:inherit;font-size:11.5px;cursor:pointer}
 .ve-fchip.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent}
 .ve-adj-val{color:#ffd0ec;font-variant-numeric:tabular-nums}
+.ve-ovtrack{position:relative;height:14px;margin-bottom:2px}
+.ve-ovspan{position:absolute;top:1px;bottom:1px;border:0;border-radius:4px;background:#f044a866;color:#ffd0ec;font:inherit;font-size:8.5px;line-height:11px;cursor:pointer;padding:0 3px;overflow:hidden;white-space:nowrap}
+.ve-ovspan.logo{background:#ffffff38;color:#fff}
+.ve-ovspan.sel{outline:2px solid #ff72c5;outline-offset:1px}
+.ve-it-logo{object-fit:contain}
 .ve-tab-hint{font-size:11px;color:#91a2b9;margin:0}
 #veItemBar{display:flex;flex-direction:column;gap:10px}
 .ve-field .ve-item-select,.ve-field .ve-item-input{width:100%}
@@ -971,6 +976,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
         <div class="ve-tabs">
           <button type="button" class="ve-tab active" data-tab="filter">Filter</button>
           <button type="button" class="ve-tab" data-tab="text">Teks</button>
+          <button type="button" class="ve-tab" data-tab="logo">Logo</button>
         </div>
         <div class="ve-tabpane" id="veTabFilter">
           <div class="ve-presets" id="vePresets"></div>
@@ -987,9 +993,21 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
             <div class="ve-field"><label for="veItemFont">Font</label><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></div>
             <div class="ve-field"><label>Warna</label><div class="ve-row" id="veItemColors" style="gap:5px"></div></div>
             <div class="ve-field"><label for="veItemSize">Ukuran</label><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:100%" aria-label="Ukuran"></div>
+            <div class="ve-field"><label>Muncul pada (dtk)</label><div class="ve-row" style="gap:6px"><input type="number" id="veItemStart" class="ve-item-input" min="0" step="0.1" style="min-width:64px;flex:1" aria-label="Mulai muncul (detik)"><span class="ve-tab-hint">s/d</span><input type="number" id="veItemEnd" class="ve-item-input" min="0" step="0.1" style="min-width:64px;flex:1" aria-label="Selesai muncul (detik)"></div></div>
             <button type="button" class="ve-btn danger" id="veItemDel">Hapus teks</button>
           </div>
           <p class="ve-tab-hint">Tambah teks, lalu seret teksnya di video untuk memindahkan.</p>
+        </div>
+        <div class="ve-tabpane" id="veTabLogo" hidden>
+          <button type="button" class="ve-btn" id="veAddLogo">⬆ Unggah logo / gambar</button>
+          <input type="file" id="veLogoFile" accept="image/*" hidden>
+          <div id="veLogoBar" hidden>
+            <div class="ve-field"><label>Ukuran <span class="ve-adj-val" id="veLogoSizeVal">15%</span></label><input id="veLogoSize" type="range" min="0.04" max="0.6" step="0.01" value="0.15" aria-label="Ukuran logo"></div>
+            <div class="ve-field"><label>Transparansi <span class="ve-adj-val" id="veLogoOpVal">100%</span></label><input id="veLogoOp" type="range" min="0.1" max="1" step="0.05" value="1" aria-label="Transparansi logo"></div>
+            <div class="ve-field"><label>Muncul pada (dtk)</label><div class="ve-row" style="gap:6px"><input type="number" id="veLogoStart" class="ve-item-input" min="0" step="0.1" style="min-width:64px;flex:1" aria-label="Mulai muncul (detik)"><span class="ve-tab-hint">s/d</span><input type="number" id="veLogoEnd" class="ve-item-input" min="0" step="0.1" style="min-width:64px;flex:1" aria-label="Selesai muncul (detik)"></div></div>
+            <button type="button" class="ve-btn danger" id="veLogoDel">Hapus logo</button>
+          </div>
+          <p class="ve-tab-hint">Letakkan logo channel di pojok video (ala TV) atau pakai sebagai watermark — bisa digeser & diatur waktunya.</p>
         </div>
       </div>
     </aside>
@@ -998,6 +1016,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
       <div class="ve-tl-wrap" id="veTlWrap">
         <div class="ve-tl-inner" id="veTlInner">
           <div class="ve-tl-body" id="veTlBody">
+            <div class="ve-ovtrack" id="veOvTrack" hidden></div>
             <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
             <div class="ve-timeline" id="veTimeline"></div>
             <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>

@@ -9,8 +9,9 @@
   const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', texts: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', texts: [], logos: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
+  let LOGO_IMGS = null; // id logo -> HTMLImageElement siap gambar (diisi saat ekspor)
 
   const readyClips = () => V.clips.filter((c) => c.ready);
   const fmtT = (x) => (CORE().fmtTime ? CORE().fmtTime(x) : String(x));
@@ -131,6 +132,11 @@
         if (wrap && pl.offsetLeft > wrap.scrollLeft + wrap.clientWidth - 48) wrap.scrollLeft = pl.offsetLeft - 80;
       }
     }
+    // teks & logo hanya tampil pada jangka waktunya (teks berjangka + logo/watermark)
+    document.querySelectorAll('.ve-it').forEach((n) => {
+      const it = V.texts.find((x) => x.id === n.dataset.veId) || V.logos.find((x) => x.id === n.dataset.veId);
+      if (it) n.style.display = (t >= (it.start || 0) && t <= (it.end == null ? Infinity : it.end)) ? '' : 'none';
+    });
     if (V.playing && V.cur >= 0 && ready[V.cur]) {
       const el = $('veVideo');
       const c = ready[V.cur];
@@ -164,11 +170,13 @@
     b.setAttribute('aria-label', V.playing ? 'Jeda' : 'Putar');
   }
 
-  // ---------- overlay teks ----------
+  // ---------- overlay teks (berjangka) & logo ----------
   function renderOverlays() {
     const stage = $('veStage'); if (!stage) return;
     stage.querySelectorAll('.ve-it').forEach((n) => n.remove());
     const H = stage.clientHeight || 1;
+    const t = globalTime();
+    const vis = (it) => (t >= (it.start || 0) && t <= (it.end == null ? Infinity : it.end) ? '' : 'none');
     for (const it of V.texts) {
       const d = document.createElement('div');
       d.className = 've-it' + (V.selItem === it.id ? ' sel' : '');
@@ -181,10 +189,50 @@
       d.style.fontSize = Math.max(10, Math.round(it.size * H)) + 'px';
       d.style.left = (it.x * 100) + '%';
       d.style.top = (it.y * 100) + '%';
+      d.style.display = vis(it);
       stage.appendChild(d);
       bindDrag(d, it);
     }
-    renderItemBar();
+    for (const it of V.logos) {
+      const d = document.createElement('img');
+      d.className = 've-it ve-it-logo' + (V.selItem === it.id ? ' sel' : '');
+      d.dataset.veId = it.id;
+      d.src = it.url; d.alt = 'logo'; d.draggable = false;
+      const lh = Math.max(8, (it.scale || 0.15) * H);
+      const lw = lh * ((it.w || 100) / (it.h || 100));
+      d.style.width = lw + 'px';
+      d.style.height = lh + 'px';
+      d.style.left = (it.x * 100) + '%';
+      d.style.top = (it.y * 100) + '%';
+      d.style.opacity = String(it.opacity == null ? 1 : it.opacity);
+      d.style.display = vis(it);
+      stage.appendChild(d);
+      bindDrag(d, it);
+    }
+    renderItemBar(); renderLogoBar(); renderOvTrack();
+  }
+
+  // jalur tipis di atas penggaris: jangka waktu teks (T) & logo (L) — klik untuk memilih
+  function renderOvTrack() {
+    const track = $('veOvTrack'); if (!track) return;
+    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    track.hidden = total <= 0;
+    if (total <= 0) { track.innerHTML = ''; return; }
+    const spans = [
+      ...V.texts.map((it) => ({ it, kind: 'T', logo: false })),
+      ...V.logos.map((it) => ({ it, kind: 'L', logo: true })),
+    ];
+    track.innerHTML = spans.map(({ it, kind, logo }) => {
+      const l = Math.max(0, Math.min(100, ((it.start || 0) / total) * 100));
+      const r = Math.max(0, Math.min(100, ((it.end == null ? total : it.end) / total) * 100));
+      return '<button type="button" class="ve-ovspan' + (logo ? ' logo' : '') + (V.selItem === it.id ? ' sel' : '') + '" data-oid="' + it.id + '" data-kind="' + kind + '" style="left:' + l + '%;width:' + Math.max(0.8, r - l) + '%" title="' + (logo ? 'Logo' : 'Teks') + ' ' + fmtT(it.start || 0) + '–' + fmtT(it.end == null ? total : it.end) + '">' + kind + '</button>';
+    }).join('');
+    track.querySelectorAll('.ve-ovspan').forEach((b) => b.addEventListener('click', () => {
+      V.selItem = b.dataset.oid;
+      V.selClip = null;
+      setVeTab(b.dataset.kind === 'L' ? 'logo' : 'text');
+      renderOverlays(); renderClipBar();
+    }));
   }
 
   function bindDrag(node, it) {
@@ -192,35 +240,56 @@
       e.preventDefault();
       V.selItem = it.id;
       V.selClip = null;
-      setVeTab('text');
-      renderOverlays(); renderClipBar();
-      node.setPointerCapture?.(e.pointerId);
+      setVeTab(V.texts.some((x) => x.id === it.id) ? 'text' : 'logo');
+      // Perbarui seleksi TANPA merender ulang — node lama terhapus bila dirender, drag jadi putus.
+      document.querySelectorAll('.ve-it').forEach((n) => n.classList.toggle('sel', n.dataset.veId === it.id));
+      renderClipBar(); renderItemBar(); renderLogoBar(); renderOvTrack();
+      // Lepas fokus dari input panel supaya tombol panah menggeser overlay (bukan mengubah slider/input).
+      try { const ae = document.activeElement; if (ae && ae.blur) ae.blur(); } catch {}
       const move = (ev) => {
         const stage = $('veStage'); if (!stage) return;
         const r = stage.getBoundingClientRect();
-        it.x = Math.min(0.98, Math.max(0.02, (ev.clientX - r.left) / r.width));
-        it.y = Math.min(0.98, Math.max(0.02, (ev.clientY - r.top) / r.height));
+        it.x = Math.min(0.98, Math.max(0.02, (ev.clientX - r.left) / Math.max(1, r.width)));
+        it.y = Math.min(0.98, Math.max(0.02, (ev.clientY - r.top) / Math.max(1, r.height)));
         node.style.left = (it.x * 100) + '%';
         node.style.top = (it.y * 100) + '%';
       };
-      const up = () => { node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up); };
-      node.addEventListener('pointermove', move);
-      node.addEventListener('pointerup', up);
-      node.addEventListener('pointercancel', up);
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
     });
   }
 
   function selectedItem() {
-    return V.texts.find((x) => x.id === V.selItem) || null;
+    return V.texts.find((x) => x.id === V.selItem) || V.logos.find((x) => x.id === V.selItem) || null;
   }
   function renderItemBar() {
     const bar = $('veItemBar'); if (!bar) return;
-    const it = selectedItem();
+    const it = V.texts.find((x) => x.id === V.selItem);
     bar.hidden = !it;
     if (!it) return;
     if ($('veItemText') && document.activeElement !== $('veItemText')) $('veItemText').value = it.str;
     if ($('veItemFont')) $('veItemFont').value = it.font;
     if ($('veItemSize')) $('veItemSize').value = String(Math.round(it.size * 1000) / 1000);
+    if ($('veItemStart')) $('veItemStart').value = String(it.start || 0);
+    if ($('veItemEnd')) $('veItemEnd').value = String(it.end == null ? 0 : it.end);
+  }
+  function renderLogoBar() {
+    const bar = $('veLogoBar'); if (!bar) return;
+    const it = V.logos.find((x) => x.id === V.selItem);
+    bar.hidden = !it;
+    if (!it) return;
+    if ($('veLogoSize')) $('veLogoSize').value = String(it.scale || 0.15);
+    if ($('veLogoSizeVal')) $('veLogoSizeVal').textContent = Math.round((it.scale || 0.15) * 100) + '%';
+    if ($('veLogoOp')) $('veLogoOp').value = String(it.opacity == null ? 1 : it.opacity);
+    if ($('veLogoOpVal')) $('veLogoOpVal').textContent = Math.round((it.opacity == null ? 1 : it.opacity) * 100) + '%';
+    if ($('veLogoStart')) $('veLogoStart').value = String(it.start || 0);
+    if ($('veLogoEnd')) $('veLogoEnd').value = String(it.end == null ? 0 : it.end);
   }
 
   // ---------- timeline ----------
@@ -338,8 +407,9 @@
   function setVeTab(name) {
     V.tab = name;
     document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    const f = $('veTabFilter'); if (f) f.hidden = name !== 'filter';
-    const t = $('veTabText'); if (t) t.hidden = name !== 'text';
+    for (const [id, key] of [['veTabFilter', 'filter'], ['veTabText', 'text'], ['veTabLogo', 'logo']]) {
+      const pane = $(id); if (pane) pane.hidden = key !== name;
+    }
   }
 
   // ---------- penyesuaian manual (slider) ----------
@@ -374,7 +444,16 @@
     if (el) el.style.filter = filterCss() || 'none';
   }
 
+  function clampOverlayTimes() {
+    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    if (total <= 0) return;
+    for (const it of [...V.texts, ...V.logos]) {
+      it.end = Math.min(it.end == null ? total : it.end, total);
+      it.start = Math.min(it.start || 0, Math.max(0, it.end - 0.1));
+    }
+  }
   function renderAll() {
+    clampOverlayTimes();
     const empty = $('veEmpty'); const wrap = $('veWrap');
     const has = V.clips.length > 0;
     if (empty) empty.hidden = has;
@@ -399,7 +478,7 @@
       setTimeout(fin, 8000);
     });
   }
-  function drawFrame(ctx, el, W, H) {
+  function drawFrame(ctx, el, W, H, g) {
     ctx.fillStyle = '#0a1220';
     ctx.fillRect(0, 0, W, H);
     const vw = el.videoWidth || 720, vh = el.videoHeight || 1280;
@@ -411,9 +490,19 @@
     const F = CORE().VFONTS || { family: {}, weight: {} };
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     V.texts.forEach((it) => {
+      if (g < (it.start || 0) || g > (it.end == null ? Infinity : it.end)) return;
       ctx.font = (F.weight[it.font] || 700) + ' ' + Math.round(it.size * H) + 'px ' + (F.family[it.font] || 'Inter, Arial, sans-serif');
       ctx.fillStyle = it.color;
       it.str.split('\n').forEach((line, i, arr) => ctx.fillText(line, it.x * W, it.y * H + (i - (arr.length - 1) / 2) * it.size * H * 1.15));
+    });
+    V.logos.forEach((it) => {
+      if (g < (it.start || 0) || g > (it.end == null ? Infinity : it.end)) return;
+      const im = LOGO_IMGS && LOGO_IMGS.get(it.id); if (!im) return;
+      const lh = Math.max(4, (it.scale || 0.15) * H);
+      const lw = lh * ((im.naturalWidth || it.w || 100) / (im.naturalHeight || it.h || 100));
+      ctx.globalAlpha = Math.min(1, Math.max(0.05, it.opacity == null ? 1 : it.opacity));
+      try { ctx.drawImage(im, it.x * W - lw / 2, it.y * H - lh / 2, lw, lh); } catch {}
+      ctx.globalAlpha = 1;
     });
   }
   async function exportVideo() {
@@ -435,6 +524,14 @@
     if (progWrap) progWrap.hidden = false;
 
     const [W, H] = (CORE().VE_RATIOS || {})[V.ratio] || [1080, 1920];
+    // siapkan gambar logo (teks berjangka & logo ikut dirender sesuai waktunya)
+    LOGO_IMGS = new Map();
+    await Promise.all(V.logos.map((l) => new Promise((res) => {
+      const im = new Image();
+      im.onload = () => { LOGO_IMGS.set(l.id, im); res(); };
+      im.onerror = () => res();
+      im.src = l.url;
+    })));
     const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext && canvas.getContext('2d');
     const stream = canvas.captureStream(30);
@@ -480,7 +577,7 @@
         await new Promise((resolve) => {
           const step = () => {
             if (V.cancelExport) { resolve(); return; }
-            if (ctx) drawFrame(ctx, el, W, H);
+            if (ctx) drawFrame(ctx, el, W, H, doneSec + Math.min(Math.max(el.currentTime - c.start, 0), c.end - c.start));
             setProg(doneSec + Math.min(Math.max(el.currentTime - c.start, 0), c.end - c.start));
             if (el.currentTime >= c.end - 0.02 || el.ended) { resolve(); return; }
             requestAnimationFrame(step);
@@ -495,6 +592,7 @@
       await stopped;
       els.forEach(({ el }) => { try { el.pause(); } catch {} el.removeAttribute('src'); try { el.load(); } catch {} });
       try { ac && ac.close(); } catch {}
+      LOGO_IMGS = null;
     }
     if (progWrap) progWrap.hidden = true;
     V.exporting = false;
@@ -621,7 +719,8 @@
     updatePlayBtn();
   });
   $('veAddText')?.addEventListener('click', () => {
-    V.texts.push({ id: 't' + (++uid), str: 'Teks baru', font: 'Inter', size: 0.06, color: '#ffffff', x: 0.5, y: 0.82 });
+    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    V.texts.push({ id: 't' + (++uid), str: 'Teks baru', font: 'Inter', size: 0.06, color: '#ffffff', x: 0.5, y: 0.82, start: 0, end: Math.max(0.5, total) });
     V.selItem = V.texts[V.texts.length - 1].id;
     setVeTab('text');
     renderOverlays();
@@ -654,6 +753,64 @@
   })();
   $('veItemDel')?.addEventListener('click', () => {
     V.texts = V.texts.filter((x) => x.id !== V.selItem);
+    V.selItem = null;
+    renderOverlays();
+  });
+
+  // ---------- jangka waktu teks & logo (muncul pada detik ke-… s/d …) ----------
+  function bindTiming(startId, endId, find) {
+    const apply = () => {
+      const it = find(); if (!it) return;
+      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      let start = Math.max(0, Math.min(total, Math.round((Number($(startId).value) || 0) * 10) / 10));
+      let end = Math.max(0, Math.min(total, Math.round((Number($(endId).value) || 0) * 10) / 10));
+      if (end < start + 0.1) end = Math.min(total, start + 0.1);
+      if (end < start + 0.1) start = Math.max(0, end - 0.1);
+      it.start = start; it.end = end;
+      renderOverlays(); // sinkron input + jalur T/L di atas penggaris
+    };
+    $(startId)?.addEventListener('change', apply);
+    $(endId)?.addEventListener('change', apply);
+  }
+  bindTiming('veItemStart', 'veItemEnd', () => V.texts.find((x) => x.id === V.selItem));
+  bindTiming('veLogoStart', 'veLogoEnd', () => V.logos.find((x) => x.id === V.selItem));
+
+  // ---------- logo / watermark ----------
+  function addLogoFile(f) {
+    if (!f || !/^image\//i.test(f.type || '')) { window.toast?.('Pilih file gambar ya (PNG/JPG/WebP).'); return; }
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    let settled = false;
+    const put = (w, h) => {
+      if (settled) return; settled = true;
+      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      V.logos.push({ id: 'l' + (++uid), url, w: w || 100, h: h || 100, x: 0.84, y: 0.12, scale: 0.15, opacity: 1, start: 0, end: Math.max(0.5, total) });
+      V.selItem = V.logos[V.logos.length - 1].id;
+      setVeTab('logo');
+      renderOverlays();
+      window.toast?.('Logo ditambahkan di pojok kanan atas — seret untuk memindahkan.');
+    };
+    im.onload = () => put(im.naturalWidth, im.naturalHeight);
+    im.onerror = () => { if (!settled) { settled = true; window.toast?.('Logo gagal dibuka — coba PNG/JPG/WebP.'); try { URL.revokeObjectURL(url); } catch {} } };
+    im.src = url;
+    setTimeout(() => put(100, 100), 3000); // jaga-jaga onload tak terpicu
+  }
+  $('veAddLogo')?.addEventListener('click', () => $('veLogoFile')?.click());
+  $('veLogoFile')?.addEventListener('change', (e) => { addLogoFile(e.target.files && e.target.files[0]); e.target.value = ''; });
+  $('veLogoSize')?.addEventListener('input', (e) => {
+    const it = V.logos.find((x) => x.id === V.selItem); if (!it) return;
+    it.scale = Math.min(0.6, Math.max(0.04, Number(e.target.value) || 0.15));
+    const lab = $('veLogoSizeVal'); if (lab) lab.textContent = Math.round(it.scale * 100) + '%';
+    renderOverlays();
+  });
+  $('veLogoOp')?.addEventListener('input', (e) => {
+    const it = V.logos.find((x) => x.id === V.selItem); if (!it) return;
+    it.opacity = Math.min(1, Math.max(0.1, Number(e.target.value) || 1));
+    const lab = $('veLogoOpVal'); if (lab) lab.textContent = Math.round(it.opacity * 100) + '%';
+    renderOverlays();
+  });
+  $('veLogoDel')?.addEventListener('click', () => {
+    V.logos = V.logos.filter((x) => x.id !== V.selItem);
     V.selItem = null;
     renderOverlays();
   });
