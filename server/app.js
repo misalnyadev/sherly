@@ -12,6 +12,7 @@ import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
+import { sanitizeDocInput, docToMeta, EDITOR_DOC_TYPES } from './editor-docs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -833,6 +834,49 @@ app.delete('/api/custom-providers/:id', requireUser, requireAdmin, async (req, r
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
+// ---------- Editor: dokumen naskah admin (D-152) ----------
+app.get('/api/editor/docs', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await req.supabase.from('editor_documents')
+      .select('id,title,doc_type,status,body,created_at,updated_at')
+      .eq('user_id', req.user.id).order('updated_at', { ascending: false }).limit(200);
+    if (error) throw new Error('Tabel editor_documents belum bisa diakses. Jalankan supabase/editor_documents.sql di SQL Editor dulu.');
+    res.json({ docs: data || [] });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.post('/api/editor/docs', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const v = sanitizeDocInput(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error });
+    const { data, error } = await req.supabase.from('editor_documents')
+      .insert({ user_id: req.user.id, ...v.value })
+      .select('id,title,doc_type,status,body,created_at,updated_at').single();
+    if (error) return res.status(500).json({ error: 'Gagal menyimpan dokumen (' + error.message + ').' });
+    res.json({ ok: true, doc: data });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.put('/api/editor/docs/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const v = sanitizeDocInput(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error });
+    const { data, error } = await req.supabase.from('editor_documents')
+      .update({ ...v.value, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).eq('user_id', req.user.id)
+      .select('id,title,doc_type,status,body,created_at,updated_at').single();
+    if (!data && !error) return res.status(404).json({ error: 'Dokumen tidak ditemukan.' });
+    if (error) return res.status(500).json({ error: 'Gagal memperbarui dokumen (' + error.message + ').' });
+    res.json({ ok: true, doc: data });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.delete('/api/editor/docs/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { error } = await req.supabase.from('editor_documents')
+      .delete().eq('id', req.params.id).eq('user_id', req.user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.get('/api/editor/meta', requireUser, requireAdmin, (_req, res) => res.json({ doc_types: EDITOR_DOC_TYPES }));
 app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
   try {
     const { text, voice: reqVoice, style: reqStyle } = req.body || {};
