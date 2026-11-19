@@ -214,7 +214,7 @@
   // ---------- timeline ----------
   function clipCard(c, i) {
     const len = Math.round(Math.max(0, c.end - c.start) * 1000) / 1000;
-    const w = Math.round(len * PX_PER_SEC + 44);
+    const w = Math.round(len * PX_PER_SEC);
     const sel = V.selClip === c.id ? ' sel' : '';
     const inner = c.ready
       ? (c.thumb ? '<img src="' + c.thumb + '" alt="" draggable="false">' : '')
@@ -229,6 +229,8 @@
   function renderRuler() {
     const ruler = $('veRuler'); const pl = $('vePlayline');
     const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const body = $('veTlBody');
+    if (body) body.style.width = Math.max(0, Math.round(total * PX_PER_SEC)) + 'px';
     if (!ruler) return;
     if (pl) pl.hidden = total <= 0;
     if (total <= 0) { ruler.innerHTML = ''; return; }
@@ -250,8 +252,7 @@
   function renderTimeline() {
     const tl = $('veTimeline'); if (!tl) return;
     V.tlEpoch++;
-    tl.innerHTML = V.clips.map(clipCard).join('')
-      + '<button type="button" class="ve-add" id="veAddInline" title="Tambah klip video">＋</button>';
+    tl.innerHTML = V.clips.map(clipCard).join('');
     // pilih klip (bukan grip)
     tl.querySelectorAll('.ve-clip').forEach((card) => {
       card.addEventListener('pointerdown', (e) => {
@@ -281,7 +282,7 @@
             else c.end = Math.max(e0 + ds, s0 + (CORE().MIN_SEG || 0.5));
             c.start = Math.max(0, c.start); c.end = Math.min(c.dur, c.end);
             if (lenEl) lenEl.textContent = fmtT(Math.round(Math.max(0, c.end - c.start) * 1000) / 1000);
-            card.style.width = Math.round(Math.max(0, c.end - c.start) * PX_PER_SEC + 44) + 'px';
+            card.style.width = Math.round(Math.max(0, c.end - c.start) * PX_PER_SEC) + 'px';
           };
           const up = () => {
             grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
@@ -297,8 +298,6 @@
         });
       });
     });
-    const addBtn = tl.querySelector('#veAddInline');
-    addBtn?.addEventListener('click', () => $('veFile')?.click());
     renderClipBar();
     renderRuler();
   }
@@ -499,10 +498,10 @@
 
   // Scrub ala CapCut: tarik garis playhead / ketuk-geser penggaris di atas timeline.
   (() => {
-    const wrap = $('veTlWrap'); const inner = $('veTlInner');
-    if (!wrap || !inner) return;
+    const wrap = $('veTlWrap'); const body = $('veTlBody');
+    if (!wrap || !body) return;
     const scrub = (ev) => {
-      const r = inner.getBoundingClientRect();
+      const r = body.getBoundingClientRect();
       if (r.width < 2) return;
       const frac = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
       const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
@@ -549,6 +548,7 @@
   });
 
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
+  $('veAddInline')?.addEventListener('click', () => $('veFile')?.click());
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
   $('veFilter')?.addEventListener('change', (e) => { V.filter = e.target.value || 'normal'; applyStage(); });
