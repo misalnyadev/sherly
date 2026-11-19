@@ -297,6 +297,46 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .pl-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .pl-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .pl-list{display:flex;flex-direction:column;gap:10px}
+.ed-work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
+.ed-stage-wrap{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.ed-stage{position:relative;overflow:hidden;border-radius:12px;background:#0a1220;user-select:none;touch-action:none;cursor:grab;max-width:100%}
+.ed-stage:active{cursor:grabbing}
+.ed-stage img{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;max-width:none;image-rendering:auto}
+.ed-ol{position:absolute;inset:0}
+.ed-it{position:absolute;transform:translate(-50%,-50%);cursor:move;line-height:1.12;white-space:pre;text-shadow:0 1px 6px #00000080}
+.ed-it.sel{outline:1.5px dashed #ff9bdc;outline-offset:4px;border-radius:2px}
+.ed-stage-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;width:100%}
+.ed-ratio{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:10px;padding:5px 10px;font:inherit;font-size:10.5px;cursor:pointer;text-align:center}
+.ed-ratio b{display:block;font-size:11.5px;color:#f4f5fb}
+.ed-ratio.active{border-color:#f044a8;background:#f044a826;color:#ffd0ec}
+.ed-ratio.active b{color:#ffd0ec}
+.ed-zoomrow{display:flex;align-items:center;gap:8px;width:100%;max-width:340px}
+.ed-zoomrow input{flex:1;accent-color:#f044a8}
+.ed-zoomrow small{font-size:10px;color:#91a2b9;min-width:34px;text-align:right}
+.ed-side .ed-panel{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:13px;padding:12px;margin-bottom:12px}
+.ed-panel h3{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#91a2b9;margin-bottom:9px}
+.ed-presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ed-preset{border:1px solid #24344e;background:#0f1828;border-radius:10px;padding:4px;cursor:pointer;font:inherit}
+.ed-preset img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:7px;display:block}
+.ed-preset span{display:block;font-size:9px;color:#cfd6e4;margin-top:4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-preset.active{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
+.ed-preset.active span{color:#ffd0ec}
+.ed-adj{display:grid;gap:8px}
+.ed-adj label{display:flex;align-items:center;gap:8px;font-size:11px;color:#cfd6e4}
+.ed-adj label span{min-width:74px}
+.ed-adj input{flex:1;accent-color:#f044a8}
+.ed-adj label small{min-width:38px;text-align:right;color:#91a2b9;font-size:10px}
+.ed-emojis{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.ed-emoji{border:1px solid transparent;background:transparent;border-radius:8px;font-size:19px;padding:3px 0;cursor:pointer;font-family:inherit}
+.ed-emoji:hover{background:#111a2e;border-color:#49334e}
+.ed-selbox{display:grid;gap:8px}
+.ed-selbox input[type=text]{background:#0f1828;color:#fff;border:1px solid #24344e;border-radius:9px;padding:8px 10px;font:inherit;font-size:12px}
+.ed-swatches{display:flex;gap:6px}
+.ed-swatch{width:26px;height:26px;border-radius:50%;border:2px solid #24344e;cursor:pointer}
+.ed-swatch.active{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
+.ed-empty{border:1.5px dashed #49334e;border-radius:15px;padding:38px 20px;text-align:center;color:#91a2b9;font-size:12.5px;line-height:1.7;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+.ed-empty:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
+.ed-empty b{display:block;font-size:15px;color:#f4f5fb;margin-bottom:6px}
 .pl-item{display:flex;gap:14px;align-items:center;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:13px 15px;transition:border-color .18s,box-shadow .18s;cursor:pointer}
 .pl-item:hover{border-color:#49334e;box-shadow:0 0 0 3px #f044a814}
 .pl-date{flex:none;width:52px;text-align:center;border-right:1px solid var(--line);padding-right:12px}
@@ -395,6 +435,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .pl-actions button:hover{border-color:#f044a8;color:#ffd0ec}
 .pl-actions svg{width:14px;height:14px}
 @media(max-width:560px){.pl-item{flex-wrap:wrap}.pl-side{flex-direction:row;width:100%;justify-content:space-between;align-items:center}}
+@media(max-width:860px){.ed-work{grid-template-columns:1fr}.ed-presets{grid-template-columns:repeat(4,1fr)}}
 /* Persona */
 .pe-hero{display:flex;gap:22px;align-items:center;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:16px;flex-wrap:wrap}
 .pe-ava{width:110px;height:110px;border-radius:50%;object-fit:cover;object-position:center 16%;border:3px solid #f044a8;padding:4px;background:radial-gradient(circle at 50% 30%,rgba(216,45,145,.35),rgba(4,7,15,.9));box-shadow:0 0 44px rgba(216,45,145,.35);flex:none}
@@ -515,7 +556,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    <div class="nav-group-label">Menu Admin</div>
    <button data-page="Karakter" title="Karakter"><span class="ico" data-icon="users"></span><span class="nav-label">Karakter</span></button>
    <button data-page="Studio" title="Studio"><span class="ico" data-icon="clapperboard"></span><span class="nav-label">Studio</span></button>
-   <button data-page="Editor" title="Editor (segera)"><span class="ico" data-icon="pencil"></span><span class="nav-label">Editor<span class="chip">segera</span></span></button>
+   <button data-page="Editor" title="Editor finishing konten"><span class="ico" data-icon="pencil"></span><span class="nav-label">Editor</span></button>
    <button data-page="Pengaturan" title="Pengaturan"><span class="ico" data-icon="sliders"></span><span class="nav-label">Pengaturan</span></button>
   </div>
  </nav>
@@ -731,6 +772,41 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     <div class="modal-actions"><button type="button" class="outline-btn danger-btn" id="plDeleteBtn" hidden>Hapus</button><button type="button" class="outline-btn" id="plCancelBtn">Batal</button><button type="button" class="pink-btn" id="plSaveBtn">Simpan</button></div>
   </div></div>
 </section>
+<section id="editorView" class="page-view">
+  <div class="page-heading"><div><h1>Editor</h1><p>Finishing konten ala CapCut / ediats Instagram — atur rasio, filter, teks, dan sticker, lalu unduh hasilnya. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="edChangeBtn" hidden><span data-icon="images"></span> Ganti Foto</button><button type="button" class="outline-btn" id="edResetBtn" hidden><span data-icon="refresh-cw"></span> Reset</button><button type="button" class="pink-btn" id="edExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Unduh Hasil</button></div></div>
+  <div class="ed-work">
+   <div class="ed-stage-wrap" id="edStageWrap">
+    <div class="ed-empty" id="edEmpty" role="button" tabindex="0" aria-label="Pilih foto untuk diedit"><b>Seret foto ke sini</b>atau klik untuk memilih file<br><small>JPG · PNG · WebP — hasil generate dari Studio juga bisa langsung ditempel</small></div>
+    <div class="ed-stage" id="edStage" hidden aria-label="Panggung editing"><img id="edPhoto" alt="Foto yang sedang diedit" draggable="false"><div class="ed-ol" id="edOverlay"></div></div>
+    <div class="ed-stage-tools" id="edStageTools" hidden>
+      <div id="edRatios" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
+      <div class="ed-zoomrow"><small>Zoom</small><input type="range" id="edZoom" min="100" max="400" step="5" value="100" aria-label="Zoom foto"><small id="edZoomVal">100%</small></div>
+    </div>
+   </div>
+   <div class="ed-side" id="edSide" hidden>
+    <div class="ed-panel"><h3>Filter</h3><div class="ed-presets" id="edPresets"></div></div>
+    <div class="ed-panel"><h3>Sesuaikan</h3><div class="ed-adj">
+      <label><span>Cerah</span><input type="range" id="edAdjB" min="40" max="180" value="100"><small id="edAdjBVal">100%</small></label>
+      <label><span>Kontras</span><input type="range" id="edAdjC" min="40" max="180" value="100"><small id="edAdjCVal">100%</small></label>
+      <label><span>Saturasi</span><input type="range" id="edAdjS" min="0" max="200" value="100"><small id="edAdjSVal">100%</small></label>
+      <label><span>Kehangatan</span><input type="range" id="edAdjW" min="0" max="60" value="0"><small id="edAdjWVal">0%</small></label>
+      <button type="button" class="outline-btn" id="edAdjReset" style="width:100%">Balikkan penyesuaian</button>
+    </div></div>
+    <div class="ed-panel"><h3>Teks</h3>
+      <button type="button" class="outline-btn" id="edAddTextBtn" style="width:100%;margin-bottom:8px"><span data-icon="plus"></span> Tambah Teks</button>
+      <div class="ed-selbox" id="edSelBox" hidden>
+        <div id="edSelTextBox"><input type="text" id="edSelText" maxlength="300" placeholder="Tulis teks overlay-mu"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#cfd6e4"><span style="min-width:44px">Ukuran</span><input type="range" id="edSelSize" min="3" max="40" value="7"><small id="edSelSizeVal"></small></label>
+        <div id="edSelFontRow"><select id="edSelFont" aria-label="Font teks"></select></div>
+        <div class="ed-swatches" id="edSelColors"></div>
+        <button type="button" class="outline-btn danger-btn" id="edSelDel" style="width:100%">Hapus item ini</button>
+      </div>
+    </div>
+    <div class="ed-panel"><h3>Sticker</h3><div class="ed-emojis" id="edEmojis"></div></div>
+   </div>
+  </div>
+  <input type="file" id="edFileInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+</section>
 <section id="personaView" class="page-view">
   <div class="page-heading"><div><h1>Persona</h1><p>Brand kit Sherly — identitas, suara, pilar konten, dan media kit kolaborasi.</p></div></div>
   <div id="personaRoot"></div>
@@ -880,7 +956,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
  </section>
  <aside class="rightcol">
   <section class="panel chat"><h3><span data-icon="message-circle"></span> Chat Sherly <span data-icon="arrow-up-right"></span></h3><span class="online">● Online</span><p>Hai, aku Sherly! Ada ide konten, butuh bantuan atau sekadar ngobrol santai? Yuk, cerita aja...</p><button class="primary" onclick="toast('Chat AI belum dihubungkan — ini masih prototype')">Mulai Chat &nbsp; <span data-icon="chevron-right"></span></button><img src="assets/sherly-panel.png" alt="Sherly — master character portrait"></section>
-  <section class="panel admin-only" id="homeAdminMenu"><div class="section-head"><h2><i data-icon="sliders"></i> Menu Admin</h2></div><div class="admin-quick"><button type="button" data-page="Karakter" title="Manajemen Karakter"><span class="aq-ico" data-icon="users"></span>Karakter</button><button type="button" data-page="Studio" title="Studio"><span class="aq-ico" data-icon="clapperboard"></span>Studio</button><button type="button" data-page="Editor" title="Editor (segera)"><span class="aq-ico" data-icon="pencil"></span>Editor</button><button type="button" data-page="Pengaturan" title="Pengaturan"><span class="aq-ico" data-icon="sliders"></span>Pengaturan</button></div></section>
+  <section class="panel admin-only" id="homeAdminMenu"><div class="section-head"><h2><i data-icon="sliders"></i> Menu Admin</h2></div><div class="admin-quick"><button type="button" data-page="Karakter" title="Manajemen Karakter"><span class="aq-ico" data-icon="users"></span>Karakter</button><button type="button" data-page="Studio" title="Studio"><span class="aq-ico" data-icon="clapperboard"></span>Studio</button><button type="button" data-page="Editor" title="Editor"><span class="aq-ico" data-icon="pencil"></span>Editor</button><button type="button" data-page="Pengaturan" title="Pengaturan"><span class="aq-ico" data-icon="sliders"></span>Pengaturan</button></div></section>
   <section class="panel"><div class="section-head"><h2><span data-icon="calendar-days"></span> Kalender & Jadwal</h2></div><div class="calendar-top"><b>November 2026</b><span class="calendar-arrows"><span data-icon="chevron-left"></span><span data-icon="chevron-right"></span></span></div><div class="days"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span class="selected">14</span><span>15</span></div><div class="events"><div class="event"><i></i><b>09:00</b><span>Meeting Content Plan</span><em>Planner</em></div><div class="event"><i></i><b>14:00</b><span>Shooting — Sherly</span><em>Studio</em></div><div class="event"><i></i><b>19:00</b><span>Edit Video</span><em>Editor</em></div></div></section>
   <section class="panel" id="homeCharsPanel"><div class="section-head"><h2><span data-icon="users"></span> Karakter Tersedia</h2><button class="link" data-page="Karakter Publik">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="character"><div class="dash-chars" id="homeChars"><div class="empty-state">Memuat karakter…</div></div></div></section>
  </aside>
@@ -939,7 +1015,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
 const ADMIN_ONLY_PAGES=['Dashboard','Karakter','Studio','Editor','Aset','Planner','Kalender','Cloud Publish','Pengaturan'];
-function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}if(page==='Editor'||page==='Cloud Publish'){toast('Modul '+page+' segera hadir — masih dalam pengembangan.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}if(page==='Cloud Publish'){toast('Modul Cloud Publish segera hadir — masih dalam pengembangan.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const edv=document.getElementById('editorView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(edv)edv.classList.toggle('active',page==='Editor');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Editor')window.renderEditor?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Editor','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 window.addEventListener('sherly-chat-opened',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page==='Chat Sherly'))});
 window.addEventListener('sherly-chat-closed',()=>{document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage))});
@@ -1014,6 +1090,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/portfolio-data.js"></script>
 <script src="/portfolio.js"></script>
 <script src="/planner.js"></script>
+<script src="/editor.js"></script>
 <script src="/calendar.js"></script>
 <script src="/studio.js"></script>
 <script src="/persona-data.js"></script>
