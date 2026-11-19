@@ -330,7 +330,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   .ve-playrow{gap:8px}
   .ve-btn{padding:6px 11px;font-size:11.5px}
 }
-.ve-playbtn{width:46px;height:46px;border-radius:50%;border:0;background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;font-size:17px;cursor:pointer;flex:none}
+.ve-playbtn{width:46px;height:46px;border-radius:50%;border:0;background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;font-size:17px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.ve-playbtn svg{width:18px;height:18px}
 .ve-time{font-size:12px;color:#cfd6e4;font-variant-numeric:tabular-nums;flex:none}
 .ve-poswrap{flex:1;height:22px;display:flex;align-items:center;cursor:pointer;touch-action:none}
 .ve-postrack{position:relative;height:4px;width:100%;background:#0f1828;border-radius:99px;overflow:hidden}
@@ -356,9 +357,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-tab{flex:1;border:0;background:transparent;color:#91a2b9;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
 .ve-tab.active{background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;font-weight:700}
 .ve-tabpane{display:flex;flex-direction:column;gap:10px}
-.ve-presets{display:flex;flex-wrap:wrap;gap:6px}
-.ve-fchip{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:6px 13px;font:inherit;font-size:11.5px;cursor:pointer}
-.ve-fchip.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent}
+.ve-select{position:relative;display:block}
+.ve-select select{width:100%;appearance:none;-webkit-appearance:none;padding-right:32px;color-scheme:dark;cursor:pointer}
+.ve-select>[data-icon]{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:#91a2b9}
+.ve-select>[data-icon] svg{width:15px;height:15px}
+.ve-mute-badge svg,.ve-bin-sub [data-icon] svg{width:11px;height:11px}
 .ve-adj-val{color:#ffd0ec;font-variant-numeric:tabular-nums}
 .ve-ovtrack{position:relative;height:14px;margin-bottom:2px}
 .ve-ovspan{position:absolute;top:1px;bottom:1px;border:0;border-radius:4px;background:#f044a866;color:#ffd0ec;font:inherit;font-size:8.5px;line-height:11px;cursor:pointer;padding:0 3px;overflow:hidden;white-space:nowrap}
@@ -389,7 +392,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   .ve-tl-zone{grid-area:tl}
   #veProgWrap{grid-area:prog}
 }
-.ve-btn{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer}
+.ve-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer}
 .ve-btn:hover{border-color:#f044a8;color:#ffd0ec}
 .ve-split-btn{border-color:#f044a8;background:#f044a826;color:#ffd0ec;font-weight:700}
 .ve-btn.danger{border-color:#9b1c67;color:#ffd0ec}
@@ -415,6 +418,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-clip-len{position:absolute;left:0;right:0;bottom:0;font-size:9.5px;text-align:center;color:#fff;background:#04070fcc;padding:2px 0;pointer-events:none}
 .ve-mute-badge{position:absolute;top:4px;right:6px;font-size:11px;pointer-events:none}
 .ve-grip{position:absolute;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;color:#ffd0ec;background:#f044a866;font-size:9px;letter-spacing:-1px;cursor:ew-resize;touch-action:none}
+.ve-grip svg{width:12px;height:18px}
 .ve-grip.grip-l{left:0;border-radius:8px 0 0 8px}
 .ve-grip.grip-r{right:0;border-radius:0 8px 8px 0}
 .ve-prog{height:8px;background:#0f1828;border-radius:99px;overflow:hidden;border:1px solid #24344e}
@@ -991,20 +995,20 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   </div></div>
 </section>
 <section id="videoView" class="page-view">
-  <div class="page-heading"><div><h1>Editor Video</h1><p>Edits ala CapCut — gabung klip, buang adegan tak perlu lewat penggaris, filter &amp; teks, lalu ekspor. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="veExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Ekspor Video</button><button type="button" class="outline-btn" id="veRecBtn" title="Rekam langsung dari kamera">🎥 Rekam</button><button type="button" class="pink-btn" id="veAddBtn"><span data-icon="plus"></span> Tambah Klip</button><input type="file" id="veFile" accept="video/*" multiple hidden></div></div>
+  <div class="page-heading"><div><h1>Editor Video</h1><p>Edits ala CapCut — gabung klip, buang adegan tak perlu lewat penggaris, filter &amp; teks, lalu ekspor. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="veExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Ekspor Video</button><button type="button" class="outline-btn" id="veRecBtn" title="Rekam langsung dari kamera"><span data-icon="video"></span> Rekam</button><button type="button" class="pink-btn" id="veAddBtn"><span data-icon="plus"></span> Tambah Klip</button><input type="file" id="veFile" accept="video/*" multiple hidden></div></div>
   <div class="empty-state" id="veEmpty">Belum ada klip.<br>Klik <b>Tambah Klip</b> — pilih video dari galeri HP-mu (bisa beberapa sekaligus), lalu potong &amp; susun di timeline bawah. Hasil ekspornya siap diunggah ke IG / edits-mu.</div>
   <div id="veWrap" hidden>
     <aside class="ve-bin" id="veBin">
       <div class="ve-panel">
         <h3 class="ve-panel-title">Media Klip <span id="veBinCount"></span></h3>
-        <button type="button" class="ve-btn" id="veBinAdd">＋ Tambah Klip</button>
+        <button type="button" class="ve-btn" id="veBinAdd"><span data-icon="plus"></span> Tambah Klip</button>
         <div class="ve-bin-list" id="veBinList"></div>
         <p class="ve-tab-hint">Klik klip untuk memuatnya di pratinjau. Susunan &amp; pemotongan tetap lewat timeline bawah.</p>
       </div>
     </aside>
     <div class="ve-main">
-      <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video><div class="ve-cam" id="veCam" hidden><video id="veCamVideo" playsinline muted></video><div class="ve-cam-row"><button type="button" class="ve-btn" id="veCamRec">⏺ Rekam</button><button type="button" class="ve-btn ve-split-btn" id="veCamStop" hidden>⏹ Selesai &amp; Pakai</button><button type="button" class="ve-btn danger" id="veCamCancel">Batal</button></div><p class="ve-tab-hint" id="veCamHint"></p></div></div></div>
-      <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span></div>
+      <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video><div class="ve-cam" id="veCam" hidden><video id="veCamVideo" playsinline muted></video><div class="ve-cam-row"><button type="button" class="ve-btn" id="veCamRec"><span data-icon="circle-dot"></span> Rekam</button><button type="button" class="ve-btn ve-split-btn" id="veCamStop" hidden><span data-icon="square"></span> Selesai &amp; Pakai</button><button type="button" class="ve-btn danger" id="veCamCancel">Batal</button></div><p class="ve-tab-hint" id="veCamHint"></p></div></div></div>
+      <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar"><span data-icon="play"></span></button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span></div>
     </div>
     <aside class="ve-side">
       <div class="ve-panel">
@@ -1016,12 +1020,12 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
           <button type="button" class="ve-tab" data-tab="audio">Audio</button>
         </div>
         <div class="ve-tabpane" id="veTabFilter">
-          <div class="ve-presets" id="vePresets"></div>
+          <div class="ve-field"><label for="veFilterSel">Filter</label><div class="ve-select"><select id="veFilterSel" class="ve-item-input" aria-label="Filter pratinjau"></select><span data-icon="chevron-down" aria-hidden="true"></span></div></div>
           <div class="ve-field"><label>Cerah <span class="ve-adj-val" id="veAdjBrightVal">1.00</span></label><input id="veAdjBright" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-label="Cerah"></div>
           <div class="ve-field"><label>Kontras <span class="ve-adj-val" id="veAdjContrastVal">1.00</span></label><input id="veAdjContrast" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-label="Kontras"></div>
           <div class="ve-field"><label>Saturasi <span class="ve-adj-val" id="veAdjSatVal">1.00</span></label><input id="veAdjSat" type="range" min="0" max="2" step="0.05" value="1" aria-label="Saturasi"></div>
           <div class="ve-field"><label>Rona warna <span class="ve-adj-val" id="veAdjHueVal">0</span></label><input id="veAdjHue" type="range" min="-30" max="30" step="1" value="0" aria-label="Rona warna"></div>
-          <button type="button" class="ve-btn" id="veAdjReset">↺ Reset filter</button>
+          <button type="button" class="ve-btn" id="veAdjReset"><span data-icon="refresh-cw"></span> Reset filter</button>
         </div>
         <div class="ve-tabpane" id="veTabText" hidden>
           <button type="button" class="ve-btn" id="veAddText">+ Tambah teks</button>
@@ -1036,7 +1040,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
           <p class="ve-tab-hint">Tambah teks, lalu seret teksnya di video untuk memindahkan.</p>
         </div>
         <div class="ve-tabpane" id="veTabLogo" hidden>
-          <button type="button" class="ve-btn" id="veAddLogo">⬆ Unggah logo / gambar</button>
+          <button type="button" class="ve-btn" id="veAddLogo"><span data-icon="upload"></span> Unggah logo / gambar</button>
           <input type="file" id="veLogoFile" accept="image/*" hidden>
           <div id="veLogoBar" hidden>
             <div class="ve-field"><label>Ukuran <span class="ve-adj-val" id="veLogoSizeVal">15%</span></label><input id="veLogoSize" type="range" min="0.04" max="0.6" step="0.01" value="0.15" aria-label="Ukuran logo"></div>
@@ -1047,7 +1051,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
           <p class="ve-tab-hint">Letakkan logo channel di pojok video (ala TV) atau pakai sebagai watermark — bisa digeser & diatur waktunya.</p>
         </div>
         <div class="ve-tabpane" id="veTabAudio" hidden>
-          <button type="button" class="ve-btn" id="veAddMusic">⬆ Unggah musik</button>
+          <button type="button" class="ve-btn" id="veAddMusic"><span data-icon="upload"></span> Unggah musik</button>
           <input type="file" id="veMusicFile" accept="audio/*" hidden>
           <div id="veMusicBar" hidden>
             <div class="ve-field"><label for="veMusicName">Musik</label><input id="veMusicName" class="ve-item-input" readonly></div>
@@ -1060,7 +1064,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
       </div>
     </aside>
     <div class="ve-tl-zone">
-      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><select id="veClipRate" class="ve-item-select" aria-label="Kecepatan klip" title="Kecepatan putar klip"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button type="button" class="ve-btn" id="veClipFade" title="Pudar di awal & akhir klip (0.3 dtk)">◐ Fade</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div><div class="ve-zoom"><button type="button" class="ve-btn" id="veZoomOut" title="Zoom out timeline">−</button><input id="veZoom" type="range" min="40" max="280" step="10" value="90" aria-label="Zoom timeline (piksel per detik)"><button type="button" class="ve-btn" id="veZoomIn" title="Zoom in timeline">＋</button></div></div>
+      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink"><span data-icon="scissors"></span> Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute"><span data-icon="volume-2"></span> Ada suara</button><select id="veClipRate" class="ve-item-select" aria-label="Kecepatan klip" title="Kecepatan putar klip"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select><button type="button" class="ve-btn" id="veClipFade" title="Pudar di awal & akhir klip (0.3 dtk)"><span data-icon="contrast"></span> Fade</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal"><span data-icon="chevron-left"></span> Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser <span data-icon="chevron-right"></span></button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div><div class="ve-zoom"><button type="button" class="ve-btn" id="veZoomOut" title="Zoom out timeline"><span data-icon="minus"></span></button><input id="veZoom" type="range" min="40" max="280" step="10" value="90" aria-label="Zoom timeline (piksel per detik)"><button type="button" class="ve-btn" id="veZoomIn" title="Zoom in timeline"><span data-icon="plus"></span></button></div></div>
       <div class="ve-tl-wrap" id="veTlWrap">
         <div class="ve-tl-inner" id="veTlInner">
           <div class="ve-tl-body" id="veTlBody">
@@ -1235,6 +1239,15 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 
 const ICONS={
  home:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/>',
+ minus:'<path d="M5 12h14"/>',
+ pause:'<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>',
+ square:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
+ 'circle-dot':'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1.5"/>',
+ scissors:'<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
+ 'volume-2':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+ 'volume-x':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
+ contrast:'<circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12"/>',
+ 'grip-vertical':'<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>',
  check:'<path d="M20 6 9 17l-5-5"/>',
  'user-round':'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
