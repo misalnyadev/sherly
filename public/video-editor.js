@@ -7,9 +7,19 @@
   const CORE = () => window.VE_CORE || {};
   const COLORS = ['#ffffff', '#0a1220', '#ffd0ec', '#f044a8'];
   const pxPerSec = () => (V.zoom || 90); // lebar timeline per detik — diatur zoom (D-167)
+  // Durasi efektif di timeline = (end-start)/kecepatan (D-168). Core tetap murni (unit test utuh).
+  const effDur = (c) => Math.max(0, ((Number(c.end) || 0) - (Number(c.start) || 0))) / (c.rate || 1);
+  const effList = () => readyClips().map((c) => ({ start: 0, end: effDur(c) }));
+  const totalTime = () => (CORE().timelineDuration ? CORE().timelineDuration(effList()) : 0);
+  function clipAtEff(t) {
+    const ready = readyClips();
+    const at = CORE().clipAt ? CORE().clipAt(effList(), t) : null;
+    if (!at) return null;
+    return { index: at.index, localT: at.localT, clip: ready[at.index] };
+  }
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', zoom: 90, texts: [], logos: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', adjust: { bright: 1, contrast: 1, sat: 1, hue: 0 }, tab: 'filter', zoom: 90, volMaster: 1, music: null, texts: [], logos: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, underIdx: -1, underEpoch: -1, tlEpoch: 0, exporting: false, cancelExport: false };
   let uid = 0;
   let LOGO_IMGS = null; // id logo -> HTMLImageElement siap gambar (diisi saat ekspor)
 
@@ -84,12 +94,14 @@
     const el = $('veVideo');
     if (!el) return;
     el.muted = !!c.muted;
+    el.volume = Math.min(1, Math.max(0, V.volMaster == null ? 1 : V.volMaster));
+    try { el.playbackRate = c.rate || 1; } catch {}
     if (el.dataset.veSrc !== c.url) {
       el.dataset.veSrc = c.url;
       el.src = c.url;
-      el.onloadedmetadata = () => { try { el.currentTime = c.start + (opts.localT || 0); } catch {} const pr = el.play?.(); if (pr && pr.catch) pr.catch(() => {}); };
+      el.onloadedmetadata = () => { try { el.currentTime = c.start + (opts.localT || 0) * (c.rate || 1); } catch {} const pr = el.play?.(); if (pr && pr.catch) pr.catch(() => {}); };
     } else {
-      try { el.currentTime = c.start + (opts.localT || 0); } catch {}
+      try { el.currentTime = c.start + (opts.localT || 0) * (c.rate || 1); } catch {}
       if (V.playing) { const pr = el.play?.(); if (pr && pr.catch) pr.catch(() => {}); }
     }
   }
@@ -97,11 +109,12 @@
     const ready = readyClips();
     if (V.cur < 0 || !ready[V.cur]) return 0;
     let acc = 0;
-    for (let i = 0; i < V.cur; i++) acc += ready[i].end - ready[i].start;
+    for (let i = 0; i < V.cur; i++) acc += effDur(ready[i]);
     const el = $('veVideo');
-    const len = Math.round((ready[V.cur].end - ready[V.cur].start) * 1000) / 1000;
+    const c = ready[V.cur];
+    const len = Math.round(effDur(c) * 1000) / 1000;
     const local = el && el.readyState >= 1
-      ? Math.min(Math.max(el.currentTime - ready[V.cur].start, 0), len)
+      ? Math.min(Math.max((el.currentTime - c.start) / (c.rate || 1), 0), len)
       : Math.min(Math.max(V.curLocal || 0, 0), len);
     return acc + local;
   }
@@ -109,7 +122,7 @@
     const vEl = $('videoView');
     if (vEl && !vEl.classList.contains('active')) { requestAnimationFrame(tick); return; } // hemat CPU saat halaman lain
     const ready = readyClips();
-    const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+    const total = totalTime();
     const t = globalTime();
     const timeEl = $('veTime'); if (timeEl) timeEl.textContent = fmtT(t) + ' / ' + fmtT(total);
     const pos = $('vePos'); if (pos) pos.style.width = (total > 0 ? Math.min(100, (t / total) * 100) : 0) + '%';
@@ -118,7 +131,7 @@
     if (pl) {
       pl.style.left = (total > 0 ? Math.min(100, (t / total) * 100) : 0) + '%';
       const bub = $('vePlTime'); if (bub) bub.textContent = fmtT(t);
-      const at = (CORE().clipAt && total > 0) ? CORE().clipAt(ready, t) : null;
+      const at = (total > 0) ? clipAtEff(t) : null;
       const idx = at ? at.index : -1;
       if (idx !== V.underIdx || V.underEpoch !== V.tlEpoch) {
         V.underIdx = idx;
@@ -137,6 +150,12 @@
       const it = V.texts.find((x) => x.id === n.dataset.veId) || V.logos.find((x) => x.id === n.dataset.veId);
       if (it) n.style.display = (t >= (it.start || 0) && t <= (it.end == null ? Infinity : it.end)) ? '' : 'none';
     });
+    // transisi fade per klip: pudar 0.3 dtk di awal & akhir klip
+    if (ready[V.cur]) {
+      const c = ready[V.cur];
+      const el2 = $('veVideo');
+      if (el2) el2.style.opacity = c.fade ? String(Math.max(0.04, Math.min(1, (el2.currentTime - c.start) / 0.3, (c.end - el2.currentTime) / 0.3))) : '';
+    }
     if (V.playing && V.cur >= 0 && ready[V.cur]) {
       const el = $('veVideo');
       const c = ready[V.cur];
@@ -152,16 +171,17 @@
   function seekGlobal(t) {
     const ready = readyClips();
     if (!ready.length) return;
-    const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+    const total = totalTime();
     const tt = Math.min(Math.max(Number(t) || 0, 0), Math.max(0, total - 0.05));
-    const at = CORE().clipAt ? CORE().clipAt(ready, tt) : null;
+    const at = clipAtEff(tt);
     if (!at) return;
     if (V.cur !== at.index) loadClip(at.index, { localT: at.localT });
     else {
       const el = $('veVideo');
       V.curLocal = at.localT;
-      if (el) { try { el.currentTime = at.clip.start + at.localT; } catch {} }
+      if (el) { try { el.currentTime = at.clip.start + at.localT * (at.clip.rate || 1); } catch {} }
     }
+    syncMusic(tt, V.playing);
   }
 
   function updatePlayBtn() {
@@ -215,19 +235,22 @@
   // jalur tipis di atas penggaris: jangka waktu teks (T) & logo (L) — klik untuk memilih
   function renderOvTrack() {
     const track = $('veOvTrack'); if (!track) return;
-    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const total = totalTime();
     track.hidden = total <= 0;
     if (total <= 0) { track.innerHTML = ''; return; }
     const spans = [
-      ...V.texts.map((it) => ({ it, kind: 'T', logo: false })),
-      ...V.logos.map((it) => ({ it, kind: 'L', logo: true })),
+      ...V.texts.map((it) => ({ it, kind: 'T', cls: '' })),
+      ...V.logos.map((it) => ({ it, kind: 'L', cls: ' logo' })),
+      ...(V.music && V.music.dur > 0 ? [{ it: { id: 'music', start: 0, end: Math.min(V.music.dur, total) }, kind: 'M', cls: ' music' }] : []),
     ];
-    track.innerHTML = spans.map(({ it, kind, logo }) => {
+    track.innerHTML = spans.map(({ it, kind, cls }) => {
       const l = Math.max(0, Math.min(100, ((it.start || 0) / total) * 100));
       const r = Math.max(0, Math.min(100, ((it.end == null ? total : it.end) / total) * 100));
-      return '<button type="button" class="ve-ovspan' + (logo ? ' logo' : '') + (V.selItem === it.id ? ' sel' : '') + '" data-oid="' + it.id + '" data-kind="' + kind + '" style="left:' + l + '%;width:' + Math.max(0.8, r - l) + '%" title="' + (logo ? 'Logo' : 'Teks') + ' ' + fmtT(it.start || 0) + '–' + fmtT(it.end == null ? total : it.end) + '">' + kind + '</button>';
+      const name = kind === 'M' ? 'Musik' : (kind === 'L' ? 'Logo' : 'Teks');
+      return '<button type="button" class="ve-ovspan' + cls + (V.selItem === it.id ? ' sel' : '') + '" data-oid="' + it.id + '" data-kind="' + kind + '" style="left:' + l + '%;width:' + Math.max(0.8, r - l) + '%" title="' + name + ' ' + fmtT(it.start || 0) + '–' + fmtT(it.end == null ? total : it.end) + '">' + kind + '</button>';
     }).join('');
     track.querySelectorAll('.ve-ovspan').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.kind === 'M') { setVeTab('audio'); return; }
       V.selItem = b.dataset.oid;
       V.selClip = null;
       setVeTab(b.dataset.kind === 'L' ? 'logo' : 'text');
@@ -279,6 +302,24 @@
     if ($('veItemStart')) $('veItemStart').value = String(it.start || 0);
     if ($('veItemEnd')) $('veItemEnd').value = String(it.end == null ? 0 : it.end);
   }
+  // ---------- musik latar (D-168) ----------
+  function musicEl() { return $('veMusicAudio'); }
+  function syncMusic(t, play) {
+    const el = musicEl(); if (!el || !V.music) return;
+    try { el.volume = Math.min(1, Math.max(0, V.music.vol == null ? 0.8 : V.music.vol)); } catch {}
+    if (V.music.dur > 0) { try { el.currentTime = Math.min(Math.max(0, t), Math.max(0, V.music.dur - 0.05)); } catch {} }
+    if (play) { const p = el.play?.(); if (p && p.catch) p.catch(() => {}); }
+  }
+  function renderMusicBar() {
+    const bar = $('veMusicBar'); if (!bar) return;
+    bar.hidden = !V.music;
+    if (!V.music) return;
+    if ($('veMusicName')) $('veMusicName').value = V.music.name + (V.music.dur ? ' (' + fmtT(V.music.dur) + ')' : '');
+    if ($('veMusicVol')) $('veMusicVol').value = String(V.music.vol == null ? 0.8 : V.music.vol);
+    if ($('veMusicVolVal')) $('veMusicVolVal').textContent = Math.round((V.music.vol == null ? 0.8 : V.music.vol) * 100) + '%';
+    if ($('veVolMaster')) $('veVolMaster').value = String(V.volMaster == null ? 1 : V.volMaster);
+    if ($('veVolMasterVal')) $('veVolMasterVal').textContent = Math.round((V.volMaster == null ? 1 : V.volMaster) * 100) + '%';
+  }
   function renderLogoBar() {
     const bar = $('veLogoBar'); if (!bar) return;
     const it = V.logos.find((x) => x.id === V.selItem);
@@ -294,7 +335,7 @@
 
   // ---------- timeline ----------
   function clipCard(c, i) {
-    const len = Math.round(Math.max(0, c.end - c.start) * 1000) / 1000;
+    const len = Math.round(effDur(c) * 1000) / 1000; // durasi di timeline (setelah kecepatan)
     const w = Math.round(len * pxPerSec());
     const sel = V.selClip === c.id ? ' sel' : '';
     const inner = c.ready
@@ -309,7 +350,7 @@
   // Penggaris waktu ala CapCut di atas timeline + garis playhead.
   function renderRuler() {
     const ruler = $('veRuler'); const pl = $('vePlayline');
-    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const total = totalTime();
     const px = pxPerSec();
     const body = $('veTlBody');
     if (body) body.style.width = Math.max(0, Math.round(total * px)) + 'px';
@@ -361,12 +402,12 @@
           const s0 = c.start, e0 = c.end;
           const lenEl = card.querySelector('.ve-clip-len');
           const move = (ev) => {
-            const ds = (ev.clientX - x0) / pxPerSec();
+            const ds = ((ev.clientX - x0) / pxPerSec()) * (c.rate || 1); // px timeline → detik sumber
             if (side === 'l') c.start = Math.min(s0 + ds, e0 - (CORE().MIN_SEG || 0.5));
             else c.end = Math.max(e0 + ds, s0 + (CORE().MIN_SEG || 0.5));
             c.start = Math.max(0, c.start); c.end = Math.min(c.dur, c.end);
-            if (lenEl) lenEl.textContent = fmtT(Math.round(Math.max(0, c.end - c.start) * 1000) / 1000);
-            card.style.width = Math.round(Math.max(0, c.end - c.start) * pxPerSec()) + 'px';
+            if (lenEl) lenEl.textContent = fmtT(Math.round(effDur(c) * 1000) / 1000);
+            card.style.width = Math.round(effDur(c) * pxPerSec()) + 'px';
           };
           const up = () => {
             grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
@@ -413,6 +454,8 @@
     bar.hidden = !c;
     if (!c) return;
     if ($('veClipMute')) $('veClipMute').textContent = c.muted ? '🔇 Suara mati' : '🔊 Ada suara';
+    if ($('veClipRate')) $('veClipRate').value = String(c.rate || 1);
+    if ($('veClipFade')) $('veClipFade').classList.toggle('on', !!c.fade);
   }
 
   // ---------- bars & rows ----------
@@ -431,7 +474,7 @@
   function setVeTab(name) {
     V.tab = name;
     document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-    for (const [id, key] of [['veTabFilter', 'filter'], ['veTabText', 'text'], ['veTabLogo', 'logo']]) {
+    for (const [id, key] of [['veTabFilter', 'filter'], ['veTabText', 'text'], ['veTabLogo', 'logo'], ['veTabAudio', 'audio']]) {
       const pane = $(id); if (pane) pane.hidden = key !== name;
     }
   }
@@ -474,7 +517,7 @@
   }
 
   function clampOverlayTimes() {
-    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const total = totalTime();
     if (total <= 0) return;
     for (const it of [...V.texts, ...V.logos]) {
       it.end = Math.min(it.end == null ? total : it.end, total);
@@ -491,6 +534,7 @@
     renderOverlays();
     renderTimeline();
     renderFilterRow();
+    renderMusicBar();
     const ex = $('veExportBtn'); if (ex) ex.disabled = !readyClips().length || V.exporting;
     const sp = $('veSplitBtn'); if (sp) sp.hidden = !readyClips().length;
     if (V.cur < 0 && readyClips().length) loadClip(0, { localT: 0 });
@@ -507,14 +551,16 @@
       setTimeout(fin, 8000);
     });
   }
-  function drawFrame(ctx, el, W, H, g) {
+  function drawFrame(ctx, el, W, H, g, fadeA) {
     ctx.fillStyle = '#0a1220';
     ctx.fillRect(0, 0, W, H);
     const vw = el.videoWidth || 720, vh = el.videoHeight || 1280;
     const f = CORE().coverFit ? CORE().coverFit(vw, vh, W, H) : { dx: 0, dy: 0, dw: W, dh: H };
     const css = filterCss();
     if (css && 'filter' in ctx) { try { ctx.filter = css; } catch {} }
+    ctx.globalAlpha = (fadeA == null ? 1 : fadeA);
     try { ctx.drawImage(el, f.dx, f.dy, f.dw, f.dh); } catch {}
+    ctx.globalAlpha = 1;
     if ('filter' in ctx) { try { ctx.filter = 'none'; } catch {} }
     const F = CORE().VFONTS || { family: {}, weight: {} };
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -587,9 +633,10 @@
     const els = ready.map((c) => {
       const el = document.createElement('video');
       el.src = c.url; el.muted = !!c.muted; el.preload = 'auto'; el.playsInline = true;
+      try { el.playbackRate = c.rate || 1; } catch {}
       return { c, el };
     });
-    const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+    const total = totalTime();
     let doneSec = 0;
     const setProg = (sec) => {
       const p = total > 0 ? Math.min(100, Math.round((sec / total) * 100)) : 0;
@@ -597,30 +644,52 @@
       if (progLabel) progLabel.textContent = (V.cancelExport ? 'Membatalkan… ' : 'Merekrender… ') + p + '% — biarkan halaman tetap terbuka ya';
     };
     rec.start(500);
+    // musik latar: diputar & ikut terekam (loop bila lebih pendek dari video)
+    let musicX = null;
+    if (V.music && ac && dest) {
+      try {
+        musicX = document.createElement('audio');
+        musicX.src = V.music.url; musicX.preload = 'auto'; musicX.loop = true;
+        const ms = ac.createMediaElementSource(musicX);
+        const mg = ac.createGain(); mg.gain.value = Math.min(1, Math.max(0, V.music.vol == null ? 0.8 : V.music.vol));
+        ms.connect(mg); mg.connect(dest); mg.connect(ac.destination);
+        musicX.currentTime = 0;
+        const mp = musicX.play?.(); if (mp && mp.catch) mp.catch(() => {});
+      } catch { musicX = null; }
+    }
     try {
       for (const { c, el } of els) {
         if (V.cancelExport) break;
-        if (ac && !c.muted) { try { const src = ac.createMediaElementSource(el); src.connect(dest); src.connect(ac.destination); } catch {} }
+        if (ac && !c.muted) {
+          try {
+            const src = ac.createMediaElementSource(el);
+            const gn = ac.createGain(); gn.gain.value = Math.min(1, Math.max(0, V.volMaster == null ? 1 : V.volMaster));
+            src.connect(gn); gn.connect(dest); gn.connect(ac.destination);
+          } catch {}
+        }
         await seekTo(el, c.start);
         try { await el.play(); } catch {}
         await new Promise((resolve) => {
           const step = () => {
             if (V.cancelExport) { resolve(); return; }
-            if (ctx) drawFrame(ctx, el, W, H, doneSec + Math.min(Math.max(el.currentTime - c.start, 0), c.end - c.start));
-            setProg(doneSec + Math.min(Math.max(el.currentTime - c.start, 0), c.end - c.start));
+            const localEff = Math.min(Math.max((el.currentTime - c.start) / (c.rate || 1), 0), effDur(c));
+            const fadeA = c.fade ? Math.max(0.04, Math.min(1, (el.currentTime - c.start) / 0.3, (c.end - el.currentTime) / 0.3)) : 1;
+            if (ctx) drawFrame(ctx, el, W, H, doneSec + localEff, fadeA);
+            setProg(doneSec + localEff);
             if (el.currentTime >= c.end - 0.02 || el.ended) { resolve(); return; }
             requestAnimationFrame(step);
           };
           requestAnimationFrame(step);
         });
         el.pause?.();
-        doneSec += c.end - c.start;
+        doneSec += effDur(c);
       }
     } finally {
       try { rec.stop(); } catch {}
       await stopped;
       els.forEach(({ el }) => { try { el.pause(); } catch {} el.removeAttribute('src'); try { el.load(); } catch {} });
       try { ac && ac.close(); } catch {}
+      try { musicX && musicX.pause(); } catch {}
       LOGO_IMGS = null;
     }
     if (progWrap) progWrap.hidden = true;
@@ -651,7 +720,7 @@
       const ready = readyClips();
       if (!ready.length) return;
       if (V.playing) { $('veVideo')?.pause?.(); V.playing = false; updatePlayBtn(); }
-      const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+      const total = totalTime();
       wrap.setPointerCapture?.(e.pointerId);
       const seek = (ev) => seekGlobal(frac(ev) * total);
       seek(e);
@@ -671,7 +740,7 @@
       const r = body.getBoundingClientRect();
       if (r.width < 2) return;
       const frac = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      const total = totalTime();
       seekGlobal(frac * total);
     };
     const begin = (e) => {
@@ -700,10 +769,10 @@
   $('veSplitBtn')?.addEventListener('click', () => {
     const ready = readyClips();
     if (!ready.length) return;
-    const at = CORE().clipAt ? CORE().clipAt(ready, globalTime()) : null;
+    const at = clipAtEff(globalTime());
     if (!at) { window.toast?.('Putar/ggeser playhead ke dalam klip dulu ya.'); return; }
     const c = at.clip;
-    const parts = CORE().splitAt ? CORE().splitAt(c, c.start + at.localT) : null;
+    const parts = CORE().splitAt ? CORE().splitAt(c, c.start + at.localT * (c.rate || 1)) : null;
     if (!parts) { window.toast?.('Titik bagi terlalu mepet ke ujung klip — geser playhead ke tengahnya dulu.'); return; }
     const i = V.clips.indexOf(c);
     if (i < 0) return;
@@ -724,6 +793,112 @@
   $('veZoom')?.addEventListener('input', (e) => setZoom(Number(e.target.value) || 90));
   $('veZoomIn')?.addEventListener('click', () => setZoom((V.zoom || 90) + 30));
   $('veZoomOut')?.addEventListener('click', () => setZoom((V.zoom || 90) - 30));
+
+  // ---------- musik & volume (D-168) ----------
+  function addMusicFile(f) {
+    if (!f || !/^audio\//i.test(f.type || '')) { window.toast?.('Pilih file musik ya (MP3/M4A/WAV).'); return; }
+    const url = URL.createObjectURL(f);
+    const el = document.createElement('audio');
+    let settled = false;
+    const put = (dur) => {
+      if (settled) return; settled = true;
+      V.music = { url, name: f.name || 'musik', dur: dur || 0, vol: Number(($('veMusicVol') || {}).value) || 0.8 };
+      const me = musicEl(); if (me) { me.src = url; }
+      renderMusicBar(); renderOverlays();
+      setVeTab('audio');
+      syncMusic(globalTime(), false);
+      window.toast?.('Musik ditambahkan — ikut jalan bersama timeline & terekam saat ekspor.');
+    };
+    el.addEventListener('loadedmetadata', () => put(isFinite(el.duration) ? el.duration : 0), { once: true });
+    el.addEventListener('error', () => put(0), { once: true });
+    el.src = url;
+    setTimeout(() => put(isFinite(el.duration) ? el.duration : 0), 3000);
+  }
+  $('veAddMusic')?.addEventListener('click', () => $('veMusicFile')?.click());
+  $('veMusicFile')?.addEventListener('change', (e) => { addMusicFile(e.target.files && e.target.files[0]); e.target.value = ''; });
+  $('veMusicVol')?.addEventListener('input', (e) => {
+    if (!V.music) return;
+    V.music.vol = Math.min(1, Math.max(0, Number(e.target.value) || 0));
+    const lab = $('veMusicVolVal'); if (lab) lab.textContent = Math.round(V.music.vol * 100) + '%';
+    syncMusic(globalTime(), false);
+  });
+  $('veVolMaster')?.addEventListener('input', (e) => {
+    V.volMaster = Math.min(1, Math.max(0, Number(e.target.value) || 0));
+    const lab = $('veVolMasterVal'); if (lab) lab.textContent = Math.round(V.volMaster * 100) + '%';
+    const el = $('veVideo'); if (el) el.volume = V.volMaster;
+  });
+  $('veMusicDel')?.addEventListener('click', () => {
+    const el = musicEl();
+    if (el) { try { el.pause(); } catch {} el.removeAttribute('src'); try { el.load?.(); } catch {} }
+    if (V.music) { try { URL.revokeObjectURL(V.music.url); } catch {} }
+    V.music = null;
+    renderMusicBar(); renderOverlays();
+  });
+
+  // ---------- kecepatan & fade per klip (D-168) ----------
+  $('veClipRate')?.addEventListener('change', (e) => {
+    const c = V.clips.find((x) => x.id === V.selClip); if (!c) return;
+    c.rate = Math.min(2, Math.max(0.5, Number(e.target.value) || 1));
+    renderAll();
+    const el = $('veVideo'); if (el) { try { el.playbackRate = c.rate; } catch {} }
+    window.toast?.('Kecepatan klip: ' + c.rate + '× — durasi di timeline jadi ' + fmtT(effDur(c)) + '.');
+  });
+  $('veClipFade')?.addEventListener('click', () => {
+    const c = V.clips.find((x) => x.id === V.selClip); if (!c) return;
+    c.fade = !c.fade;
+    renderClipBar();
+  });
+
+  // ---------- rekam kamera (D-168) ----------
+  let camStream = null; let camRec = null; const camChunks = [];
+  function camCleanup() {
+    try { if (camRec && camRec.state !== 'inactive') camRec.stop(); } catch {}
+    camRec = null; camChunks.length = 0;
+    try { if (camStream) camStream.getTracks().forEach((t) => t.stop()); } catch {}
+    camStream = null;
+    const cv = $('veCamVideo'); if (cv) { try { cv.srcObject = null; } catch {} }
+    const cam = $('veCam'); if (cam) cam.hidden = true;
+    const st = $('veCamStop'); if (st) st.hidden = true;
+    const rc = $('veCamRec'); if (rc) rc.hidden = false;
+    const hint = $('veCamHint'); if (hint) hint.textContent = '';
+  }
+  $('veRecBtn')?.addEventListener('click', async () => {
+    if (camStream) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { window.toast?.('Rekam kamera belum didukung browser ini — coba Chrome/Edge terbaru.'); return; }
+    if (typeof MediaRecorder === 'undefined') { window.toast?.('Browser ini belum mendukung perekaman.'); return; }
+    try { camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true }); }
+    catch { window.toast?.('Izin kamera/mikrofon ditolak — aktifkan izinnya lalu coba lagi.'); camStream = null; return; }
+    const cv = $('veCamVideo'); const cam = $('veCam');
+    if (!cv || !cam) { camCleanup(); return; }
+    cv.srcObject = camStream;
+    const p = cv.play?.(); if (p && p.catch) p.catch(() => {});
+    cam.hidden = false;
+    const hint = $('veCamHint'); if (hint) hint.textContent = 'Tekan Rekam saat siap — hasilnya masuk sebagai klip baru.';
+  });
+  $('veCamRec')?.addEventListener('click', () => {
+    if (!camStream || camRec) return;
+    const picked = CORE().pickMime ? CORE().pickMime((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) : null;
+    try { camRec = picked ? new MediaRecorder(camStream, { mimeType: picked.mime }) : new MediaRecorder(camStream); } catch { camRec = null; }
+    if (!camRec) { window.toast?.('Perekaman tidak bisa dimulai di browser ini.'); return; }
+    camChunks.length = 0;
+    camRec.ondataavailable = (e) => { if (e.data && e.data.size) camChunks.push(e.data); };
+    camRec.onstop = () => {
+      const type = (camRec && camRec.mimeType) || 'video/webm';
+      let blob = null; try { blob = new Blob(camChunks, { type }); } catch {}
+      camRec = null;
+      camCleanup();
+      if (!blob || !blob.size) { window.toast?.('Rekaman kosong — coba lagi.'); return; }
+      const f = new File([blob], 'rekaman-kamera.' + (type.indexOf('mp4') >= 0 ? 'mp4' : 'webm'), { type: type.split(';')[0] });
+      addFiles([f]);
+      window.toast?.('Rekaman jadi klip baru — potong & susun di timeline ✨');
+    };
+    camRec.start(500);
+    if ($('veCamRec')) $('veCamRec').hidden = true;
+    if ($('veCamStop')) $('veCamStop').hidden = false;
+    const hint = $('veCamHint'); if (hint) hint.textContent = 'Merekam… tekan Selesai & Pakai bila sudah cukup.';
+  });
+  $('veCamStop')?.addEventListener('click', () => { try { if (camRec) camRec.stop(); } catch {} });
+  $('veCamCancel')?.addEventListener('click', camCleanup);
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
   document.querySelectorAll('.ve-side .ve-tab').forEach((b) => b.addEventListener('click', () => setVeTab(b.dataset.tab)));
@@ -745,18 +920,19 @@
     const ready = readyClips();
     if (!ready.length) { window.toast?.('Tambahkan klip dulu ya.'); return; }
     const el = $('veVideo');
-    if (V.playing) { el?.pause?.(); V.playing = false; }
+    if (V.playing) { el?.pause?.(); musicEl()?.pause?.(); V.playing = false; }
     else {
       const atEnd = V.cur === ready.length - 1 && el && el.currentTime >= ready[V.cur].end - 0.05;
       if (V.cur < 0 || atEnd) loadClip(0, { localT: 0 });
       V.playing = true;
+      syncMusic(globalTime(), true);
       const pr = el?.play?.();
       if (pr && pr.catch) pr.catch(() => { V.playing = false; updatePlayBtn(); window.toast?.('Gagal memutar — coba ketuk lagi.'); });
     }
     updatePlayBtn();
   });
   $('veAddText')?.addEventListener('click', () => {
-    const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+    const total = totalTime();
     V.texts.push({ id: 't' + (++uid), str: 'Teks baru', font: 'Inter', size: 0.06, color: '#ffffff', x: 0.5, y: 0.82, start: 0, end: Math.max(0.5, total) });
     V.selItem = V.texts[V.texts.length - 1].id;
     setVeTab('text');
@@ -798,7 +974,7 @@
   function bindTiming(startId, endId, find) {
     const apply = () => {
       const it = find(); if (!it) return;
-      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      const total = totalTime();
       let start = Math.max(0, Math.min(total, Math.round((Number($(startId).value) || 0) * 10) / 10));
       let end = Math.max(0, Math.min(total, Math.round((Number($(endId).value) || 0) * 10) / 10));
       if (end < start + 0.1) end = Math.min(total, start + 0.1);
@@ -820,7 +996,7 @@
     let settled = false;
     const put = (w, h) => {
       if (settled) return; settled = true;
-      const total = CORE().timelineDuration ? CORE().timelineDuration(readyClips()) : 0;
+      const total = totalTime();
       V.logos.push({ id: 'l' + (++uid), url, w: w || 100, h: h || 100, x: 0.84, y: 0.12, scale: 0.15, opacity: 1, start: 0, end: Math.max(0.5, total) });
       V.selItem = V.logos[V.logos.length - 1].id;
       setVeTab('logo');
