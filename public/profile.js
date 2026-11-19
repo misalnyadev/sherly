@@ -9,13 +9,16 @@
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const DEFAULT_AVATAR = {};
   const POSITIONS = [{ v: '50% 12%', label: 'atas' }, { v: '50% 42%', label: 'tengah' }, { v: '50% 72%', label: 'bawah' }];
+  // D-149: jenis akun otomatis — mengikuti role akun, bukan diisi manual.
+  const ROLE_ACCOUNT_TYPE = { admin: 'Pemilik', member: 'Klien', guest: 'Tamu' };
+  const autoAccountType = () => ROLE_ACCOUNT_TYPE[window.sherlyUser?.role || 'guest'] || 'Tamu';
 
   function readForm() {
     return {
       fullName: $('pfFullName').value.trim(),
       displayName: $('pfDisplayName').value.trim(),
       gender: $('pfGender').value,
-      accountType: $('pfAccountType').value,
+      accountType: autoAccountType(),
       role: $('pfRole').value.trim(),
       company: $('pfCompany').value.trim(),
       bio: $('pfBio').value.trim(),
@@ -32,7 +35,7 @@
   function writeForm(p) {
     const set = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
     set('pfFullName', p.fullName); set('pfDisplayName', p.displayName); set('pfGender', p.gender);
-    if (p.accountType) $('pfAccountType').value = p.accountType;
+    set('pfAccountType', autoAccountType()); // D-149: selalu otomatis, abaikan nilai lama
     set('pfRole', p.role); set('pfCompany', p.company); set('pfBio', p.bio);
     set('pfEmail', p.email); set('pfPhone', p.phone); set('pfLocation', p.location); set('pfWebsite', p.website);
     if (p.primaryContact) $('pfPrimaryContact').value = p.primaryContact;
@@ -72,10 +75,14 @@
     if (b) { if (name) b.textContent = name; else b.textContent = user ? 'Pengguna' : 'Tamu'; }
     if (small) {
       if (user) {
-        const sub = [p.accountType, p.role].filter(Boolean).join(' · ').toUpperCase();
-        small.textContent = sub || (user.role === 'admin' ? 'ADMIN' : user.role === 'member' ? 'KLIEN · SHERLYSTUDIO' : 'TAMU · SHERLYSTUDIO');
+        // D-149: teks di bawah nama mengikuti jenis akun otomatis (Pemilik/Klien/Tamu).
+        const t = autoAccountType().toUpperCase();
+        small.textContent = (user.role || 'guest') === 'admin'
+          ? [t, p.role].filter(Boolean).join(' · ').toUpperCase()
+          : t + ' · SHERLYSTUDIO';
       } else small.textContent = 'LOGIN · SHERLYSTUDIO';
     }
+    const at = $('pfAccountType'); if (at) at.value = autoAccountType();
     owner?.classList.toggle('is-guest', !user);
     // D-116: badge tier di halaman profil — status yang dikenali Sherly saat chat (server-side).
     ['pfTierBadge', 'pcTierBadge'].forEach((id) => {
@@ -113,13 +120,13 @@
   };
   // DB <-> form mapping (snake_case <-> camelCase)
   const dbToForm = (r) => ({
-    fullName: r.full_name || '', displayName: r.display_name || '', gender: r.gender || '', accountType: r.account_type || 'Kreator',
+    fullName: r.full_name || '', displayName: r.display_name || '', gender: r.gender || '',
     role: r.role || '', company: r.company || '', bio: r.bio || '',
     email: r.email || '', phone: r.phone || '', location: r.location || '', website: r.website || '',
     primaryContact: r.primary_contact || 'WhatsApp', photo: r.photo || null, photoPosition: r.photo_position || POSITIONS[0].v,
   });
   const formToDb = (p) => ({
-    full_name: p.fullName || '', display_name: p.displayName || '', gender: p.gender || '', account_type: p.accountType || 'Kreator',
+    full_name: p.fullName || '', display_name: p.displayName || '', gender: p.gender || '', account_type: p.accountType || '',
     role: p.role || '', company: p.company || '', bio: p.bio || '',
     email: p.email || '', phone: p.phone || '', location: p.location || '', website: p.website || '',
     primary_contact: p.primaryContact || 'WhatsApp', photo: p.photo || '', photo_position: p.photoPosition || POSITIONS[0].v,
@@ -156,12 +163,12 @@
         } else if (local) {
           writeForm(local);
         } else {
-          writeForm({ email: user?.email || '', accountType: 'Kreator', primaryContact: 'WhatsApp' });
+          writeForm({ email: user?.email || '', primaryContact: 'WhatsApp' });
         }
       }
     } catch (e) {
       window.toast?.('Gagal memuat profil dari server — memakai data lokal browser. (' + e.message + ')');
-      if (local) writeForm(local); else writeForm({ email: user?.email || '', accountType: 'Kreator', primaryContact: 'WhatsApp' });
+      if (local) writeForm(local); else writeForm({ email: user?.email || '', primaryContact: 'WhatsApp' });
     }
     applyProfileUI();
   };
