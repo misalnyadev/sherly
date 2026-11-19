@@ -27,17 +27,22 @@
 
   const MIN_SEG = 0.5; // detik minimum per klip
 
-  // 73.4 → "1:13.4"; null/negatif → "0:00.0"
+  // 73.4 → "1:13.4"; null/negatif → "0:00.0".
+  // Digit persepuluh dibulatkan dulu (double 4.8 = 4.7999… — floor mentah bisa meleset),
+  // lalu carry ke detik & menit kalau membulat ke 10.
   function fmtTime(sec) {
     const s = Math.max(0, Number(sec) || 0);
-    const m = Math.floor(s / 60);
-    const r = s - m * 60;
-    return m + ':' + String(Math.floor(r)).padStart(2, '0') + '.' + Math.floor((r % 1) * 10);
+    let m = Math.floor(s / 60);
+    let r = s - m * 60;
+    let d = Math.round((r % 1) * 100) / 10;
+    if (d >= 10) { d = 0; r = Math.floor(r) + 1; }
+    if (r >= 60) { r -= 60; m += 1; }
+    return m + ':' + String(Math.floor(r)).padStart(2, '0') + '.' + Math.floor(d);
   }
 
   // Total durasi timeline (klip siap saja: dur > 0).
   function timelineDuration(clips) {
-    return (Array.isArray(clips) ? clips : []).reduce((a, c) => a + Math.max(0, (Number(c.end) || 0) - (Number(c.start) || 0)), 0);
+    return (Array.isArray(clips) ? clips : []).reduce((a, c) => a + Math.round(Math.max(0, (Number(c.end) || 0) - (Number(c.start) || 0)) * 1000) / 1000, 0);
   }
 
   // Posisi global t → klip aktif + waktu lokal. null kalau di luar rentang.
@@ -61,6 +66,20 @@
     let s = Math.min(Math.max(Number(start) || 0, 0), d - MIN_SEG);
     let e = Math.min(Math.max(Number(end) || 0, s + MIN_SEG), d);
     return { start: +s.toFixed(3), end: +e.toFixed(3) };
+  }
+
+  // Bagi klip di titik t (waktu absolut dalam sumber video) → dua segmen.
+  // null kalau terlalu mepet ke ujung (masing-masing sisi harus ≥ MIN_SEG).
+  function splitAt(clip, t) {
+    if (!clip || typeof clip !== 'object') return null;
+    const cut = Number(t);
+    if (!isFinite(cut)) return null;
+    if (cut - (Number(clip.start) || 0) < MIN_SEG) return null;
+    if ((Number(clip.end) || 0) - cut < MIN_SEG) return null;
+    return {
+      left: { ...clip, end: +cut.toFixed(3) },
+      right: { ...clip, start: +cut.toFixed(3) },
+    };
   }
 
   // Cover-fit: seluruh kanvas terisi video (mirip object-fit:cover) — untuk render ekspor.
@@ -94,5 +113,5 @@
   }
 
   const g = typeof window !== 'undefined' ? window : globalThis;
-  g.VE_CORE = { VE_RATIOS, VE_FILTERS, VFONTS, MIN_SEG, fmtTime, timelineDuration, clipAt, clampTrim, coverFit, pickMime, exportName };
+  g.VE_CORE = { VE_RATIOS, VE_FILTERS, VFONTS, MIN_SEG, fmtTime, timelineDuration, clipAt, clampTrim, splitAt, coverFit, pickMime, exportName };
 })();

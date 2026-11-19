@@ -13,6 +13,12 @@ test('fmtTime: detik → m:ss.d, aman untuk input aneh', () => {
   assert.equal(VE.fmtTime(-5), '0:00.0');
   assert.equal(VE.fmtTime(null), '0:00.0');
   assert.equal(VE.fmtTime('abc'), '0:00.0');
+  // float noise: double 4.8 = 4.7999…, 7.8 = 7.7999…
+  assert.equal(VE.fmtTime(4.8), '0:04.8');
+  assert.equal(VE.fmtTime(7.8), '0:07.8');
+  assert.equal(VE.fmtTime(4.799999999999999), '0:04.8');
+  // carry: 59.999… → 1:00.0
+  assert.equal(VE.fmtTime(59.999), '1:00.0');
 });
 
 test('timelineDuration & clipAt: matematika timeline multi-klip', () => {
@@ -40,6 +46,25 @@ test('clampTrim: batas aman (0 ≤ start < end ≤ dur, min 0.5 dtk)', () => {
   assert.deepEqual(VE.clampTrim(10, 9.8, 10), { start: 9.5, end: 10 });
   assert.deepEqual(VE.clampTrim(0.3, 0, 0.3), { start: 0, end: 0.3 }); // video pendek: min seg mengikuti durasi
   assert.deepEqual(VE.clampTrim(null, null, null), { start: 0, end: 0.5 });
+});
+
+test('splitAt: bagi klip di tengah — dua segmen berbagi sumber yang sama', () => {
+  const c = { id: 'c1', url: 'blob:x', start: 2, end: 12, muted: true, thumb: 't', ready: true };
+  const p = VE.splitAt(c, 6);
+  assert.equal(p.left.start, 2); assert.equal(p.left.end, 6);
+  assert.equal(p.right.start, 6); assert.equal(p.right.end, 12);
+  assert.equal(p.left.url, 'blob:x'); assert.equal(p.right.url, 'blob:x');
+  assert.equal(p.left.muted, true); assert.equal(p.right.thumb, 't');
+  assert.notEqual(p.right.id, undefined); // id ikut tersalin (pemanggil mengganti dgn id baru)
+  // terlalu mepet ke ujung / input aneh -> null
+  assert.equal(VE.splitAt(c, 2.4), null);   // sisi kiri < 0.5 dtk
+  assert.equal(VE.splitAt(c, 11.8), null);  // sisi kanan < 0.5 dtk
+  assert.equal(VE.splitAt(c, 2), null);
+  assert.equal(VE.splitAt(c, 12), null);
+  assert.equal(VE.splitAt(c, NaN), null);
+  assert.equal(VE.splitAt(null, 5), null);
+  // klip 0,8 dtk tidak bisa dibagi dua (tiap sisi harus ≥ 0,5 dtk)
+  assert.equal(VE.splitAt({ start: 0, end: 0.8 }, 0.4), null);
 });
 
 test('coverFit: seluruh kanvas terisi (mirip object-fit:cover)', () => {
