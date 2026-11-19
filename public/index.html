@@ -321,15 +321,31 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-stage video{width:100%;height:100%;object-fit:cover;display:block}
 .ve-it{position:absolute;transform:translate(-50%,-50%);cursor:grab;white-space:pre;text-align:center;line-height:1.15;padding:2px 6px;border-radius:6px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .ve-it.sel{outline:2px dashed #f044a8;outline-offset:3px}
-.ve-playrow{display:flex;align-items:center;gap:12px;margin:10px 0 6px}
+.ve-playrow{display:flex;align-items:center;gap:12px;margin:10px 0 0}
 .ve-playbtn{width:46px;height:46px;border-radius:50%;border:0;background:linear-gradient(100deg,#d82d91,#b02d80);color:#fff;font-size:17px;cursor:pointer;flex:none}
 .ve-time{font-size:12px;color:#cfd6e4;font-variant-numeric:tabular-nums;flex:none}
 .ve-poswrap{flex:1;height:22px;display:flex;align-items:center;cursor:pointer;touch-action:none}
 .ve-postrack{position:relative;height:4px;width:100%;background:#0f1828;border-radius:99px;overflow:hidden}
 .ve-pos{height:100%;width:0;background:linear-gradient(90deg,#ff72c5,#f044a8)}
-.ve-rows{display:flex;flex-direction:column;gap:8px;margin:8px 0 4px}
 .ve-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
-.ve-row-label{font-size:10px;color:#91a2b9;width:64px;flex:none;text-transform:uppercase;letter-spacing:.4px}
+#veWrap{display:flex;flex-direction:column;gap:8px}
+.ve-main{display:flex;flex-direction:column;order:1}
+.ve-side{display:flex;flex-direction:column;gap:10px;order:3}
+.ve-panel{background:#0f1828;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.ve-panel-title{font-size:10px;color:#91a2b9;text-transform:uppercase;letter-spacing:.6px;margin:0}
+.ve-field{display:flex;flex-direction:column;gap:4px}
+.ve-field>label{font-size:11px;color:#cfd6e4}
+.ve-field .ve-item-select,.ve-field .ve-item-input{width:100%}
+.ve-tl-zone{display:flex;flex-direction:column;gap:6px;order:2}
+.ve-tl-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#veProgWrap{order:4}
+@media (min-width:1024px){
+  #veWrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"main side" "tl tl" "prog prog";gap:14px}
+  .ve-main{grid-area:main}
+  .ve-side{grid-area:side}
+  .ve-tl-zone{grid-area:tl}
+  #veProgWrap{grid-area:prog}
+}
 .ve-btn{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer}
 .ve-btn:hover{border-color:#f044a8;color:#ffd0ec}
 .ve-split-btn{border-color:#f044a8;background:#f044a826;color:#ffd0ec;font-weight:700}
@@ -338,7 +354,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-item-select{background:#0f1828;border:1px solid #24344e;border-radius:9px;padding:8px;color:#fff;font:inherit;font-size:12px}
 .ve-dot{width:22px;height:22px;border-radius:50%;border:2px solid #49334e;cursor:pointer;flex:none}
 .ve-dot:hover{border-color:#f044a8}
-.ve-tl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:2px 0 8px}
+.ve-tl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:0 0 6px}
 .ve-tl-inner{position:relative;min-width:100%;width:max-content;padding-right:24px}
 .ve-ruler{position:relative;height:22px;touch-action:none;cursor:ew-resize}
 .ve-tick{position:absolute;bottom:0;width:1px;height:5px;background:#24344e}
@@ -932,22 +948,38 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   </div></div>
 </section>
 <section id="videoView" class="page-view">
-  <div class="page-heading"><div><h1>Editor Video</h1><p>Edits ala CapCut/IG langsung dari HP — gabung klip, buang adegan tak perlu lewat penggaris, filter &amp; teks, lalu ekspor. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><select id="veRatio" class="ve-item-select" aria-label="Rasio video"><option value="9:16">9:16 · Reels</option><option value="1:1">1:1 · Feed</option><option value="4:5">4:5 · Feed</option><option value="16:9">16:9 · YouTube</option></select><button type="button" class="outline-btn" id="veExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Ekspor Video</button><button type="button" class="pink-btn" id="veAddBtn"><span data-icon="plus"></span> Tambah Klip</button><input type="file" id="veFile" accept="video/*" multiple hidden></div></div>
+  <div class="page-heading"><div><h1>Editor Video</h1><p>Edits ala CapCut — gabung klip, buang adegan tak perlu lewat penggaris, filter &amp; teks, lalu ekspor. Semua diproses di perangkatmu.</p></div><div class="pl-toolbar"><button type="button" class="outline-btn" id="veExportBtn" disabled><span data-icon="arrow-right" style="transform:rotate(90deg)"></span> Ekspor Video</button><button type="button" class="pink-btn" id="veAddBtn"><span data-icon="plus"></span> Tambah Klip</button><input type="file" id="veFile" accept="video/*" multiple hidden></div></div>
   <div class="empty-state" id="veEmpty">Belum ada klip.<br>Klik <b>Tambah Klip</b> — pilih video dari galeri HP-mu (bisa beberapa sekaligus), lalu potong &amp; susun di timeline bawah. Hasil ekspornya siap diunggah ke IG / edits-mu.</div>
   <div id="veWrap" hidden>
-    <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video></div></div>
-    <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button></div>
-    <div class="ve-tl-wrap" id="veTlWrap">
-      <div class="ve-tl-inner" id="veTlInner">
-        <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
-        <div class="ve-timeline" id="veTimeline"></div>
-        <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>
-      </div>
+    <div class="ve-main">
+      <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video></div></div>
+      <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span></div>
     </div>
-    <div class="ve-rows">
-      <div class="ve-row"><span class="ve-row-label">Filter</span><select id="veFilter" class="ve-item-select" aria-label="Filter video"></select><button type="button" class="ve-btn" id="veAddText">+ Teks</button></div>
-      <div class="ve-row" id="veItemBar" hidden style="gap:6px"><span class="ve-row" id="veItemTextRow" style="gap:6px;flex:1"><input id="veItemText" class="ve-item-input" maxlength="300" placeholder="Tulis teksnya…"></span><span id="veItemFontRow"><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></span><span class="ve-row" id="veItemColors" style="gap:5px"></span><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:90px" aria-label="Ukuran"><button type="button" class="ve-btn danger" id="veItemDel">Hapus</button></div>
-      <div class="ve-row" id="veClipBar" hidden><span class="ve-row-label">Klip</span><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div>
+    <aside class="ve-side">
+      <div class="ve-panel">
+        <h3 class="ve-panel-title">Opsi Video</h3>
+        <div class="ve-field"><label for="veRatio">Rasio kanvas</label><select id="veRatio" class="ve-item-select" aria-label="Rasio video"><option value="9:16">9:16 · Reels</option><option value="1:1">1:1 · Feed</option><option value="4:5">4:5 · Feed</option><option value="16:9">16:9 · YouTube</option></select></div>
+        <div class="ve-field"><label for="veFilter">Filter</label><select id="veFilter" class="ve-item-select" aria-label="Filter video"></select></div>
+        <button type="button" class="ve-btn" id="veAddText">+ Teks</button>
+      </div>
+      <div class="ve-panel" id="veItemBar" hidden>
+        <h3 class="ve-panel-title">Edit Teks</h3>
+        <div class="ve-field"><label for="veItemText">Tulis teksnya</label><input id="veItemText" class="ve-item-input" maxlength="300" placeholder="Teks di video…"></div>
+        <div class="ve-field"><label for="veItemFont">Font</label><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></div>
+        <div class="ve-field"><label>Warna</label><div class="ve-row" id="veItemColors" style="gap:5px"></div></div>
+        <div class="ve-field"><label for="veItemSize">Ukuran</label><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:100%" aria-label="Ukuran"></div>
+        <button type="button" class="ve-btn danger" id="veItemDel">Hapus teks</button>
+      </div>
+    </aside>
+    <div class="ve-tl-zone">
+      <div class="ve-tl-tools"><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button><div class="ve-row" id="veClipBar" hidden><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div></div>
+      <div class="ve-tl-wrap" id="veTlWrap">
+        <div class="ve-tl-inner" id="veTlInner">
+          <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
+          <div class="ve-timeline" id="veTimeline"></div>
+          <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>
+        </div>
+      </div>
     </div>
     <div id="veProgWrap" hidden><div class="ve-prog"><div class="ve-prog-bar" id="veProgBar"></div></div><p class="ve-prog-label" id="veProgLabel"></p></div>
   </div>
