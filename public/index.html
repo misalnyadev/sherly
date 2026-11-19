@@ -334,6 +334,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-fchip.active{background:linear-gradient(100deg,#d82d91,#5b1f4e);color:#fff;border-color:transparent}
 .ve-btn{border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer}
 .ve-btn:hover{border-color:#f044a8;color:#ffd0ec}
+.ve-split-btn{border-color:#f044a8;background:#f044a826;color:#ffd0ec;font-weight:700}
 .ve-btn.danger{border-color:#9b1c67;color:#ffd0ec}
 .ve-item-input{background:#0f1828;border:1px solid #24344e;border-radius:9px;padding:8px 10px;color:#fff;font:inherit;font-size:13px;min-width:140px;flex:1}
 .ve-item-select{background:#0f1828;border:1px solid #24344e;border-radius:9px;padding:8px;color:#fff;font:inherit;font-size:12px}
@@ -341,10 +342,20 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .ve-dot:hover{border-color:#f044a8}
 .ve-emoji{border:0;background:transparent;font-size:19px;cursor:pointer;border-radius:8px;padding:3px 5px}
 .ve-emoji:hover{background:#111a2e}
-.ve-timeline{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 14px;-webkit-overflow-scrolling:touch}
+.ve-tl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:4px 0 10px}
+.ve-tl-inner{position:relative;min-width:100%;width:max-content;padding-right:24px}
+.ve-ruler{position:relative;height:22px;touch-action:none;cursor:ew-resize}
+.ve-tick{position:absolute;bottom:0;width:1px;height:5px;background:#24344e}
+.ve-tick.big{height:10px;background:#49334e}
+.ve-tick-label{position:absolute;bottom:11px;transform:translateX(-50%);font-size:9px;color:#91a2b9;white-space:nowrap}
+.ve-playline{position:absolute;top:2px;bottom:6px;width:2px;margin-left:-1px;background:#f044a8;z-index:5;touch-action:none;cursor:ew-resize}
+.ve-pl-head{position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:7px;background:#f044a8;box-shadow:0 3px 10px #0009;cursor:grab}
+.ve-pl-time{position:absolute;top:24px;left:50%;transform:translateX(-50%);background:#f044a8;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap;pointer-events:none}
+.ve-timeline{display:flex;gap:8px;padding:2px 2px 8px}
 .ve-clip{position:relative;flex:none;height:64px;background:#0f1828;border:2px solid #24344e;border-radius:10px;overflow:hidden;cursor:pointer}
 .ve-clip img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;opacity:.92}
 .ve-clip.sel{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
+.ve-clip.under{outline:2px solid #ff72c580;outline-offset:1px}
 .ve-clip-len{position:absolute;left:0;right:0;bottom:0;font-size:9.5px;text-align:center;color:#fff;background:#04070fcc;padding:2px 0;pointer-events:none}
 .ve-mute-badge{position:absolute;top:4px;right:6px;font-size:11px;pointer-events:none}
 .ve-grip{position:absolute;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;color:#ffd0ec;background:#f044a866;font-size:9px;letter-spacing:-1px;cursor:ew-resize;touch-action:none}
@@ -929,14 +940,20 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div class="empty-state" id="veEmpty">Belum ada klip.<br>Klik <b>Tambah Klip</b> — pilih video dari galeri HP-mu (bisa beberapa sekaligus), lalu potong &amp; susun di timeline bawah. Hasil ekspornya siap diunggah ke IG / edits-mu.</div>
   <div id="veWrap" hidden>
     <div class="ve-stage-wrap"><div class="ve-stage" id="veStage"><video id="veVideo" playsinline webkit-playsinline preload="metadata"></video></div></div>
-    <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span></div>
+    <div class="ve-playrow"><button type="button" class="ve-playbtn" id="vePlayBtn" aria-label="Putar">▶</button><div class="ve-poswrap" id="vePosWrap" title="Geser untuk pindah posisi (playhead)"><div class="ve-postrack"><div class="ve-pos" id="vePos"></div></div></div><span class="ve-time" id="veTime">0:00.0 / 0:00.0</span><button type="button" class="ve-btn ve-split-btn" id="veSplitBtn" hidden title="Bagi klip di posisi garis pink">✂ Bagi</button></div>
     <div class="ve-rows">
       <div class="ve-row"><span class="ve-row-label">Filter</span><div class="ve-row" id="veFilters" style="gap:6px"></div></div>
       <div class="ve-row"><span class="ve-row-label">Teks</span><button type="button" class="ve-btn" id="veAddText">+ Tambah teks</button><div class="ve-row" id="veItemBar" hidden style="gap:6px;flex:1"><span class="ve-row" id="veItemTextRow" style="gap:6px;flex:1"><input id="veItemText" class="ve-item-input" maxlength="300" placeholder="Tulis teksnya…"></span><span id="veItemFontRow"><select id="veItemFont" class="ve-item-select" aria-label="Font"></select></span><span class="ve-row" id="veItemColors" style="gap:5px"></span><input id="veItemSize" type="range" min="0.02" max="0.25" step="0.005" style="width:90px" aria-label="Ukuran"><button type="button" class="ve-btn danger" id="veItemDel">Hapus</button></div></div>
       <div class="ve-row"><span class="ve-row-label">Sticker</span><div class="ve-row" id="veStickers" style="gap:2px"></div></div>
-      <div class="ve-row" id="veClipBar" hidden><span class="ve-row-label">Klip</span><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipSplit" title="Bagi klip ini di posisi playhead">✂ Bagi</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div>
+      <div class="ve-row" id="veClipBar" hidden><span class="ve-row-label">Klip</span><button type="button" class="ve-btn" id="veClipMute">🔊 Ada suara</button><button type="button" class="ve-btn" id="veClipLeft" title="Geser klip ke awal">◀ Geser</button><button type="button" class="ve-btn" id="veClipRight" title="Geser klip ke akhir">Geser ▶</button><button type="button" class="ve-btn danger" id="veClipDel">Hapus klip</button></div>
     </div>
-    <div class="ve-timeline" id="veTimeline"></div>
+    <div class="ve-tl-wrap" id="veTlWrap">
+      <div class="ve-tl-inner" id="veTlInner">
+        <div class="ve-ruler" id="veRuler" title="Ketuk/geser untuk memindah titik potong"></div>
+        <div class="ve-timeline" id="veTimeline"></div>
+        <div class="ve-playline" id="vePlayline" hidden><span class="ve-pl-head" title="Tarik garis ini"></span><span class="ve-pl-time" id="vePlTime">0:00.0</span></div>
+      </div>
+    </div>
     <div id="veProgWrap" hidden><div class="ve-prog"><div class="ve-prog-bar" id="veProgBar"></div></div><p class="ve-prog-label" id="veProgLabel"></p></div>
   </div>
 </section>
