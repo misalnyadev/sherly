@@ -9,10 +9,32 @@
     return '<span data-icon="' + key + '">' + (paths ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>' : '') + '</span>';
   };
 
-  window.renderPersona = function renderPersona() {
+  // D-194: override persona dari owner (Pengaturan → Persona Sherly) digabung ke bawaan.
+  window.sherlyFetchPersonaOverrides = async function sherlyFetchPersonaOverrides() {
+    if (window.__sherlyPersonaOv) return window.__sherlyPersonaOv;
+    try {
+      const res = await fetch('/api/persona-settings');
+      const d = await res.json().catch(() => ({}));
+      window.__sherlyPersonaOv = (d && d.overrides && typeof d.overrides === 'object') ? d.overrides : {};
+    } catch { window.__sherlyPersonaOv = {}; }
+    return window.__sherlyPersonaOv;
+  };
+  window.sherlyMergePersona = function sherlyMergePersona(base, ov) {
+    const out = { ...(base || {}) };
+    const o = ov || {};
+    for (const k of ['name', 'handle', 'instagram', 'tagline', 'role', 'location', 'bio', 'audience', 'kolaborasi']) if (o[k]) out[k] = o[k];
+    if (Array.isArray(o.traits) && o.traits.length) out.traits = o.traits;
+    if (o.voice) out.voice = { ...(base?.voice || {}), ...o.voice };
+    if (Array.isArray(o.pillars) && o.pillars.length) out.pillars = o.pillars;
+    if (o.visual) out.visual = { ...(base?.visual || {}), ...(Array.isArray(o.visual.mood) && o.visual.mood.length ? { mood: o.visual.mood } : {}), ...(o.visual.foto ? { foto: o.visual.foto } : {}) };
+    if (o.owner) out.owner = { ...(base?.owner || {}), ...o.owner };
+    return out;
+  };
+  window.renderPersona = async function renderPersona() {
     const root = document.getElementById('personaRoot');
     if (!root) return;
-    const p = window.SHERLY_PERSONA || {};
+    const ov = await window.sherlyFetchPersonaOverrides();
+    const p = window.sherlyMergePersona(window.SHERLY_PERSONA || {}, ov);
     const chips = (arr) => '<div class="pe-traits">' + (arr || []).map((t) => '<span class="chip">' + esc(t) + '</span>').join('') + '</div>';
 
     // D-192: tata letak blogazine — masthead editorial, bio drop-cap, pilar bernomor.
@@ -84,4 +106,93 @@
       }, 250);
     });
   };
+
+  // ===== D-194: Editor Persona (Pengaturan → tab "Persona Sherly") =====
+  function personaEditorInit() {
+    const pane = document.getElementById('settingsPersonaPane');
+    if (!pane || pane.dataset.ready) return;
+    pane.dataset.ready = '1';
+    const $ = (id) => document.getElementById(id);
+    const status = (msg, isErr) => { const el = $('peEdStatus'); if (el) { el.textContent = msg || ''; el.style.color = isErr ? '#ff9bdc' : 'var(--muted)'; } };
+
+    (async () => {
+      try {
+        const ov = await window.sherlyFetchPersonaOverrides();
+        const base = window.SHERLY_PERSONA || {};
+        const eff = window.sherlyMergePersona(base, ov);
+        const v = (x) => (x == null ? '' : String(x));
+        $('peEdOwnerName').value = v(eff.owner?.name);
+        $('peEdOwnerNote').value = v(eff.owner?.note);
+        $('peEdTagline').value = v(eff.tagline);
+        $('peEdRole').value = v(eff.role);
+        $('peEdLocation').value = v(eff.location);
+        $('peEdBio').value = v(eff.bio);
+        $('peEdTraits').value = (eff.traits || []).join(', ');
+        $('peEdGaya').value = v(eff.voice?.gaya);
+        $('peEdKhas').value = v(eff.voice?.khas);
+        $('peEdPantangan').value = v(eff.voice?.pantangan);
+        for (let i = 1; i <= 4; i++) {
+          const pl = (eff.pillars || [])[i - 1] || {};
+          $('peEdP' + i + 'T').value = v(pl.title);
+          $('peEdP' + i + 'D').value = v(pl.desc);
+        }
+        $('peEdMood').value = ((eff.visual || {}).mood || []).join(', ');
+        $('peEdFoto').value = v(eff.visual?.foto);
+        $('peEdAudience').value = v(eff.audience);
+        $('peEdKolaborasi').value = v(eff.kolaborasi);
+      } catch { status('Gagal memuat persona saat ini.', true); }
+    })();
+
+    const collect = () => ({
+      owner: { name: $('peEdOwnerName').value.trim(), note: $('peEdOwnerNote').value.trim() },
+      tagline: $('peEdTagline').value.trim(),
+      role: $('peEdRole').value.trim(),
+      location: $('peEdLocation').value.trim(),
+      bio: $('peEdBio').value.trim(),
+      traits: $('peEdTraits').value.split(',').map((x) => x.trim()).filter(Boolean),
+      voice: { gaya: $('peEdGaya').value.trim(), khas: $('peEdKhas').value.trim(), pantangan: $('peEdPantangan').value.trim() },
+      pillars: [1, 2, 3, 4].map((i) => ({ title: $('peEdP' + i + 'T').value.trim(), desc: $('peEdP' + i + 'D').value.trim() })),
+      visual: { mood: $('peEdMood').value.split(',').map((x) => x.trim()).filter(Boolean), foto: $('peEdFoto').value.trim() },
+      audience: $('peEdAudience').value.trim(),
+      kolaborasi: $('peEdKolaborasi').value.trim()
+    });
+
+    const save = async (payload) => {
+      const btn = $('peEdSaveBtn');
+      btn.disabled = true; status('Menyimpan…');
+      try {
+        const h = { 'Content-Type': 'application/json' };
+        const t = await window.sherlyGetAccessToken?.();
+        if (t) h.Authorization = 'Bearer ' + t;
+        const res = await fetch('/api/persona-settings', { method: 'PUT', headers: h, body: JSON.stringify(payload) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || ('Gagal menyimpan (' + res.status + ')'));
+        window.__sherlyPersonaOv = null; // cache lama dibersihkan — halaman Persona ambil yang baru
+        status('Tersimpan ✓ Persona & nama owner langsung dipakai.');
+        window.toast?.('Persona Sherly tersimpan 💕');
+      } catch (e) {
+        status(e.message || 'Gagal menyimpan.', true);
+        window.toast?.(e.message || 'Gagal menyimpan persona.');
+      } finally { btn.disabled = false; }
+    };
+
+    $('peEdSaveBtn')?.addEventListener('click', () => save(collect()));
+    $('peEdResetBtn')?.addEventListener('click', () => {
+      if (!window.confirm?.('Kembalikan Persona ke bawaan? Perubahanmu akan hilang.')) return;
+      save({});
+      ['peEdOwnerName', 'peEdOwnerNote'].forEach((id) => { const el = $(id); if (el) el.value = ''; });
+    });
+  }
+
+  document.querySelectorAll('.settings-tab[data-settings-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.settingsTab;
+      document.querySelectorAll('.settings-tab[data-settings-tab]').forEach((b) => b.classList.toggle('active', b === btn));
+      const providers = document.getElementById('settingsProvidersPane');
+      const persona = document.getElementById('settingsPersonaPane');
+      if (providers) providers.hidden = tab !== 'providers';
+      if (persona) persona.hidden = tab !== 'persona';
+      if (tab === 'persona') personaEditorInit();
+    });
+  });
 })();
