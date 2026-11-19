@@ -10,7 +10,7 @@
   const PX_PER_SEC = 90; // lebar kartu klip per detik di timeline
   const MAX_CLIPS = 12;
 
-  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], sticks: [], selItem: null, selClip: null, playing: false, cur: -1, exporting: false, cancelExport: false };
+  let V = { clips: [], ratio: '9:16', filter: 'normal', texts: [], sticks: [], selItem: null, selClip: null, playing: false, cur: -1, curLocal: 0, exporting: false, cancelExport: false };
   let uid = 0;
 
   const readyClips = () => V.clips.filter((c) => c.ready);
@@ -69,6 +69,7 @@
     if (i < 0 || i >= ready.length) { V.cur = -1; return; }
     const c = ready[i];
     V.cur = i;
+    V.curLocal = opts.localT || 0;
     const el = $('veVideo');
     if (!el) return;
     el.muted = !!c.muted;
@@ -87,7 +88,10 @@
     let acc = 0;
     for (let i = 0; i < V.cur; i++) acc += ready[i].end - ready[i].start;
     const el = $('veVideo');
-    const local = el && el.readyState >= 1 ? Math.min(Math.max(el.currentTime - ready[V.cur].start, 0), ready[V.cur].end - ready[V.cur].start) : 0;
+    const len = Math.round((ready[V.cur].end - ready[V.cur].start) * 1000) / 1000;
+    const local = el && el.readyState >= 1
+      ? Math.min(Math.max(el.currentTime - ready[V.cur].start, 0), len)
+      : Math.min(Math.max(V.curLocal || 0, 0), len);
     return acc + local;
   }
   function tick() {
@@ -107,6 +111,22 @@
       }
     }
     requestAnimationFrame(tick);
+  }
+
+  // Lompat pratinjau ke waktu global t (detik) di timeline.
+  function seekGlobal(t) {
+    const ready = readyClips();
+    if (!ready.length) return;
+    const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+    const tt = Math.min(Math.max(Number(t) || 0, 0), Math.max(0, total - 0.05));
+    const at = CORE().clipAt ? CORE().clipAt(ready, tt) : null;
+    if (!at) return;
+    if (V.cur !== at.index) loadClip(at.index, { localT: at.localT });
+    else {
+      const el = $('veVideo');
+      V.curLocal = at.localT;
+      if (el) { try { el.currentTime = at.clip.start + at.localT; } catch {} }
+    }
   }
 
   function updatePlayBtn() {
@@ -185,7 +205,7 @@
 
   // ---------- timeline ----------
   function clipCard(c, i) {
-    const len = Math.max(0, c.end - c.start);
+    const len = Math.round(Math.max(0, c.end - c.start) * 1000) / 1000;
     const w = Math.round(len * PX_PER_SEC + 44);
     const sel = V.selClip === c.id ? ' sel' : '';
     const inner = c.ready
@@ -229,7 +249,7 @@
             if (side === 'l') c.start = Math.min(s0 + ds, e0 - (CORE().MIN_SEG || 0.5));
             else c.end = Math.max(e0 + ds, s0 + (CORE().MIN_SEG || 0.5));
             c.start = Math.max(0, c.start); c.end = Math.min(c.dur, c.end);
-            if (lenEl) lenEl.textContent = fmtT(Math.max(0, c.end - c.start));
+            if (lenEl) lenEl.textContent = fmtT(Math.round(Math.max(0, c.end - c.start) * 1000) / 1000);
             card.style.width = Math.round(Math.max(0, c.end - c.start) * PX_PER_SEC + 44) + 'px';
           };
           const up = () => {
@@ -430,6 +450,48 @@
   }
 
   // ---------- event ----------
+  // scrub playhead: ketuk/geser bar posisi untuk pindah titik potong
+  (() => {
+    const wrap = $('vePosWrap'); if (!wrap) return;
+    const frac = (ev) => {
+      const r = wrap.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (ev.clientX - r.left) / Math.max(1, r.width)));
+    };
+    wrap.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const ready = readyClips();
+      if (!ready.length) return;
+      if (V.playing) { $('veVideo')?.pause?.(); V.playing = false; updatePlayBtn(); }
+      const total = CORE().timelineDuration ? CORE().timelineDuration(ready) : 0;
+      wrap.setPointerCapture?.(e.pointerId);
+      const seek = (ev) => seekGlobal(frac(ev) * total);
+      seek(e);
+      const move = (ev) => seek(ev);
+      const up = () => { wrap.removeEventListener('pointermove', move); wrap.removeEventListener('pointerup', up); wrap.removeEventListener('pointercancel', up); };
+      wrap.addEventListener('pointermove', move);
+      wrap.addEventListener('pointerup', up);
+      wrap.addEventListener('pointercancel', up);
+    });
+  })();
+
+  // ✂ Bagi: potong klip aktif di posisi playhead jadi dua segmen
+  $('veClipSplit')?.addEventListener('click', () => {
+    const ready = readyClips();
+    if (!ready.length) return;
+    const at = CORE().clipAt ? CORE().clipAt(ready, globalTime()) : null;
+    if (!at) { window.toast?.('Putar/ggeser playhead ke dalam klip dulu ya.'); return; }
+    const c = at.clip;
+    const parts = CORE().splitAt ? CORE().splitAt(c, c.start + at.localT) : null;
+    if (!parts) { window.toast?.('Titik bagi terlalu mepet ke ujung klip — geser playhead ke tengahnya dulu.'); return; }
+    const i = V.clips.indexOf(c);
+    if (i < 0) return;
+    c.end = parts.left.end;
+    V.clips.splice(i + 1, 0, { ...c, id: 'c' + (++uid), start: parts.right.start, end: parts.right.end });
+    V.selClip = c.id;
+    renderAll();
+    window.toast?.('Klip dibagi dua ✂ — tap bagian yang tidak perlu lalu Hapus, atau trim lagi.');
+  });
+
   $('veAddBtn')?.addEventListener('click', () => $('veFile')?.click());
   $('veFile')?.addEventListener('change', (e) => { addFiles(e.target.files || []); e.target.value = ''; });
   $('veRatio')?.addEventListener('change', (e) => { V.ratio = e.target.value || '9:16'; applyStage(); });
