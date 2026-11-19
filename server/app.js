@@ -210,6 +210,17 @@ async function buildTrustedContext(user, timezone, profile, supabase, currentCon
   const tierRule = 'KENALI STATUS LAWAN BICARA sejak kalimat pertama: cara menyapa, kedekatan, dan topik yang boleh dibahas harus mengikuti badge/peran di atas. Tunjukkan lewat gaya komunikasi — JANGAN menyebut kata teknis seperti "badge", "status", atau "sistem" kepada mereka.';
   const base = `KONTEKS SESI TERVERIFIKASI SERVER:\n${identity}\nWaktu lokal pengguna: ${local}. Zona waktu: ${timezone}.\nGunakan waktu ini bila relevan (menyebut "kemarin", "besok", janji, atau tenggat); jangan mengumumkannya tanpa alasan.\n${genderRule}\n${roleBlock}\n${tierRule}`;
   const parts = [base];
+  // D-194: Sherly kenal pemilik studio & membawa laporan bersama (khusus owner).
+  try {
+    const personaOverrides = await fetchPersonaOverrides();
+    const ownerName = String(personaOverrides.owner?.name || '').trim();
+    if (role === 'admin') {
+      const shared = await fetchSharedMemoryForOwner(supabase, timezone);
+      if (shared) parts.push(shared);
+    } else if (ownerName) {
+      parts.push(`PEMILIK SHERLYSTUDIO: ${ownerName}${personaOverrides.owner?.note ? ` — ${personaOverrides.owner.note}` : ''}. Kamu bekerja untuk pemilik studio ini; bila lawan bicara bertanya tentang pemilik, jawab hangat dan singkat.`);
+    }
+  } catch { /* konteks owner opsional — jangan ganggu chat */ }
   const notesBlock = await fetchSherlyNotes(supabase, user.id, timezone);
   if (notesBlock) parts.push(notesBlock);
   const pastMemory = await fetchPastMemory(supabase, user.id, currentConversationId, timezone);
@@ -374,6 +385,7 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     if (!['auto','gemini','groq','openrouter','custom'].includes(provider)) return res.status(400).json({ error: 'Pilihan provider tidak valid.' });
     const userId = req.user.id;
     let conversationId = requestedId;
+    let createdNewConversation = false;
     if (conversationId) {
       if (!validUuid(conversationId)) return res.status(400).json({ error: 'ID percakapan tidak valid.' });
       const { data: existing, error } = await req.supabase.from('ai_conversations').select('id').eq('id', conversationId).eq('user_id', userId).maybeSingle();
@@ -383,6 +395,7 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
       const { data: created, error } = await req.supabase.from('ai_conversations').insert({ user_id: userId, title, provider: provider === 'auto' ? 'groq' : provider }).select('id').single();
       if (error) throw error;
       conversationId = created.id;
+      createdNewConversation = true;
     }
     const storedUserContent = image ? `${message}\n[📷 gambar terlampir]` : message;
     const { error: saveUserError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'user', content: storedUserContent, provider });
@@ -398,14 +411,19 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
     const messages = fetched.length ? fetched : [{ role: 'user', content: message }]; // fallback bila histori kosong (mis. sinkronisasi tertunda)
     const result = await chatWithAI({ provider, messages, temperature: 0.7, maxTokens: 1600, ...(image ? { image } : {}) }, await buildTrustedContext(req.user, safeTimezone(timezone), chatProfile, req.supabase, conversationId), { supabase: req.supabase, accessToken: req.accessToken });
     const notePattern = /<{0,2}CATATAN\s*:\s*([^>\n]{3,300})>{0,2}/gi;
+    const reportPattern = /<{0,2}REPORT\s*:\s*([^>\n]{3,400})>{0,2}/gi;
     const foundNotes = [];
-    const stripNotes = (t) => String(t || '').replace(notePattern, (_m, n) => { foundNotes.push(String(n)); return ''; }).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const foundReports = [];
+    const stripNotes = (t) => String(t || '').replace(notePattern, (_m, n) => { foundNotes.push(String(n)); return ''; }).replace(reportPattern, (_m, r) => { foundReports.push(String(r)); return ''; }).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     const cleanBubbles = (Array.isArray(result.bubbles) && result.bubbles.length ? result.bubbles : [result.text]).map(stripNotes).filter(Boolean);
     const assistantContent = cleanBubbles.join('\n\n'); // disimpan sebagai teks; histori dipecah lagi per \n\n saat dirender
     const { error: saveAssistantError } = await req.supabase.from('ai_messages').insert({ conversation_id: conversationId, user_id: userId, role: 'assistant', content: assistantContent, provider: result.provider, model: result.model, token_usage: result.usage });
     if (saveAssistantError) throw saveAssistantError;
     await req.supabase.from('ai_conversations').update({ provider: result.provider }).eq('id', conversationId).eq('user_id', userId);
     if (foundNotes.length) await saveMemoryNotes(req.supabase, userId, foundNotes).catch(() => {});
+    // D-194: memori bersama — laporan Sherly utk owner + catat kunjungan tamu/klien.
+    if (foundReports.length) await saveSharedReports(req.supabase, req.user, chatProfile, foundReports).catch(() => {});
+    if (createdNewConversation) await logSharedVisit(req.supabase, req.user, chatProfile, message).catch(() => {});
     res.json({ ok: true, conversation_id: conversationId, reply: assistantContent, bubbles: cleanBubbles.length ? cleanBubbles : [assistantContent], provider: result.provider, requested_provider: result.requestedProvider, fallback_used: result.fallbackUsed, key_source: result.keySource || null, key_name: result.keyName || null, model_switched: result.modelSwitched || null, model: result.model, usage: result.usage });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
@@ -806,6 +824,104 @@ app.put('/api/admin/settings', requireUser, requireAdmin, async (req, res) => {
     res.json({ ok: true, whatsapp: num });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
+
+// ==== D-194: Persona editable (owner) + memori bersama lintas peran ====
+const PERSONA_OVERRIDE_KEY = 'persona_overrides_v1';
+function sanitizePersonaOverrides(body) {
+  const src = body && typeof body === 'object' ? body : {};
+  const str = (v, n) => (typeof v === 'string' ? v.replace(/[\r\n]+/g, ' ').trim().slice(0, n) : '');
+  const para = (v, n) => (typeof v === 'string' ? v.replace(/[\r\n]{3,}/g, '\n\n').trim().slice(0, n) : '');
+  const list = (v, n) => (Array.isArray(v) ? v : String(v || '').split(',')).map((x) => str(x, 60)).filter(Boolean).slice(0, n);
+  const out = {};
+  const ownerName = str(src.owner?.name, 80); if (ownerName) out.owner = { name: ownerName, note: str(src.owner?.note, 200) };
+  const map = { tagline: [str, 300], role: [str, 160], location: [str, 120], audience: [para, 600], kolaborasi: [para, 600] };
+  for (const [k, [fn, cap]] of Object.entries(map)) { const v = fn(src[k], cap); if (v) out[k] = v; }
+  const bio = para(src.bio, 1200); if (bio) out.bio = bio;
+  const traits = list(src.traits, 12); if (traits.length) out.traits = traits;
+  const voice = {};
+  for (const k of ['gaya', 'khas', 'pantangan']) { const v = para(src.voice?.[k], 800); if (v) voice[k] = v; }
+  if (Object.keys(voice).length) out.voice = voice;
+  const pillars = (Array.isArray(src.pillars) ? src.pillars : []).slice(0, 6)
+    .map((pl) => ({ title: str(pl?.title, 90), desc: para(pl?.desc, 400) }))
+    .filter((pl) => pl.title || pl.desc);
+  if (pillars.length) out.pillars = pillars;
+  const visual = {};
+  const mood = list(src.visual?.mood, 10); if (mood.length) visual.mood = mood;
+  const foto = para(src.visual?.foto, 600); if (foto) visual.foto = foto;
+  if (Object.keys(visual).length) out.visual = visual;
+  return out;
+}
+function parsePersonaRow(row) {
+  let v = row?.value;
+  if (v && typeof v === 'object') return v;
+  if (typeof v === 'string' && v.trim().startsWith('{')) { try { const p = JSON.parse(v); if (p && typeof p === 'object') return p; } catch { /* nilai bukan JSON — abaikan */ } }
+  return {};
+}
+let __personaCache = { at: 0, value: null };
+async function fetchPersonaOverrides(force = false) {
+  if (!force && __personaCache.value && Date.now() - __personaCache.at < 60000) return __personaCache.value;
+  let out = {};
+  try {
+    const { data } = await createPublicClient().from('app_settings').select('key,value').eq('key', PERSONA_OVERRIDE_KEY).maybeSingle();
+    out = parsePersonaRow(data);
+  } catch { /* supabase belum dikonfigurasi / tabel belum ada — pakai bawaan */ }
+  __personaCache = { at: Date.now(), value: out };
+  return out;
+}
+app.get('/api/persona-settings', async (_req, res) => {
+  try { res.json({ overrides: await fetchPersonaOverrides(true) }); }
+  catch (error) { res.status(500).json({ error: error.message }); }
+});
+app.put('/api/persona-settings', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const overrides = sanitizePersonaOverrides(req.body);
+    const { error } = await req.supabase.from('app_settings')
+      .upsert({ key: PERSONA_OVERRIDE_KEY, value: JSON.stringify(overrides), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) return res.status(500).json({ error: 'Gagal menyimpan persona. Pastikan tabel app_settings sudah dibuat (docs/supabase-studio-settings.sql).' });
+    __personaCache = { at: 0, value: null };
+    res.json({ ok: true, overrides });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+function sharedActorLabel(user, profile) {
+  const meta = user?.user_metadata || {};
+  return String(meta.full_name || meta.display_name || meta.nickname || profile?.name || '').trim().slice(0, 80)
+    || (resolveUserRole(user) === 'member' ? 'Klien' : 'Tamu');
+}
+async function logSharedVisit(supabase, user, profile, firstMessage) {
+  const content = String(firstMessage || '').replace(/\s+/g, ' ').trim().slice(0, 140) || '(tanpa pesan)';
+  const { error } = await supabase.from('sherly_shared_memory')
+    .insert({ kind: 'visit', actor_id: user.id, actor_label: sharedActorLabel(user, profile), actor_role: resolveUserRole(user), content });
+  if (error) throw error;
+}
+async function saveSharedReports(supabase, user, profile, reports) {
+  const rows = [...new Set((reports || []).map((r) => String(r).replace(/\s+/g, ' ').trim()).filter((r) => r.length > 2))].slice(0, 3)
+    .map((content) => ({ kind: 'report', actor_id: user.id, actor_label: sharedActorLabel(user, profile), actor_role: resolveUserRole(user), content: content.slice(0, 400) }));
+  if (!rows.length) return;
+  const { error } = await supabase.from('sherly_shared_memory').insert(rows);
+  if (error) throw error;
+}
+async function fetchSharedMemoryForOwner(supabase, timezone) {
+  try {
+    const { data, error } = await supabase.from('sherly_shared_memory')
+      .select('kind,actor_label,actor_role,content,created_at').order('created_at', { ascending: false }).limit(25);
+    if (error || !data?.length) return '';
+    const fmt = (ts) => formatIdTimestamp(ts, timezone);
+    const visits = data.filter((r) => r.kind === 'visit').slice(0, 10);
+    const reports = data.filter((r) => r.kind !== 'visit').slice(0, 15);
+    const lines = ['LAPORAN STUDIO (KHUSUS PEMILIK — RAHASIA, jangan pernah dibagikan ke orang selain pemilik):'];
+    if (visits.length) {
+      lines.push('Kunjungan terbaru:');
+      visits.forEach((v) => lines.push(`- [${fmt(v.created_at)}] ${v.actor_label} (${v.actor_role}): ${String(v.content).slice(0, 120)}`));
+    }
+    if (reports.length) {
+      lines.push('Pesan & laporan tersimpan untukmu:');
+      reports.forEach((r) => lines.push(`- [${fmt(r.created_at)}] Dari ${r.actor_label} (${r.actor_role}): ${String(r.content).slice(0, 200)}`));
+    }
+    if (!visits.length && !reports.length) return '';
+    lines.push('Gunakan laporan ini secara natural bila pemilik bertanya (mis. "ada tamu berkunjung?"); sampaikan pesan titipan dengan setia.');
+    return lines.join('\n');
+  } catch { /* tabel sherly_shared_memory belum dibuat — lewati diam-diam */ return ''; }
+}
 async function listCustomProviders(supabase, userId, withKeys = false) {
   const { data, error } = await supabase.from('custom_providers').select('id,name,base_url,model,encrypted_key,active,created_at').eq('user_id', userId).order('created_at', { ascending: true });
   if (error) throw new Error('Tabel custom_providers belum bisa diakses. Jalankan docs/supabase-custom-providers.sql di SQL Editor dulu.');

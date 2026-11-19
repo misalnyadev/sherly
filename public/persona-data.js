@@ -34,6 +34,9 @@ window.SHERLY_PERSONA = {
     ],
     foto: 'Foto bernuansa cream & beige dengan cahaya alami; komposisi bersih dengan ruang bernapas; subjek tenang dan natural \u2014 tidak ramai, tapi selalu punya sudut pandang.'
   },
+  // D-194: owner bisa diisi lewat Pengaturan → Persona Sherly (tersimpan app_settings).
+  // Dipakai supaya Sherly mengenal pemilik studio saat ditanya tamu/klien.
+  owner: { name: '', note: '' },
   audience: 'Penikmat lifestyle 18\u201334 tahun di Indonesia \u2014 mayoritas perempuan yang menyukai hal estetik namun praktis.',
   kolaborasi: 'Penawaran kolaborasi & brand deal disambut hangat \u2014 kirim pesan lewat DM Instagram.',
   heyTalent: {

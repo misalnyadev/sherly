@@ -898,7 +898,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
  </section>
  <section id="aiProvidersView" class="page-view">
   <div class="page-heading"><div><h1>Pengaturan</h1><p>Kelola provider &amp; API key AI dan identitas akun Anda.</p></div></div>
-  <div class="settings-tabs"><button type="button" class="settings-tab active" data-settings-tab="providers"><span data-icon="sliders"></span> Provider &amp; API Key</button><button type="button" class="settings-tab" data-page="Profil"><span data-icon="user-round"></span> Profil Pengguna</button></div>
+  <div class="settings-tabs"><button type="button" class="settings-tab active" data-settings-tab="providers"><span data-icon="sliders"></span> Provider &amp; API Key</button><button type="button" class="settings-tab" data-page="Profil"><span data-icon="user-round"></span> Profil Pengguna</button><button type="button" class="settings-tab" data-settings-tab="persona"><span data-icon="sherlyheart"></span> Persona Sherly</button></div>
+  <div id="settingsProvidersPane">
   <div class="page-heading sub"><div><h1 style="font-size:19px">AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Satu label dapat berisi banyak key. Nilai key tidak pernah tampil — rotasi &amp; fallback otomatis saat gagal. Key dikelompokkan per kategori: Teks &amp; Logika, Vision, TTS, dan (segera) Studio — gambar &amp; video (mis. kie.ai).</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
   <div id="vaultBanner" class="warn-banner" style="display:none"></div>
   <div class="cap-tabs" id="capabilityTabs" role="tablist" aria-label="Kategori kemampuan provider"></div>
@@ -940,6 +941,37 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    </div>
    <p class="bank-suara-progress" id="bankProgress" role="status"></p>
    <div class="bank-suara-list" id="bankSuaraList"><p class="bank-suara-empty">Memuat Bank Suara...</p></div>
+  </div>
+  </div>
+  <div id="settingsPersonaPane" hidden>
+   <div class="page-heading sub"><div><h1 style="font-size:19px">Persona Sherly</h1><p>Ubah identitas &amp; suara Sherly — perubahan langsung tampil di halaman Persona; nama pemilik studio dipakai saat Sherly berbincang.</p></div></div>
+   <div class="panel">
+    <div class="form-grid">
+     <div class="form-field"><label for="peEdOwnerName">Nama pemilik studio (owner)</label><input id="peEdOwnerName" maxlength="80" placeholder="mis. Misalya"></div>
+     <div class="form-field"><label for="peEdOwnerNote">Catatan owner (opsional)</label><input id="peEdOwnerNote" maxlength="200" placeholder="mis. suka disapa Kak Bunda wkwk"></div>
+     <div class="form-field full"><label for="peEdTagline">Tagline</label><input id="peEdTagline" maxlength="300"></div>
+     <div class="form-field"><label for="peEdRole">Peran</label><input id="peEdRole" maxlength="160"></div>
+     <div class="form-field"><label for="peEdLocation">Lokasi</label><input id="peEdLocation" maxlength="120"></div>
+     <div class="form-field full"><label for="peEdBio">Bio</label><textarea id="peEdBio" rows="4" maxlength="1200"></textarea></div>
+     <div class="form-field full"><label for="peEdTraits">Sifat / traits (pisah koma)</label><input id="peEdTraits" maxlength="400"></div>
+     <div class="form-field full"><label for="peEdGaya">Suara — Gaya</label><textarea id="peEdGaya" rows="3" maxlength="800"></textarea></div>
+     <div class="form-field full"><label for="peEdKhas">Suara — Khas</label><textarea id="peEdKhas" rows="3" maxlength="800"></textarea></div>
+     <div class="form-field full"><label for="peEdPantangan">Suara — Pantangan</label><textarea id="peEdPantangan" rows="3" maxlength="800"></textarea></div>
+     <div class="form-field full"><label>Pilar konten 1</label><input id="peEdP1T" maxlength="90" placeholder="Judul"><textarea id="peEdP1D" rows="2" maxlength="400" placeholder="Deskripsi singkat"></textarea></div>
+     <div class="form-field full"><label>Pilar konten 2</label><input id="peEdP2T" maxlength="90" placeholder="Judul"><textarea id="peEdP2D" rows="2" maxlength="400" placeholder="Deskripsi singkat"></textarea></div>
+     <div class="form-field full"><label>Pilar konten 3</label><input id="peEdP3T" maxlength="90" placeholder="Judul"><textarea id="peEdP3D" rows="2" maxlength="400" placeholder="Deskripsi singkat"></textarea></div>
+     <div class="form-field full"><label>Pilar konten 4</label><input id="peEdP4T" maxlength="90" placeholder="Judul"><textarea id="peEdP4D" rows="2" maxlength="400" placeholder="Deskripsi singkat"></textarea></div>
+     <div class="form-field full"><label for="peEdMood">Mood visual (pisah koma)</label><input id="peEdMood" maxlength="200"></div>
+     <div class="form-field full"><label for="peEdFoto">Catatan gaya foto</label><textarea id="peEdFoto" rows="2" maxlength="600"></textarea></div>
+     <div class="form-field full"><label for="peEdAudience">Audiens</label><textarea id="peEdAudience" rows="2" maxlength="600"></textarea></div>
+     <div class="form-field full"><label for="peEdKolaborasi">Kolaborasi</label><textarea id="peEdKolaborasi" rows="2" maxlength="600"></textarea></div>
+    </div>
+    <div class="pe-cta" style="margin-top:14px">
+     <button type="button" class="pink-btn" id="peEdSaveBtn"><span data-icon="check"></span> Simpan Persona</button>
+     <button type="button" class="outline-btn" id="peEdResetBtn"><span data-icon="rotate-ccw"></span> Kembalikan Bawaan</button>
+     <span id="peEdStatus" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+   </div>
   </div>
 </section>
 <section id="portfolioView" class="page-view">
@@ -1326,6 +1358,8 @@ const ICONS={
  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
  megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
  sherlyheart:'<path d="M12 20.4C9 18.2 3.6 14.7 2.7 10.9 2 7.7 4.2 5.2 6.9 5.4c1.9.2 3.5 1.4 4.2 3 .2.4.7.4.9 0 .7-1.6 2.3-2.8 4.2-3 2.7-.2 4.9 2.3 4.2 5.5-.9 3.8-6.3 7.3-9.4 9.5Z"/><path d="M8.6 21.7c2.2.8 4.6.8 6.8 0"/>',
+ check:'<path d="M20 6 9 17l-5-5"/>',
+ 'rotate-ccw':'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
  handshake:'<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>',
  check:'<path d="M20 6 9 17l-5-5"/>',
  'user-round':'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
