@@ -12,6 +12,17 @@
 export const PROMPT_KINDS = ['template', 'block'];
 
 /**
+ * Mode konten yang cocok untuk sebuah prompt.
+ * D-208: prompt dipisah per jenis konten supaya tidak salah pilih —
+ * mode 'foto' hanya muncul di Studio saat jenis konten Foto,
+ * mode 'video' hanya muncul saat jenis konten Video.
+ */
+export const PROMPT_MODES = ['foto', 'video'];
+
+/** Kelompok entri (untuk pengelompokan di UI & seed). */
+export const PROMPT_GROUPS = ['umum', 'style', 'fotovideo', 'produk'];
+
+/**
  * Kategori blok. Urutan array = urutan susunan prompt saat dirakit komposer.
  * Ini urutan hasil riset: subjek/aksi dulu, baru cahaya, kamera, gaya, tekstur,
  * color, lalu negative prompt di paling akhir.
@@ -47,6 +58,12 @@ export function normalizePromptEntry(input = {}) {
   const rawCat = String(input.category ?? 'umum').trim().toLowerCase();
   const category = CATEGORY_KEYS.includes(rawCat) ? rawCat : 'umum';
 
+  // D-208: mode (foto|video) & group (umum|style|fotovideo|produk).
+  const rawMode = String(input.mode ?? 'foto').trim().toLowerCase();
+  const mode = PROMPT_MODES.includes(rawMode) ? rawMode : 'foto';
+  const rawGroup = String(input.group ?? 'umum').trim().toLowerCase();
+  const group = PROMPT_GROUPS.includes(rawGroup) ? rawGroup : 'umum';
+
   // Slots: placeholder yang harus diisi user (mis. "outfit" untuk "try outfit { outfit }").
   let slots = [];
   if (Array.isArray(input.slots)) {
@@ -65,7 +82,7 @@ export function normalizePromptEntry(input = {}) {
 
   return {
     ok: true,
-    value: { kind, label, category, content, slots, sort_order: sortOrder, is_active: isActive },
+    value: { kind, label, category, content, slots, sort_order: sortOrder, is_active: isActive, mode, group },
   };
 }
 
@@ -134,6 +151,113 @@ export function fillTemplate(template, values = {}) {
 }
 
 /**
+ * ===== D-208: Optimasi susunan prompt =====
+ *
+ * Mengubah prompt bebas menjadi prompt berstruktur yang maximizes hasil:
+ *   subjek/aksi -> kamera -> cahaya -> gaya -> tekstur -> color -> kualitas -> negative
+ *
+ * Aturan: frasa yang sudah ada tidak diduplikasi (anti-duplikat), blok kosong
+ * dilewati, dan setiap kategori hanya mengambil frasa paling relevan.
+ */
+
+/** Petunjuk kategori untuk setiap kata kunci (dipakai auto-deteksi). */
+const KEYWORD_HINTS = [
+  { cat: 'negative', words: ['no text', 'no cartoon', 'no watermark', 'no logo', 'no cgi', 'no plastic', 'no illustration', 'tanpa teks', 'avoid ', 'without '] },
+  // Cahaya dicek SEBELUM kamera: 'golden hour sunlight' bukan Terms kamera meski ada kata 'shot'.
+  { cat: 'cahaya', words: ['golden hour', 'sunlight', 'softbox', 'rim light', 'rimlight', 'backlight', 'moonlight', 'daylight', 'overcast', 'volumetric', 'soft window light', 'studio lighting', 'natural light', 'soft light', 'hard light', 'lighting', 'light', 'shadow', 'shadows', 'neon', 'flash', 'bounce light', 'key light'] },
+  { cat: 'kamera', words: ['shot', 'angle', 'lens', 'mm ', 'mm,', 'dof', 'depth of field', 'bokeh', 'view', 'camera', 'framing', 'close-up', 'close up', 'wide angle', 'wide shot', 'aerial', 'drone', "bird's eye", 'macro', 'portrait', 'composition', 'vlog', 'pov', 'top-down', 'top down', 'overhead', 'dutch', "worm's eye", 'low angle', 'high angle', 'three-quarter', 'eye level', 'full body', 'medium shot'] },
+  { cat: 'tekstur', words: ['texture', 'porous', 'pores', 'skin texture', 'fabric', 'grain', 'wrinkle', 'material', 'imperfection', 'rough', 'dust', 'micro-detail', 'fine detail'] },
+  { cat: 'color', words: ['color', 'colour', 'tone', 'tones', 'grading', 'palette', 'warm', 'cool', 'muted', 'saturated', 'vibrant', 'monochrome', 'neutral tones', 'teal', 'amber'] },
+  { cat: 'kualitas', words: ['photorealistic', 'hyperrealistic', 'ultra-realistic', '8k', '4k', 'uhd', 'highly detailed', 'hyper-detailed', 'cinematic realism', 'dslr', 'ultra detailed'] },
+  { cat: 'gaya', words: ['style', 'editorial', 'documentary', 'commercial', 'cinematic', 'vintage', 'minimalist', 'luxury', 'aesthetic', 'photography look'] },
+];
+
+/** Kata kunci negativ (bukan substring bebas) — pola kata utuh. */
+const NEGATIVE_MARKERS = ['no ', 'without ', 'tanpa ', 'avoid '];
+
+/**
+ * Deteksi kategori sebuah frasa.
+ * @param {string} phrase
+ * @returns {string} key kategori
+ */
+export function detectCategory(phrase) {
+  const p = String(phrase || '').toLowerCase().trim();
+  if (!p) return 'umum';
+  for (const m of NEGATIVE_MARKERS) if (p.startsWith(m)) return 'negative';
+  for (const h of KEYWORD_HINTS) {
+    for (const w of h.words) if (p.includes(w)) return h.cat;
+  }
+  return 'umum';
+}
+
+/**
+ * Pisahkan prompt bebas menjadi frasa-frasa yang bisa dikelompokkan.
+ * Menghormati tanda baca sebagai batas frasa.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function splitPhrases(text) {
+  return String(text || '')
+    .split(/(?<=[.,;!?])\s+|\n+/)
+    .map((s) => s.replace(/\s+/g, ' ').trim().replace(/[.,;]+$/, '').trim())
+    .filter((s) => s.length > 2);
+}
+
+/**
+ * Optimalkan prompt: kelompokkan per kategori lalu susun ulang berurutan fokus.
+ *
+ * @param {string} raw prompt bebas dari komposer
+ * @param {Array<{category?:string, content?:string}>} blocks blok yang sudah dipilih user
+ * @returns {{prompt:string, parts:Object<string,string[]>, moved:number}}
+ */
+export function optimizePrompt(raw, blocks = []) {
+  const collected = new Map();
+  const add = (cat, text) => {
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!t) return;
+    if (!collected.has(cat)) collected.set(cat, []);
+    const list = collected.get(cat);
+    // Anti-duplikat: frasa yang sama (case-insensitive) tidak diulang.
+    if (!list.some((x) => x.toLowerCase() === t.toLowerCase())) list.push(t);
+  };
+
+  // 1) Prompt utama = subjek/aksi (bagian pertama, sebelum kategori lain terdeteksi).
+  const phrases = splitPhrases(raw);
+  const subjectParts = [];
+  const rest = [];
+  let seenTechnical = false;
+  for (const p of phrases) {
+    const cat = detectCategory(p);
+    if (cat === 'umum' && !seenTechnical) { subjectParts.push(p); continue; }
+    seenTechnical = true;
+    if (cat === 'umum') { rest.push(p); continue; }
+    add(cat, p);
+  }
+
+  // 2) Blok yang sudah dipilih user (kategori eksplisit) ikut masuk.
+  for (const b of blocks) {
+    const cat = CATEGORY_KEYS.includes(b?.category) ? b.category : 'umum';
+    if (cat === 'negative') add('negative', b.content);
+    else add(cat, b.content);
+  }
+
+  const parts = {};
+  parts.subject = subjectParts;
+  for (const { key } of PROMPT_CATEGORIES) {
+    const list = collected.get(key);
+    if (list && list.length) parts[key] = list;
+  }
+
+  const order = ['subject', 'kamera', 'cahaya', 'gaya', 'tekstur', 'color', 'kualitas', 'negative'];
+  const out = [];
+  for (const key of order) {
+    const list = parts[key];
+    if (list && list.length) out.push(list.join(', '));
+  }
+  return { prompt: out.join('\n\n'), parts, moved: rest.length };
+}
+
+/**
  * Daftar placeholder yang ada di sebuah teks.
  * @returns {string[]}
  */
@@ -148,6 +272,9 @@ export function extractSlots(text) {
  * Dipakai server untuk mengisi bank prompt user baru saat pertama kali,
  * dan dipakai juga sebagai fallback di frontend saat endpoint gagal.
  */
+// D-208: seed tambahan — gaya foto (dari gaya lama) + 159 kode video dari PDF.
+import { SEED_FOTO_STYLES, SEED_CODES_FOTOVIDEO, SEED_CODES_PRODUK } from './prompt-seed.js';
+
 export const SEED_PROMPT_BANK = {
   template: [
     {
@@ -462,13 +589,16 @@ export const SEED_PROMPT_BANK = {
  * @param {string} userId
  * @returns {Promise<Array>}
  */
-export async function listPromptEntries(supabase, userId) {
-  const { data, error } = await supabase
+export async function listPromptEntries(supabase, userId, opts = {}) {
+  let q = supabase
     .from('prompt_bank')
     .select('*')
     .eq('user_id', userId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
+  // D-208: filter per mode (foto|video) supaya tidak salah pilih prompt.
+  if (opts.mode && PROMPT_MODES.includes(opts.mode)) q = q.eq('mode', opts.mode);
+  const { data, error } = await q;
   if (error) throw Object.assign(new Error(error.message), { status: 500 });
   return data || [];
 }
@@ -537,9 +667,24 @@ export async function seedPromptBank(supabase, userId) {
 
   const rows = [];
   let order = 0;
+  // D-207: template & blok dasar (mode foto).
   for (const kind of PROMPT_KINDS) {
     for (const item of SEED_PROMPT_BANK[kind] || []) {
-      const norm = normalizePromptEntry({ ...item, kind });
+      const norm = normalizePromptEntry({ ...item, kind, mode: 'foto', group: 'umum' });
+      if (!norm.ok) continue;
+      rows.push({ user_id: userId, ...norm.value, sort_order: order++ });
+    }
+  }
+  // D-208: gaya lama jadi template transparan (mode foto).
+  for (const item of SEED_FOTO_STYLES) {
+    const norm = normalizePromptEntry({ ...item, kind: 'template', mode: 'foto', group: 'style' });
+    if (!norm.ok) continue;
+    rows.push({ user_id: userId, ...norm.value, sort_order: order++ });
+  }
+  // D-208: 159 kode video dari PDF (mode video).
+  for (const [group, list] of [['fotovideo', SEED_CODES_FOTOVIDEO], ['produk', SEED_CODES_PRODUK]]) {
+    for (const item of list) {
+      const norm = normalizePromptEntry({ ...item, kind: 'template', mode: 'video', group });
       if (!norm.ok) continue;
       rows.push({ user_id: userId, ...norm.value, sort_order: order++ });
     }

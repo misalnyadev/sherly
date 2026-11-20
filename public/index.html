@@ -670,10 +670,19 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pb-item.on .st-pop-model>small{color:#ff9bdc}
 .st-pb-empty{color:#5d6f88;font-size:11.5px;padding:12px 11px;margin:0;line-height:1.5}
 .st-pill.st-on{border-color:#f044a8;color:#f4f5fb}
+/* D-208: aksi prompt di komposer (Optimalkan & Copy). */
+.st-prompt-tools{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+.st-tool-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
+.st-tool-btn:hover:not(:disabled){border-color:#f044a8;color:#ffd0ec;background:#160f20}
+.st-tool-btn:disabled{opacity:.55;cursor:default}
+.st-tool-btn [data-icon],.st-tool-btn svg{width:14px;height:14px}
 /* D-207: panel CRUD Bank Prompt di Pengaturan. */
 .pb-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .pb-filter{border:1px solid #24344e;background:#0f1828;color:#91a2b9;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
 .pb-filter.active{border-color:#f044a8;background:#d82d9126;color:#ffd0ec}
+.pb-mode-filter{border:1px solid #24344e;background:#0f1828;color:#91a2b9;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
+.pb-mode-filter.active{border-color:#f044a8;background:#d82d9126;color:#ffd0ec}
+.pb-mode-filter:not(.active):hover{border-color:#74436c;background:#160f20;color:#ffd0ec}
 .pb-filter:not(.active):hover{border-color:#74436c;background:#160f20;color:#ffd0ec}
 .pb-row{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:12px 14px;border:1px solid #24344e;border-radius:10px;margin-bottom:8px;background:#0a1220;flex-wrap:wrap}
 .pb-row-main{flex:1 1 320px;min-width:0}
@@ -1140,6 +1149,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
      <button type="button" class="pb-filter active" data-pb-filter="all">Semua</button>
      <button type="button" class="pb-filter" data-pb-filter="template">Template</button>
      <button type="button" class="pb-filter" data-pb-filter="block">Blok</button>
+     <span style="width:10px"></span>
+     <button type="button" class="pb-mode-filter active" data-pb-mode-filter="all">Semua Mode</button>
+     <button type="button" class="pb-mode-filter" data-pb-mode-filter="foto">Foto</button>
+     <button type="button" class="pb-mode-filter" data-pb-mode-filter="video">Video</button>
     </div>
     <div id="pbList"><p style="color:var(--muted);font-size:12px">Memuat bank prompt...</p></div>
    </div>
@@ -1147,7 +1160,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     <div class="section-head"><h2><span data-icon="pencil"></span> <span id="pbFormTitle">Tambah Entri</span></h2><button class="link" id="pbCancelBtn">Batal</button></div>
     <div class="form-grid">
      <div class="form-field"><label for="pbKind">Jenis *</label><select id="pbKind"><option value="template">Template (prompt utuh)</option><option value="block">Blok (bagian prompt)</option></select></div>
+     <div class="form-field"><label for="pbMode">Mode konten *</label><select id="pbMode"><option value="foto">Foto</option><option value="video">Video</option></select></div>
      <div class="form-field"><label for="pbCategory">Kategori</label><select id="pbCategory"></select></div>
+     <div class="form-field"><label for="pbGroup">Kelompok</label><select id="pbGroup"></select></div>
      <div class="form-field"><label for="pbLabel">Label *</label><input id="pbLabel" maxlength="80" placeholder="mis. Try Outfit / Golden Hour"></div>
      <div class="form-field"><label for="pbSlots">Placeholder (pisahkan koma)</label><input id="pbSlots" maxlength="200" placeholder="mis. outfit"></div>
      <div class="form-field full"><label for="pbContent">Isi prompt *</label><textarea id="pbContent" rows="4" maxlength="2000" placeholder="cth: drone view, camera high above looking straight down..."></textarea><span id="pbSlotHint" style="font-size:11px;color:var(--muted)"></span></div>
@@ -1591,6 +1606,7 @@ plus:'<path d="M12 5v14M5 12h14"/>',
  smartphone:'<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
  monitor:'<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
  file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>',
+ copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
  x:'<path d="M18 6 6 18M6 6l12 12"/>'
 };
 document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;const paths=ICONS[key];if(paths)el.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>'});

@@ -124,12 +124,12 @@ test('D-203: jenis konten jadi SATU kotak pilihan (pill), bukan dua tab', () => 
 
 // --- D-207: Bank Prompt di Studio ---
 
-test('D-207: pill Bank Prompt ada di baris kontrol, setelah Style', () => {
+test('D-207/D-208: pill Bank Prompt ada di baris kontrol, menggantikan Style', () => {
   const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2600);
-  const iStyle = controls.indexOf('stStylePill');
+  const iImgModel = controls.indexOf('stImgModelPill');
   const iPrompt = controls.indexOf('stPromptPill');
   assert.ok(iPrompt > -1, 'pill Bank Prompt tidak ada');
-  assert.ok(iStyle > -1 && iStyle < iPrompt, 'pill Bank Prompt harus setelah Style');
+  assert.ok(iImgModel > -1 && iImgModel < iPrompt, 'pill Bank Prompt harus setelah Model');
 });
 
 test('D-207: popover Bank Prompt punya tab Template & Blok', async () => {
@@ -252,25 +252,27 @@ test('D-207: prompt akhir merakit blok urut kategori (kamera -> cahaya -> negati
   assert.ok(body.includes('PROMPT_CATEGORY_ORDER'), 'composedPrompt tidak memakai urutan kategori');
   const orderIdx = body.indexOf('for (const cat of PROMPT_CATEGORY_ORDER)');
   assert.ok(orderIdx > -1, 'blok tidak dirakit per kategori');
-  // Gaya visual & rasio tetap ditambahkan di akhir (perilaku lama).
-  assert.ok(body.includes('Gaya visual'), 'suffix gaya hilang');
+  // D-208: suffix gaya dihapus (gaya jadi template transparan), rasio tetap.
+  assert.ok(!body.includes('Gaya visual'), 'suffix gaya lama harus dihapus (D-208)');
   assert.ok(body.includes('rasio aspek'), 'keterangan rasio hilang');
 });
 
-test('D-204: urutan baris kontrol FOTO — jenis konten, rasio, provider, model, style', () => {
+test('D-204/D-208: urutan baris kontrol FOTO — jenis konten, rasio, provider, model, prompt', () => {
   const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2400);
   const iType = controls.indexOf('stTypePill');
   const iAspect = controls.indexOf('stAspectPill');
   const iEngine = controls.indexOf('stEnginePill');
   const iImgModel = controls.indexOf('stImgModelPill');
-  const iStyle = controls.indexOf('stStylePill');
+  const iPrompt = controls.indexOf('stPromptPill');
   assert.ok(
-    iType > -1 && iAspect > -1 && iEngine > -1 && iImgModel > -1 && iStyle > -1,
+    iType > -1 && iAspect > -1 && iEngine > -1 && iImgModel > -1 && iPrompt > -1,
     'elemen kontrol tidak lengkap');
   assert.ok(iType < iAspect, '1. jenis konten harus sebelum rasio');
   assert.ok(iAspect < iEngine, '2. rasio harus sebelum provider');
   assert.ok(iEngine < iImgModel, '3. provider harus sebelum model');
-  assert.ok(iImgModel < iStyle, '4. model harus sebelum style');
+  assert.ok(iImgModel < iPrompt, '4. model harus sebelum prompt');
+  // D-208: pill Style dihapus (gaya jadi template transparan di Bank Prompt).
+  assert.ok(controls.indexOf('stStylePill') === -1, 'pill Style harus dihapus (D-208)');
 });
 
 test('D-204: label provider "Otomatis" ringkas (tanpa keterangan dalam kurung)', () => {
@@ -400,7 +402,7 @@ test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model, st
   const ctrl = doc.querySelector('.st-controls');
   // Cari indeks tiap kontrol di dalam baris kontrol (id bisa di button atau wrapper).
   const idxOf = (id) => [...ctrl.children].findIndex((c) => c.id === id || c.querySelector('#' + id));
-  const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill', 'stStylePill'];
+  const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill', 'stPromptPill'];
   let prev = -1;
   for (const id of order) {
     const idx = idxOf(id);

@@ -24,8 +24,9 @@ import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 // D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
 import {
-  PROMPT_KINDS, PROMPT_CATEGORIES, SEED_PROMPT_BANK,
+  PROMPT_KINDS, PROMPT_CATEGORIES, PROMPT_MODES, PROMPT_GROUPS, SEED_PROMPT_BANK,
   listPromptEntries, createPromptEntry, updatePromptEntry, deletePromptEntry, seedPromptBank,
+  optimizePrompt,
 } from './prompt-bank.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -642,10 +643,31 @@ app.get('/api/prompt-bank', requireUser, requireAdmin, async (req, res) => {
   try {
     // Seed otomatis saat bank user masih kosong.
     await seedPromptBank(req.supabase, req.user.id);
-    const entries = await listPromptEntries(req.supabase, req.user.id);
-    res.json({ ok: true, entries, kinds: PROMPT_KINDS, categories: PROMPT_CATEGORIES });
+    // D-208: ?mode=foto|video -> hanya prompt untuk jenis konten itu.
+    const mode = String(req.query.mode || '').trim().toLowerCase();
+    const entries = await listPromptEntries(req.supabase, req.user.id, { mode: mode || undefined });
+    res.json({
+      ok: true, entries,
+      kinds: PROMPT_KINDS, categories: PROMPT_CATEGORIES,
+      modes: PROMPT_MODES, groups: PROMPT_GROUPS,
+    });
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat bank prompt.' });
+  }
+});
+
+// D-208: optimalkan susunan prompt (kategorikan + susun ulang sesuai alur fokus).
+app.post('/api/prompt-bank/optimize', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const raw = String(req.body?.prompt ?? '');
+    const blocks = Array.isArray(req.body?.blocks) ? req.body.blocks : [];
+    if (!raw.trim() && !blocks.length) {
+      return res.status(400).json({ ok: false, error: 'Prompt kosong — tidak ada yang bisa dioptimalkan.' });
+    }
+    const result = optimizePrompt(raw, blocks);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal mengoptimalkan prompt.' });
   }
 });
 
