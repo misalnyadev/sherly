@@ -555,18 +555,21 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 @media(hover:none){.cal-add{display:grid;width:26px;height:26px;opacity:.55}}
 @media(max-width:560px){.cal-cell{min-height:64px;padding:24px 4px 4px}.cal-chip{font-size:9.5px;padding:2px 4px}.cal-legend{gap:10px}}
 /* Studio */
-/* D-200: baris atas Studio — tab Foto/Video + tombol Unggah di sudut kanan */
-.st-topbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-.st-topbar .st-tabs{margin-bottom:0}
-.st-topbar .st-upload-btn{margin-left:auto}
-.st-tabs{display:flex;gap:8px;margin-bottom:14px}
+/* D-202: judul & deskripsi halaman dihapus -> grid lebih luas.
+   Tab Foto/Video pindah ke bawah komposer (urutan pertama di baris kontrol).
+   Tombol Unggah naik ke sudut kanan area Studio (absolute, di luar grid). */
+.st-tabs{display:flex;gap:8px}
+.st-tabs-inline{margin-right:2px}
 .st-tab{padding:9px 18px;border-radius:30px;border:1px solid var(--line);background:#101b2c;color:#cfd6e4;font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
 .st-tab svg{width:15px;height:15px}
 .st-tab.active{background:#24142a;border-color:#f044a8;color:#fff}
+.st-upload-corner{position:absolute;top:0;right:0;z-index:35}
 /* D-199: Studio = area atas (galeri, scrollable) + komposer sticky di bawah */
-#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 120px);min-height:420px;padding-bottom:0}
-#studioView.active .page-heading{flex:none}
-#studioRoot{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+/* D-202: judul & deskripsi halaman dihapus -> grid lebih luas.
+   Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28).
+   Composer turun lebih rendah (tempel di dasar area), jadi grid dapat ruang lebih. */
+#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 107px);min-height:420px;padding:0;margin-bottom:-16px}
+#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:16px}
 .st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
 .st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
@@ -715,7 +718,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-vp-cancel{margin-left:auto;padding:4px 10px;border-radius:8px;border:1px solid #24344e;background:transparent;color:var(--muted);font:inherit;font-size:10.5px;cursor:pointer}
 .st-vp-cancel:hover{border-color:#f044a8;color:#ff9bdc}
 @keyframes stShimmer{to{background-position:-200% 0}}
-@media(max-width:560px){.st-composer{padding:14px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.st-composer{padding:14px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.st-stage{padding-top:44px}.st-tabs-inline{width:100%}.st-tab{flex:1;justify-content:center;padding:9px 12px}}
 .pl-actions{display:flex;gap:6px}
 .pl-actions button{background:transparent;border:1px solid #24344e;color:#91a2b9;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;transition:.18s}
 .pl-actions button:hover{border-color:#f044a8;color:#ffd0ec}
@@ -1295,7 +1298,6 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div id="calendarRoot"></div>
 </section>
 <section id="studioView" class="page-view">
-  <div class="page-heading"><div><h1>Studio</h1><p>Generator konten — foto jadi, video menyusul.</p></div></div>
   <div id="studioRoot"></div>
 </section>
 <section id="collabView" class="page-view">
