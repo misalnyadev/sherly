@@ -542,6 +542,27 @@
     ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
+    if (el?.classList.contains('open')) positionPop(el);
+  }
+
+  // D-201: daftar pilihan dibuka ke ATAS (komposer di bawah). Kalau ruang di atas
+  // tidak cukup, balik ke bawah supaya daftar tidak keluar dari layar.
+  function positionPop(el) {
+    el.classList.remove('pop-up', 'pop-down');
+    const wrap = el.parentElement;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const room = rect.top - 8;
+    const need = Math.min(el.scrollHeight || 240, window.innerHeight * 0.56);
+    if (room < need && room < (window.innerHeight - rect.bottom)) {
+      el.classList.add('pop-down');
+    } else {
+      el.classList.add('pop-up');
+    }
+    // Samping: kalau meluber ke kanan, samakan ke tepi kanan viewport.
+    el.classList.remove('pop-right');
+    const w = el.offsetWidth || 200;
+    if (rect.left + w > window.innerWidth - 12) el.classList.add('pop-right');
   }
 
   function buildPop(which) {
