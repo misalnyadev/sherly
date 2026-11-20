@@ -23,6 +23,17 @@
     const paths = (typeof ICONS !== 'undefined' && ICONS[key]) || '';
     return '<span data-icon="' + key + '">' + (paths ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>' : '') + '</span>';
   };
+  // D-205: ganti ikon pada sebuah pill — span[data-icon] lama diganti wholesale
+  // (setAttribute pada <svg> tidak mengubah path-nya).
+  const setIcon = (el, key) => {
+    if (!el) return;
+    const old = el.querySelector('[data-icon]');
+    if (old) old.remove();
+    const fresh = document.createElement('span');
+    fresh.innerHTML = icon(key);
+    const span = fresh.firstElementChild;
+    if (span) el.insertBefore(span, el.firstChild);
+  };
   const authHeaders = async () => {
     const t = (await window.sherlyGetAccessToken?.()) || window.sherlyStoredToken?.()?.access_token || '';
     return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t };
@@ -33,6 +44,12 @@
   const MAX_CHAIN = 6;           // maksimal frame adegan tersimpan lokal
   const ASPECTS = [['1:1', 'Persegi (1:1)'], ['4:5', 'Potret feed (4:5)'], ['9:16', 'Reels / story (9:16)'], ['16:9', 'Landscape (16:9)']];
   const VIDEO_ASPECTS = [['9:16', 'Vertikal (9:16)'], ['16:9', 'Landscape (16:9)']];
+  // D-205: rasio dengan tinggi >= lebar = vertikal (ikon smartphone), selain itu horizontal (monitor).
+  const isVerticalAspect = (a) => {
+    const m = String(a || '').match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!m) return false;
+    return Number(m[1]) < Number(m[2]);
+  };
   const STYLES = {
     lifestyle: { label: 'Lifestyle', suffix: 'sehari-hari cozy dan estetik ala Bogor, cahaya alami, komposisi bersih dengan ruang bernapas' },
     beauty: { label: 'Beauty & Skincare', suffix: 'visual beauty & skincare yang bersih dan elegan, cahaya lembut, nuansa cream' },
@@ -571,11 +588,13 @@
     // D-203: label jenis konten & model gambar.
     const tp = $('stTypePill');
     if (tp) {
-      const ct = CONTENT_TYPES.find((c) => c[0] === state.mode);
-      const b = tp.querySelector('b');
-      b.textContent = ct ? ct[1] : 'Foto';
-      tp.querySelector('svg')?.setAttribute('data-icon', ct ? ct[2] : 'image-plus');
+      const ct = CONTENT_TYPES.find((c) => c[0] === state.mode) || CONTENT_TYPES[0];
+      tp.querySelector('b').textContent = ct[1];
+      setIcon(tp, ct[2]);
     }
+    // D-205: ikon rasio ikut pilihan — vertikal (smartphone) / horizontal (monitor).
+    const ap = $('stAspectPill');
+    if (ap) setIcon(ap, isVerticalAspect(state.aspect) ? 'smartphone' : 'monitor');
     const im = imageModel();
     const imp = $('stImgModelPill'); if (imp) imp.querySelector('b').textContent = im ? im.label : 'Model';
     const tierLabel = tierOptions().find((x) => x[0] === state.tier);

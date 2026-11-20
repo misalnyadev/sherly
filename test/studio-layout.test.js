@@ -69,11 +69,19 @@ test('D-202: section studioView tidak punya page-heading (judul & deskripsi diha
   assert.ok(!m[0].includes('Generator konten'), 'deskripsi Studio masih ada');
 });
 
-test('D-202/D-203: halaman Studio punya tinggi penuh & composer turun lebih rendah', () => {
-  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 96px\)/.test(html),
-    'tinggi view Studio bukan calc(100vh - 96px)');
+test('D-205: composer menempel di dasar viewport (tidak terangkat ke atas)', () => {
+  // Jarak atas content = padding atas main 18 + topbar ~44 + margin 17 = 79px.
+  // Tinggi view = 100vh - 79px -> dasar view tepat di y = 100vh.
+  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 79px\)/.test(html),
+    'tinggi view Studio bukan calc(100vh - 79px)');
+  // margin-bottom negatif menompah padding bawah main (28px) supaya tak ada celah.
   assert.ok(/#studioView\.active\{[^}]*margin-bottom:-28px/.test(html),
-    'view Studio tidak turun (margin-bottom)');
+    'margin-bottom penyaring celah bawah hilang');
+  // studioRoot tanpa padding bawah -> komposer duduk persis di dasar view.
+  assert.ok(/#studioRoot\{[^}]*padding-bottom:0/.test(html),
+    'studioRoot masih punya padding-bottom (composer tidak menempel)');
+  // Height lama (96px) bikin composer terangkat ~45px dari bawah.
+  assert.ok(!/height:calc\(100vh - 96px\)/.test(html), 'tinggi view lama masih dipakai');
 });
 
 test('D-202: tombol Unggah diposisikan di sudut kanan area Studio', () => {
@@ -183,6 +191,52 @@ test('D-201 (regresi): popover pilihan tetap membuka ke atas', async () => {
   assert.ok(pop.classList.contains('open'), 'popover rasio tidak terbuka');
   assert.ok(pop.classList.contains('pop-up'), 'popover bukan membuka ke atas');
   assert.ok(!pop.classList.contains('pop-down'), 'popover jatuh ke bawah');
+});
+
+test('D-205: ikon jenis konten ikut pilihan (Foto = gambar, Video = video)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const iconOf = (id) => {
+    const el = doc.getElementById(id);
+    const span = el && el.querySelector('[data-icon]');
+    return span ? span.getAttribute('data-icon') : null;
+  };
+  // Default: Foto -> ikon gambar.
+  assert.equal(iconOf('stTypePill'), 'image-plus', 'ikon jenis konten awal');
+  // Pilih Video -> ikon harus berubah ke video (bukan tetap gambar).
+  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const pop = doc.getElementById('stPop-type');
+  [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video')
+    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.equal(doc.querySelector('#stTypePill b').textContent.trim(), 'Video', 'label jenis konten');
+  assert.equal(iconOf('stTypePill'), 'video', 'ikon jenis konten harus video saat mode Video');
+});
+
+test('D-205: ikon rasio ikut orientasi (vertikal = smartphone, horizontal = monitor)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const iconOf = () => {
+    const span = doc.getElementById('stAspectPill').querySelector('[data-icon]');
+    return span ? span.getAttribute('data-icon') : null;
+  };
+  const pickAspect = (v) => {
+    doc.getElementById('stAspectPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    const pop = doc.getElementById('stPop-aspect');
+    [...pop.querySelectorAll('button')].find((b) => b.dataset.v === v)
+      .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  };
+  pickAspect('9:16');
+  assert.equal(doc.querySelector('#stAspectPill b').textContent.trim(), '9:16', 'label rasio');
+  assert.equal(iconOf(), 'smartphone', 'rasio vertikal harus ikon smartphone');
+  pickAspect('16:9');
+  assert.equal(doc.querySelector('#stAspectPill b').textContent.trim(), '16:9', 'label rasio');
+  assert.equal(iconOf(), 'monitor', 'rasio horizontal harus ikon monitor');
+  pickAspect('4:5');
+  assert.equal(iconOf(), 'smartphone', 'rasio potret harus ikon smartphone');
+  pickAspect('1:1');
+  assert.equal(iconOf(), 'monitor', 'rasio persegi harus ikon monitor (bukan vertikal)');
 });
 
 test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model, style', async () => {
