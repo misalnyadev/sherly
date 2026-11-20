@@ -163,7 +163,7 @@
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
-    if (popOpen && !e.target.closest('.st-pill-wrap') && !e.target.closest('.st-pop-backdrop')) {
+    if (popOpen && !e.target.closest('.st-pill-wrap')) {
       document.getElementById('stPop-' + popOpen)?.classList.remove('open');
       document.getElementById('stPop-' + popOpen)?.classList.remove('st-pop-center');
       popOpen = null;
@@ -597,12 +597,19 @@
     // D-205: ikon rasio ikut pilihan — vertikal (smartphone) / horizontal (monitor).
     const ap = $('stAspectPill');
     if (ap) setIcon(ap, isVerticalAspect(state.aspect) ? 'smartphone' : 'monitor');
-    // D-207: label pill Bank Prompt menampilkan jumlah blok aktif.
+    // D-207/D-213: jumlah blok aktif tampil di item menu "Prompt" & di tombol menu.
     const pp = $('stPromptPill');
     if (pp) {
-      const b = pp.querySelector('b');
-      if (b) b.textContent = promptBankLabel();
+      const sp = pp.querySelector('span');
+      if (sp) sp.textContent = promptBankLabel();
       pp.classList.toggle('st-on', selectedBlocks.length > 0);
+    }
+    // Tombol menu utama ikut memberi tanda saat ada blok aktif.
+    const mb = $('stPromptMenuBtn');
+    if (mb) {
+      const b = mb.querySelector('b');
+      if (b) b.textContent = promptBankLabel();
+      mb.classList.toggle('st-on', selectedBlocks.length > 0);
     }
     const im = imageModel();
     const imp = $('stImgModelPill'); if (imp) imp.querySelector('b').textContent = im ? im.label : 'Model';
@@ -616,21 +623,27 @@
     return window.innerWidth <= 560;
   }
 
-  /** D-210: backdrop gelap di belakang jendela prompt tengah (HP). */
-  function syncBackdrop(which) {
-    const bd = $('stPopBackdrop');
-    if (!bd) return;
-    const on = which === 'prompt' && isMobileLayout();
-    bd.classList.toggle('st-hidden', !on);
+  /** D-213: tutup menu aksi prompt (dipakai setelah salah satu aksi dijalankan). */
+  function closeActionMenu() {
+    const menu = $('stPop-actions');
+    menu?.classList.remove('open');
+    if (popOpen === 'actions') popOpen = null;
   }
 
+  /**
+   * D-213: popover prompt sudah jadi panel tengah di HP (`.st-pop-center`),
+   * jadi tidak perlu backdrop terpisah lagi — fungsi dipertahankan sebagai
+   * no-op aman supaya pemanggilan lama tidak error.
+   */
+  function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
+
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
     else el?.classList.remove('st-pop-center');
-    syncBackdrop(el?.classList.contains('open') ? which : null);
+    syncBackdrop();
   }
 
   // D-201: daftar pilihan dibuka ke ATAS (komposer di bawah). Kalau ruang di atas
@@ -646,6 +659,12 @@
       return;
     }
     el.classList.remove('st-pop-center');
+    // D-213: menu aksi berada di dalam composer (bawah) -> daftar dibuka ke ATAS.
+    if (el.id === 'stPop-actions') {
+      el.classList.add('pop-up');
+      el.classList.remove('pop-right');
+      return;
+    }
     const rect = wrap.getBoundingClientRect();
     const room = rect.top - 8;
     const need = Math.min(el.scrollHeight || 240, window.innerHeight * 0.56);
@@ -1179,21 +1198,28 @@
       + '</div>'
       // D-210: baris judul prompt DI ATAS kotak composer.
       // D-211: label "Deskripsi konten yang kamu mau" dihapus — bikin teks turun
-      // 5 baris di HP. Sisanya tombol Prompt / Optimalkan / Copy rata kanan.
-      // D-212: tombol Reset ditambah di depan; semua 4 tombol seragam bentuk petak
-      // dengan icon + tulisan putih. Urutan: Reset - Prompt - Optimalkan - Copy.
-      + '<div class="st-prompt-head">'
-      + '<div class="st-prompt-tools">'
-      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stResetPromptBtn" title="Bersihkan komposer dari prompt">' + icon('rotate-ccw') + ' Reset</button>'
-      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-tool-btn st-tool-btn-box st-tool-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
-      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
-      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stCopyPromptBtn" title="Salin semua isi prompt untuk generate di luar aplikasi">' + icon('copy') + ' Copy</button>'
-      + '</div>'
-      + '</div>'
-      + '<div class="st-pop-backdrop st-hidden" id="stPopBackdrop"></div>'
+      // 5 baris di HP.
+      // D-212: tombol Reset ditambah di depan; semua tombol seragam bentuk petak.
+      // D-213: 4 aksi (Reset - Prompt - Optimalkan - Copy) diringkas jadi SATU menu
+      // dropdown di DALAM kotak composer, supaya header composer tetap pendek
+      // (tidak lagi 2 baris di HP).
       + '<div class="st-composer">'
       + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
       + '<div class="st-mention-box">'
+      // Baris menu aksi prompt — di dalam composer, rata kanan, 1 baris.
+      + '<div class="st-prompt-tools st-tools-menu-row">'
+      + '<div class="st-pill-wrap st-menu-wrap" id="stPromptMenuWrap">'
+      + '<button type="button" class="st-menu-btn" id="stPromptMenuBtn" title="Aksi prompt">' + icon('list-checks') + ' <b>Prompt</b>' + icon('chevron-down') + '</button>'
+      + '<div class="st-pop st-pop-menu" id="stPop-actions">'
+      + '<button type="button" class="st-menu-item" id="stResetPromptBtn" data-action="reset">' + icon('rotate-ccw') + ' <span>Reset</span><small>Bersihkan komposer dari prompt</small></button>'
+      + '<button type="button" class="st-menu-item" id="stPromptPill" data-action="prompt">' + icon('message') + ' <span>Prompt</span><small>Pilih template &amp; blok prompt</small></button>'
+      + '<button type="button" class="st-menu-item" id="stOptimizeBtn" data-action="optimize">' + icon('sparkles') + ' <span>Optimalkan</span><small>Susun ulang alur prompt</small></button>'
+      + '<button type="button" class="st-menu-item" id="stCopyPromptBtn" data-action="copy">' + icon('copy') + ' <span>Copy</span><small>Salin semua isi prompt</small></button>'
+      + '</div>'
+      // Popover isi Bank Prompt — dibuka dari item "Prompt" di menu.
+      + '<div class="st-pop st-pop-wide st-pop-bank" id="stPop-prompt"></div>'
+      + '</div>'
+      + '</div>'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
@@ -1236,24 +1262,25 @@
     loadAssets();
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
-    // D-207: Bank Prompt — muat daftar entri lalu buka popover.
-    // D-208: aksi prompt di komposer.
-    $('stOptimizeBtn')?.addEventListener('click', optimizeComposedPrompt);
-    $('stCopyPromptBtn')?.addEventListener('click', copyComposedPrompt);
-    // D-212: tombol Reset — bersihkan komposer dari prompt.
-    $('stResetPromptBtn')?.addEventListener('click', resetPromptComposer);
-    // D-210: tap backdrop menutup jendela prompt tengah.
-    $('stPopBackdrop')?.addEventListener('click', () => {
-      const el = $('stPop-prompt');
-      el?.classList.remove('open', 'st-pop-center');
-      popOpen = null;
-      syncBackdrop(null);
-    });
-    $('stPromptPill')?.addEventListener('click', async () => {
+    // D-213: 4 aksi prompt jadi SATU menu dropdown di dalam kotak composer.
+    // Menu utama dibuka lewat tombol "Prompt" (ikon list-checks).
+    $('stPromptMenuBtn')?.addEventListener('click', () => { togglePop('actions'); });
+    // Item menu "Prompt" → buka popover Bank Prompt (isi template & blok).
+    $('stPromptPill')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      // Tutup menu aksi dulu, baru buka popover prompt.
+      const menu = $('stPop-actions');
+      menu?.classList.remove('open');
+      if (popOpen === 'actions') popOpen = null;
       await loadPromptBank();
       buildPromptPop();
       togglePop('prompt');
     });
+    // D-208: aksi prompt di komposer (dijalankan dari item menu).
+    $('stOptimizeBtn')?.addEventListener('click', (e) => { e.stopPropagation(); closeActionMenu(); optimizeComposedPrompt(); });
+    $('stCopyPromptBtn')?.addEventListener('click', (e) => { e.stopPropagation(); closeActionMenu(); copyComposedPrompt(); });
+    // D-212: tombol Reset — bersihkan komposer dari prompt.
+    $('stResetPromptBtn')?.addEventListener('click', (e) => { e.stopPropagation(); closeActionMenu(); resetPromptComposer(); });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
     // D-203: pill jenis konten (satu kotak) & pill model gambar.

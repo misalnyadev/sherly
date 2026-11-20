@@ -661,8 +661,6 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pop-wide{min-width:320px;max-width:min(92vw,420px)}
 /* D-210: di HP, jendela pilih Prompt = panel FIXED di tengah layar.
    Jadi daftar panjang (200 cheat code) tidak pernah terpotong tepi layar. */
-.st-pop-backdrop{position:fixed;inset:0;background:#04070fcc;z-index:110;-webkit-tap-highlight-color:transparent}
-.st-pop-backdrop.st-hidden{display:none}
 .st-pop.st-pop-center{position:fixed;left:50%;top:50%;bottom:auto;right:auto;transform:translate(-50%,-50%);
   width:min(92vw,420px);max-width:92vw;min-width:0;max-height:min(78vh,560px);
   background:#0c1422f7;border:1px solid #24344e;border-radius:14px;padding:8px;
@@ -685,30 +683,34 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pill.st-on{border-color:#f044a8;color:#f4f5fb}
 /* D-208: aksi prompt di komposer (Optimalkan & Copy). */
 .st-prompt-tools{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-/* D-209/D-210/D-211: baris aksi prompt DI ATAS kotak composer.
-   D-211: label "Deskripsi konten yang kamu mau" dihapus supaya tampilan HP bersih
-   (label panjang bikin tombol turun 5 baris). Sisa baris ini hanya tombol
-   Prompt / Optimalkan / Copy yang rata kanan maksimal. */
-.st-prompt-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:8px}
-.st-prompt-head .st-prompt-tools{flex-shrink:0}
-.st-tool-pill{padding:5px 12px;font-size:11.5px}
-@media(max-width:560px){.st-prompt-head{gap:8px;margin-bottom:6px}.st-prompt-head .st-prompt-tools{gap:6px;width:100%;justify-content:flex-end}.st-tool-btn{padding:6px 11px;font-size:11px}.st-tool-pill{padding:5px 10px;font-size:11px}.st-tool-btn-box{padding:7px 10px;font-size:11px;border-radius:10px}}
-.st-tool-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
-.st-tool-btn:hover:not(:disabled){border-color:#f044a8;color:#ffd0ec;background:#160f20}
-.st-tool-btn:disabled{opacity:.55;cursor:default}
-.st-tool-btn [data-icon],.st-tool-btn svg{width:14px;height:14px}
-/* D-212: 4 tombol aksi prompt seragam bentuk PETAK, icon + tulisan putih.
-   Reset - Prompt - Optimalkan - Copy. */
-.st-tool-btn-box{border-radius:10px;padding:7px 12px;color:#fff;background:#0f1828}
-.st-tool-btn-box b{color:#fff;font-weight:600}
-.st-tool-btn-box [data-icon],.st-tool-btn-box svg{width:14px;height:14px;stroke:#fff;fill:none}
-.st-tool-btn-box:hover:not(:disabled){color:#fff;background:#160f20;border-color:#f044a8}
-.st-tool-btn-box:hover:not(:disabled) [data-icon],.st-tool-btn-box:hover:not(:disabled) svg{stroke:#fff}
-.st-tool-btn-box.st-on{border-color:#f044a8;color:#fff}
-.st-tool-btn-box.st-on [data-icon],.st-tool-btn-box.st-on svg{stroke:#fff}
+/* D-213: aksi prompt jadi SATU menu dropdown di dalam kotak composer.
+   Baris judul lama (.st-prompt-head) dihapus supaya header composer tetap pendek. */
+/* D-213: 4 aksi prompt diringkas jadi SATU menu dropdown di DALAM kotak composer.
+   Supaya header composer tetap pendek (tidak 2 baris di HP).
+   Baris menu: tombol compact "Prompt" di kanan, popover berisi 4 aksi. */
+.st-tools-menu-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:6px}
+.st-menu-wrap{position:relative}
+.st-menu-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #24344e;background:#0f1828;color:#fff;
+  border-radius:10px;padding:6px 11px;font-size:11.5px;font-family:inherit;cursor:pointer;
+  transition:border-color .18s,background .18s}
+.st-menu-btn:hover{border-color:#f044a8;background:#160f20}
+.st-menu-btn.st-on{border-color:#f044a8;color:#fff}
+.st-menu-btn b{color:#fff;font-weight:600}
+.st-menu-btn [data-icon],.st-menu-btn svg{width:13px;height:13px;stroke:#fff;fill:none}
+.st-pop-menu{min-width:210px;max-width:min(80vw,260px);padding:5px}
+/* Item menu: ikon + judul + keterangan singkat. */
+.st-menu-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;
+  color:#fff;font:inherit;font-size:12.5px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.st-menu-item:hover{background:#24142a}
+.st-menu-item [data-icon],.st-menu-item svg{width:15px;height:15px;stroke:#fff;fill:none;flex-shrink:0}
+.st-menu-item span{color:#fff;font-weight:600;white-space:nowrap}
+.st-menu-item small{color:#91a2b9;font-size:10.5px;line-height:1.35;display:block;white-space:normal}
+.st-menu-item:hover small{color:#cfd6e4}
+/* Popover Bank Prompt (dibuka dari item "Prompt") — tetap panel tengah di HP. */
+.st-pop-bank{top:auto}
+@media(max-width:560px){.st-tools-menu-row{gap:6px;margin-bottom:4px}.st-menu-btn{padding:6px 10px;font-size:11px}
+.st-pop-menu{min-width:0;width:min(78vw,240px);max-width:min(78vw,240px)}}
 /* Tombol Prompt ikut bentuk petak seragam (override gaya .st-pill lama). */
-.st-tool-btn-box.st-tool-pill{height:auto;border-radius:10px;padding:7px 12px;font-size:11.5px;display:inline-flex;align-items:center;gap:6px}
-.st-tool-btn-box.st-tool-pill:hover:not(:disabled){color:#fff}
 /* D-207: panel CRUD Bank Prompt di Pengaturan. */
 .pb-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .pb-filter{border:1px solid #24344e;background:#0f1828;color:#91a2b9;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
