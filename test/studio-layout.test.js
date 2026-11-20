@@ -939,3 +939,50 @@ test('D-217: kursor composer ikut naik sesuai baris yang diketik', () => {
   // Tidak boleh pakai variabel global yang tak terdefinisi.
   assert.ok(!body.includes('win.getComputedStyle'), 'harus pakai window.getComputedStyle');
 });
+
+// ===== D-218: badge outline di DALAM kotak karakter + kursor pas di teks =====
+
+test('D-218: badge penanda = ikon outline, posisinya DI DALAM kotak karakter', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
+  assert.ok(badge, 'aturan .st-asset-badge tidak ada');
+  const rule = badge[0];
+  // Posisi DI DALAM (nilai positif), bukan keluar (nilai negatif).
+  assert.ok(rule.includes('right:2px'), 'badge harus di dalam kanan (right:2px)');
+  assert.ok(rule.includes('bottom:2px'), 'badge harus di dalam bawah (bottom:2px)');
+  assert.ok(!/right:-\d/.test(rule), 'badge tidak boleh keluar dari kanan');
+  assert.ok(!/bottom:-\d/.test(rule), 'badge tidak boleh keluar dari bawah');
+  // Bentuk outline, bukan filled / kertas.
+  assert.ok(rule.includes('border:1px solid #ff9bdc'), 'badge harus border pink (outline)');
+  assert.ok(rule.includes('width:12px'), 'badge kecil (12px)');
+  // Ikon SVG-nya outline (tanpa isian).
+  const svg = css.match(/\.st-asset-badge svg\{[^}]*\}/s);
+  assert.ok(svg, 'aturan svg badge tidak ada');
+  assert.ok(svg[0].includes('fill:none'), 'ikon badge harus outline (fill:none)');
+  assert.ok(svg[0].includes('stroke:#ff9bdc'), 'ikon badge harus pink');
+});
+
+test('D-218: kursor composer di HP pas di teks, tidak nongol ke atas', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('const scrollCaretIntoView'));
+  const body = fn.slice(0, fn.indexOf('\n    };'));
+  // Offset caret harus memperhitungkan border textarea juga.
+  assert.ok(body.includes('borderTop'), 'harus menghitung border-top textarea');
+  assert.ok(body.includes('borderTop + paddingTop'), 'offset caret = border + padding');
+  // Saat caret di atas area view -> scroll ke baris itu (bukan ke paling atas).
+  assert.ok(body.includes('caretTop < ta.scrollTop + borderTop + paddingTop'), 'kondisi scroll ke atas harus ada');
+  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop - borderTop - paddingTop)'), 'scroll ke baris caret');
+  // Saat caret melewati bawah -> geser tepat seperlunya.
+  assert.ok(body.includes('caretTop + lineHeight > viewBottom'), 'kondisi scroll ke bawah harus ada');
+  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop + lineHeight - clientH)'), 'scroll ke bawah tepat seperlunu');
+  // Tidak boleh scroll ke 0 saat caret ada di baris jauh.
+  assert.ok(!body.includes('ta.scrollTop = 0;'), 'scroll tidak boleh di-reset ke 0');
+});
+
+test('D-218: kursor ikutadjust saat caret berpindah (selectionchange)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes("ta?.addEventListener('selectionchange', scrollCaretIntoView)"),
+    'textarea harus listen selectionchange');
+  assert.ok(studio.includes("document.addEventListener('selectionchange'"), 'document harus listen selectionchange');
+  assert.ok(studio.includes('document.activeElement === ta'), 'hanya saat textarea aktif');
+});
