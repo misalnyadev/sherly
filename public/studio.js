@@ -40,9 +40,59 @@
     inspire: { label: 'Inspire & Grow', suffix: 'momen tumbuh menjadi kreator yang hangat dan inspiratif' },
     free: { label: 'Bebas', suffix: '' }
   };
-  const DURATIONS = [['4', '4 detik'], ['6', '6 detik'], ['8', '8 detik']];
-  const VIDEO_TIERS = [['veo3_fast', 'Veo 3.1 Fast (hemat)'], ['veo3', 'Veo 3.1 Quality (premium)'], ['veo3_lite', 'Veo 3.1 Lite (tercepat)']];
-  const RESOLUTIONS = [['720p', '720p'], ['1080p', '1080p'], ['4k', '4K']];
+  // D-200: katalog model video diambil dari server (/api/ai/video/models) agar
+  // provider/model/durasi/resolusi/aspek di UI selalu sinkron dengan provider.
+  // Fallback lokal: dipakai kalau endpoint katalog gagal (offline / belum login).
+  const FALLBACK_VIDEO_MODELS = [
+    { id: 'veo-3-1', provider: 'kie', label: 'Veo 3.1', maker: 'Google', durations: [4, 6, 8],
+      resolutions: ['720p', '1080p', '4k'], aspects: ['16:9', '9:16'], audio: true, firstLastFrame: true,
+      note: 'Google Veo 3.1 — kualitas tinggi + audio native.',
+      tiers: [{ id: 'veo3_fast', label: 'Fast (hemat)' }, { id: 'veo3_lite', label: 'Lite (tercepat)' }, { id: 'veo3', label: 'Quality (premium)' }],
+      defaultTier: 'veo3_fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+    { id: 'kling-3.0/video', provider: 'kie', label: 'Kling 3.0', maker: 'Kuaishou', durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      resolutions: ['720p', '1080p'], aspects: ['16:9', '9:16', '1:1'], audio: true, firstLastFrame: true,
+      note: 'Kling 3.0 — storytelling multi-shot, durasi panjang sampai 15 detik.',
+      tiers: [{ id: 'std', label: 'Standar' }, { id: 'pro', label: 'Pro' }, { id: '4K', label: '4K' }],
+      defaultTier: 'std', defaultDuration: 5, defaultResolution: '720p', defaultAspect: '9:16' },
+    { id: 'bytedance/seedance-2', provider: 'kie', label: 'Seedance 2.0', maker: 'ByteDance', durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      resolutions: ['480p', '720p', '1080p', '4k'], aspects: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], audio: true, firstLastFrame: true,
+      note: 'Seedance 2.0 — paling konsisten & paling banyak rasio aspek.',
+      tiers: [{ id: 'standard', label: 'Standard' }, { id: 'fast', label: 'Fast' }],
+      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '1080p', defaultAspect: '9:16' },
+    { id: 'bytedance/seedance-2-fast', provider: 'kie', label: 'Seedance 2.0 Fast', maker: 'ByteDance', durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], audio: true, firstLastFrame: true,
+      note: 'Seedance 2.0 Fast — hanya sampai 720p tapi generates lebih cepat.',
+      tiers: [{ id: 'fast', label: 'Fast' }],
+      defaultTier: 'fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+  ];
+  let videoCatalog = { defaultModel: 'veo-3-1', models: FALLBACK_VIDEO_MODELS };
+  const videoModel = () => videoCatalog.models.find((m) => m.id === state.videoModel) || videoCatalog.models[0] || null;
+  const durationOptions = () => (videoModel()?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
+  const resolutionOptions = () => (videoModel()?.resolutions || ['720p']).map((r) => [r, r === '4k' ? '4K' : r]);
+  const tierOptions = () => (videoModel()?.tiers || []).map((t) => [t.id, t.label]);
+  const aspectOptions = () => (videoModel()?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a]);
+  // D-200: samakan pilihan pengguna dengan kapabilitas model aktif.
+  // resetToDefault=true -> pakai default model; false -> pertahankan nilai yang masih valid.
+  function applyModelCaps(m, resetToDefault) {
+    if (!m) return;
+    state.tier = m.defaultTier;
+    const dur = Number(state.duration);
+    if (resetToDefault && m.defaultDuration && m.durations.includes(Number(m.defaultDuration))) {
+      state.duration = String(m.defaultDuration);
+    } else if (!m.durations.includes(dur)) {
+      state.duration = String(m.durations[m.durations.length - 1]);
+    }
+    if (resetToDefault && m.defaultResolution && m.resolutions.includes(m.defaultResolution)) {
+      state.resolution = m.defaultResolution;
+    } else if (!m.resolutions.includes(state.resolution)) {
+      state.resolution = m.resolutions[0];
+    }
+    if (resetToDefault && m.defaultAspect && m.aspects.includes(m.defaultAspect)) {
+      state.aspect = m.defaultAspect;
+    } else if (!m.aspects.includes(state.aspect)) {
+      state.aspect = m.aspects.includes('9:16') ? '9:16' : m.aspects[0];
+    }
+  }
   let engines = [['auto', 'Otomatis (Kie → Kustom → Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']];
   let characters = []; // karakter user (potret + master sheet + suara)
   const SUGGESTIONS = [
@@ -55,6 +105,8 @@
   const state = {
     mode: 'photo', aspect: '4:5', style: 'lifestyle', duration: '8', tier: 'veo3_fast',
     resolution: '720p', engine: 'auto',
+    // D-200: provider + model video (dipilih lewat pill "Model").
+    videoModel: 'veo-3-1', audio: true,
   };
   let assets = [];           // D-198: galeri aset (dari server)
   let chain = [];            // rantai adegan (lokal): frame terakhir jadi referensi gambar
@@ -455,10 +507,13 @@
     state.mode = m;
     document.querySelectorAll('#studioRoot .st-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
     const isVideo = m === 'video';
-    // Rasio aspek video hanya 16:9 & 9:16 — kalau aspect foto (4:5/1:1) otomatis ke 9:16.
-    if (isVideo && !VIDEO_ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '9:16';
-    if (!isVideo && !ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '4:5';
+    // Rasio aspek video mengikuti kapabilitas model terpilih.
+    if (isVideo) {
+      const aspects = videoModel()?.aspects || ['16:9', '9:16'];
+      if (!aspects.includes(state.aspect)) state.aspect = aspects.includes('9:16') ? '9:16' : aspects[0];
+    } else if (!ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '4:5';
     const ta = $('stPrompt'); if (ta) ta.placeholder = isVideo ? 'cth: opening reels — @sherly berjalan masuk cafe di Bogor, kamera slowly zoom in…' : 'cth: @sherly dan @novi sedang berjalan di GBK menikmati udara pagi…';
+    $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
@@ -473,14 +528,18 @@
     const a = $('stAspectPill'), s = $('stStylePill'), d = $('stDurPill');
     if (a) a.querySelector('b').textContent = aspectLabel();
     if (s) s.querySelector('b').textContent = styleLabel();
-    if (d) d.querySelector('b').textContent = (DURATIONS.find((x) => x[0] === state.duration) || DURATIONS[2])[1];
+    const durLabel = durationOptions().find((x) => x[0] === state.duration);
+    if (d) d.querySelector('b').textContent = durLabel ? durLabel[1] : state.duration + ' detik';
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || engines[0])[1];
-    const t = $('stTierPill'); if (t) t.querySelector('b').textContent = (VIDEO_TIERS.find((x) => x[0] === state.tier) || VIDEO_TIERS[0])[1];
+    const m = videoModel();
+    const mp = $('stModelPill'); if (mp) mp.querySelector('b').textContent = m ? m.label : 'Model';
+    const tierLabel = tierOptions().find((x) => x[0] === state.tier);
+    const t = $('stTierPill'); if (t) t.querySelector('b').textContent = tierLabel ? tierLabel[1] : state.tier;
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
   }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'tier', 'res'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
   }
@@ -489,14 +548,19 @@
     const el = $('stPop-' + which); if (!el) return;
     let items = '';
     if (which === 'aspect') {
-      const list = state.mode === 'video' ? VIDEO_ASPECTS : ASPECTS;
-      items = list.map(([v, l]) => '<button type="button" data-v="' + v + '" class="' + (state.aspect === v ? 'on' : '') + '">' + l + '</button>').join('');
+      const list = state.mode === 'video' ? aspectOptions() : ASPECTS;
+      items = list.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.aspect === v ? 'on' : '') + '">' + l + '</button>').join('');
     }
     else if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
-    else if (which === 'dur') items = DURATIONS.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + l + '</button>').join('');
+    else if (which === 'dur') items = durationOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + l + '</button>').join('');
     else if (which === 'engine') items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">' + l + '</button>').join('');
-    else if (which === 'tier') items = VIDEO_TIERS.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.tier === v ? 'on' : '') + '">' + l + '</button>').join('');
-    else if (which === 'res') items = RESOLUTIONS.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.resolution === v ? 'on' : '') + '">' + l + '</button>').join('');
+    else if (which === 'model') {
+      // D-200: pilih model video — tiap model punya durasi/resolusi/aspek sendiri.
+      items = videoCatalog.models.map((m) => '<button type="button" data-v="' + esc(m.id) + '" class="' + (state.videoModel === m.id ? 'on' : '') + '">'
+        + '<span class="st-pop-model">' + esc(m.label) + '<small>' + esc(m.maker) + ' · ' + esc(m.durations[0]) + '-' + esc(m.durations[m.durations.length - 1]) + ' detik</small></span></button>').join('');
+    }
+    else if (which === 'tier') items = tierOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.tier === v ? 'on' : '') + '">' + l + '</button>').join('');
+    else if (which === 'res') items = resolutionOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.resolution === v ? 'on' : '') + '">' + l + '</button>').join('');
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
@@ -505,6 +569,12 @@
       if (which === 'engine') state.engine = b.dataset.v;
       if (which === 'tier') state.tier = b.dataset.v;
       if (which === 'res') state.resolution = b.dataset.v;
+      if (which === 'model') {
+        // Model baru -> samakan durasi/resolusi/aspek/tier ke capabilities model itu.
+        state.videoModel = b.dataset.v;
+        const m = videoModel();
+        if (m) applyModelCaps(m, true);
+      }
       updatePillLabels();
       el.classList.remove('open'); popOpen = null;
     }));
@@ -563,8 +633,8 @@
     try {
       const mentioned = mentionedCharacters();
       const body = {
-        prompt: raw, tier: state.tier, aspect: state.aspect,
-        duration: Number(state.duration), resolution: state.resolution,
+        prompt: raw, model: state.videoModel, tier: state.tier, aspect: state.aspect,
+        duration: Number(state.duration), resolution: state.resolution, audio: state.audio,
       };
       if (sceneRef) body.sceneRef = { mime: sceneRef.mime, data: sceneRef.data };
       const r = await fetch('/api/ai/video', { method: 'POST', headers: await authHeaders(), body: JSON.stringify(body) });
@@ -635,9 +705,13 @@
     const root = $('studioRoot'); if (!root) return;
     loadChain();
     root.innerHTML =
-      '<div class="st-tabs">'
+      // D-200: baris atas — tab Foto/Video + tombol Unggah di sudut kanan.
+      '<div class="st-topbar">'
+      + '<div class="st-tabs">'
       + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
       + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
+      + '</div>'
+      + '<button type="button" class="st-upload-btn" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
       + '</div>'
       // D-199: area atas = galeri aset (scrollable), komposer menempel di bawah.
       + '<div class="st-stage">'
@@ -657,11 +731,11 @@
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' <b>1:1</b></button><div class="st-pop" id="stPop-aspect"></div></div>'
       + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
+      + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
-      + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('cpu') + ' <b>Veo 3.1 Fast</b></button><div class="st-pop" id="stPop-tier"></div></div>'
+      + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stResPillWrap"><button type="button" class="st-pill" id="stResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-res"></div></div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
-      + '<button type="button" class="st-upload-btn" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
       + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn">' + icon('film') + ' Buat Video</button>'
       + '</div>'
@@ -688,8 +762,20 @@
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
+    $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
+    // D-200: katalog model video dari server (provider + model + durasi + resolusi).
+    fetch('/api/ai/video/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
+      videoCatalog = { defaultModel: d.defaultModel || videoCatalog.defaultModel, models: d.models };
+      const m = videoModel();
+      if (m) {
+        state.videoModel = m.id;
+        applyModelCaps(m, false);
+      }
+      updatePillLabels();
+    }).catch(() => {});
     const ta = $('stPrompt');
     // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
     const autoFit = () => {
