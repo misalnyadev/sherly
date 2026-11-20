@@ -559,7 +559,17 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-tab{padding:9px 18px;border-radius:30px;border:1px solid var(--line);background:#101b2c;color:#cfd6e4;font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
 .st-tab svg{width:15px;height:15px}
 .st-tab.active{background:#24142a;border-color:#f044a8;color:#fff}
-.st-composer{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:16px;padding:14px}
+/* D-199: Studio = area atas (galeri, scrollable) + komposer sticky di bawah */
+#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 120px);min-height:420px;padding-bottom:0}
+#studioView.active .page-heading{flex:none}
+#studioRoot{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
+.st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
+.st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
+.st-stage-empty b{color:#fff;font-size:13.5px;font-weight:600}
+.st-stage-empty p{margin:0;font-size:12px;max-width:420px;line-height:1.6}
+.st-stage-empty b+p b{color:#ffd0ec}
+.st-composer{position:sticky;bottom:0;z-index:30;flex-shrink:0;background:linear-gradient(180deg,rgba(4,7,15,0),#070b14 26%),linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:16px;padding:14px;box-shadow:0 -10px 30px #04070fcc}
 /* D-196: Header Aset ala Google Flow — penanda karakter & gambar referensi */
 /* D-197: header aset disembunyikan saat kosong — hanya muncul bila ada aset aktif */
 .st-asset-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:6px 8px;border-radius:12px;background:#0c1422;border:1px solid #24344e}
@@ -609,8 +619,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-chain-add:hover{border-color:#f044a8;color:#ffd0ec}
 .st-chain-add svg{width:15px;height:15px;stroke:currentColor}
 .st-card-chars{font-size:10.5px;color:#ffd0ec;letter-spacing:.02em}
-.st-composer label{display:block;font-size:11.5px;color:#cfd6e4;margin-bottom:6px}
-.st-composer textarea{width:100%;box-sizing:border-box;background:#0f1828;border:1px solid #24344e;border-radius:11px;color:#fff;font:inherit;font-size:13.5px;line-height:1.55;padding:10px 12px;resize:vertical;min-height:62px;outline:0}
+.st-composer label{display:block;font-size:11px;color:#91a2b9;margin-bottom:5px;letter-spacing:.02em}
+.st-composer textarea{width:100%;box-sizing:border-box;background:#0f1828;border:1px solid #24344e;border-radius:11px;color:#fff;font:inherit;font-size:13.5px;line-height:1.55;padding:10px 12px;resize:none;height:44px;min-height:44px;max-height:150px;overflow-y:auto;outline:0}
 .st-composer textarea:focus{border-color:#f044a8}
 .st-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .st-pill-wrap{position:relative}
@@ -652,7 +662,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#111a2e 30%,#1c2b40 50%,#111a2e 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
 
 /* ===== D-198: Galeri Aset Studio (flat grid di atas komposer) ===== */
-.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:0 0 14px}
+.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:0 0 10px;align-content:start}
 .st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:12px;background:#101b2c;overflow:hidden;cursor:pointer;aspect-ratio:1/1;transition:border-color .18s,box-shadow .18s}
 .st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
 .st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
