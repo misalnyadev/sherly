@@ -20,7 +20,7 @@ export const PROMPT_KINDS = ['template', 'block'];
 export const PROMPT_MODES = ['foto', 'video'];
 
 /** Kelompok entri (untuk pengelompokan di UI & seed). */
-export const PROMPT_GROUPS = ['umum', 'style', 'fotovideo', 'produk'];
+export const PROMPT_GROUPS = ['umum', 'style', 'fotovideo', 'produk', 'flow'];
 
 /**
  * Kategori blok. Urutan array = urutan susunan prompt saat dirakit komposer.
@@ -55,14 +55,22 @@ export function normalizePromptEntry(input = {}) {
   if (!content) return { ok: false, error: 'Isi prompt wajib diisi.' };
   if (content.length > 2000) return { ok: false, error: 'Isi prompt maksimal 2000 karakter.' };
 
-  const rawCat = String(input.category ?? 'umum').trim().toLowerCase();
-  const category = CATEGORY_KEYS.includes(rawCat) ? rawCat : 'umum';
-
-  // D-208: mode (foto|video) & group (umum|style|fotovideo|produk).
+  // D-208: mode (foto|video) & group (umum|style|fotovideo|produk|flow).
   const rawMode = String(input.mode ?? 'foto').trim().toLowerCase();
   const mode = PROMPT_MODES.includes(rawMode) ? rawMode : 'foto';
   const rawGroup = String(input.group ?? 'umum').trim().toLowerCase();
   const group = PROMPT_GROUPS.includes(rawGroup) ? rawGroup : 'umum';
+
+  // D-210: group 'flow' (cheat code Google Flow) memakai kategori bebas
+  // (mis. "UGC & Creator Style"), bukan kategori blok tetap.
+  const rawCat = String(input.category ?? 'umum').trim();
+  let category;
+  if (group === 'flow') {
+    category = rawCat.slice(0, 60) || 'umum';
+  } else {
+    const catKey = rawCat.toLowerCase();
+    category = CATEGORY_KEYS.includes(catKey) ? catKey : 'umum';
+  }
 
   // Slots: placeholder yang harus diisi user (mis. "outfit" untuk "try outfit { outfit }").
   let slots = [];
@@ -273,7 +281,7 @@ export function extractSlots(text) {
  * dan dipakai juga sebagai fallback di frontend saat endpoint gagal.
  */
 // D-208: seed tambahan — gaya foto (dari gaya lama) + 159 kode video dari PDF.
-import { SEED_FOTO_STYLES, SEED_CODES_FOTOVIDEO, SEED_CODES_PRODUK } from './prompt-seed.js';
+import { SEED_FOTO_STYLES, SEED_CODES_FOTOVIDEO, SEED_CODES_PRODUK, SEED_CODES_FLOW } from './prompt-seed.js';
 
 export const SEED_PROMPT_BANK = {
   template: [
@@ -688,6 +696,12 @@ export async function seedPromptBank(supabase, userId) {
       if (!norm.ok) continue;
       rows.push({ user_id: userId, ...norm.value, sort_order: order++ });
     }
+  }
+  // D-210: 200 cheat code Google Flow (produk foto -> video), mode video.
+  for (const item of SEED_CODES_FLOW) {
+    const norm = normalizePromptEntry({ ...item, kind: 'template', mode: 'video', group: 'flow' });
+    if (!norm.ok) continue;
+    rows.push({ user_id: userId, ...norm.value, sort_order: order++ });
   }
   if (!rows.length) return 0;
   const { error: insErr } = await supabase.from('prompt_bank').insert(rows);

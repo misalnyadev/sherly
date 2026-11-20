@@ -163,7 +163,12 @@
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
-    if (popOpen && !e.target.closest('.st-pill-wrap')) { document.getElementById('stPop-' + popOpen)?.classList.remove('open'); popOpen = null; }
+    if (popOpen && !e.target.closest('.st-pill-wrap') && !e.target.closest('.st-pop-backdrop')) {
+      document.getElementById('stPop-' + popOpen)?.classList.remove('open');
+      document.getElementById('stPop-' + popOpen)?.classList.remove('st-pop-center');
+      popOpen = null;
+      syncBackdrop(null);
+    }
     if (mentionOpen && !e.target.closest('.st-mention-box')) closeMention();
   });
 
@@ -606,11 +611,26 @@
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
   }
 
+  /** D-210: deteksi layout HP (lebar layar kecil). */
+  function isMobileLayout() {
+    return window.innerWidth <= 560;
+  }
+
+  /** D-210: backdrop gelap di belakang jendela prompt tengah (HP). */
+  function syncBackdrop(which) {
+    const bd = $('stPopBackdrop');
+    if (!bd) return;
+    const on = which === 'prompt' && isMobileLayout();
+    bd.classList.toggle('st-hidden', !on);
+  }
+
   function togglePop(which) {
     ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
+    else el?.classList.remove('st-pop-center');
+    syncBackdrop(el?.classList.contains('open') ? which : null);
   }
 
   // D-201: daftar pilihan dibuka ke ATAS (komposer di bawah). Kalau ruang di atas
@@ -619,6 +639,13 @@
     el.classList.remove('pop-up', 'pop-down');
     const wrap = el.parentElement;
     if (!wrap) return;
+    // D-210: di HP, jendela pilih Prompt jadi panel di TENGAH layar (fixed),
+    // supaya daftar panjang tidak terpotong tepi kiri/kanan.
+    if (el.id === 'stPop-prompt' && isMobileLayout()) {
+      el.classList.add('st-pop-center');
+      return;
+    }
+    el.classList.remove('st-pop-center');
     const rect = wrap.getBoundingClientRect();
     const room = rect.top - 8;
     const need = Math.min(el.scrollHeight || 240, window.innerHeight * 0.56);
@@ -918,19 +945,34 @@
         { key: 'umum', label: 'Template Umum' },
         { key: 'fotovideo', label: 'Kode Foto ke Video' },
         { key: 'produk', label: 'Kode Video Produk' },
+        // D-210: 200 cheat code Google Flow (produk foto -> video), dikelompokkan per kategori.
+        { key: 'flow', label: 'Cheat Codes Google Flow', byCategory: true },
       ];
       const usedGroups = groups.filter((g) => templates.some((t) => (t.group || 'umum') === g.key));
+      const renderTpl = (t) => {
+        const slots = Array.isArray(t.slots) ? t.slots : [];
+        return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
+          + '<span class="st-pop-model">' + esc(t.label)
+          + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</small>')
+          + '</span></button>';
+      };
       body = templates.length ? usedGroups.map((g) => {
         const list = templates.filter((t) => (t.group || 'umum') === g.key);
         if (!list.length) return '';
-        return '<div class="st-pb-group"><b>' + esc(g.label) + '</b>'
-          + list.map((t) => {
-            const slots = Array.isArray(t.slots) ? t.slots : [];
-            return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
-              + '<span class="st-pop-model">' + esc(t.label)
-              + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</small>')
-              + '</span></button>';
-          }).join('') + '</div>';
+        // D-210: group 'flow' punya sub-kategori (20 kategori x 10 kode).
+        if (g.byCategory) {
+          const cats = [];
+          list.forEach((t) => {
+            const c = t.category || 'umum';
+            if (!cats.some((x) => x.key === c)) cats.push({ key: c, items: [] });
+            cats.find((x) => x.key === c).items.push(t);
+          });
+          return '<div class="st-pb-group"><b>' + esc(g.label) + '</b>'
+            + cats.map((c) => '<div class="st-pb-sub"><em>' + esc(c.key) + '</em>'
+              + c.items.map(renderTpl).join('') + '</div>').join('')
+            + '</div>';
+        }
+        return '<div class="st-pb-group"><b>' + esc(g.label) + '</b>' + list.map(renderTpl).join('') + '</div>';
       }).join('') : '<p class="st-pb-empty">Belum ada template. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
     } else {
       // Blok dikelompokkan per kategori, sesuai urutan susun prompt.
@@ -1107,17 +1149,20 @@
       + '<div class="st-stage-empty" id="stStageEmpty">' + icon('image-plus') + '<b>Hasil generate & asetmu muncul di sini</b>'
       + '<p>Ketik <b>@</b> untuk menyematkan karakter, atau unggah aset untuk dipakai ulang.</p></div>'
       + '</div>'
-      + '<div class="st-composer">'
-      + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
-      + '<div class="st-mention-box">'
-      // D-209: judul & aksi prompt sebaris (label kiri, tombol kanan).
+      // D-210: baris judul prompt DI ATAS kotak composer (label kiri, tombol kanan).
+      // Tombol Prompt pindah ke sini supaya di HP posisinya rata kanan & tidak terpotong.
       + '<div class="st-prompt-head">'
       + '<label for="stPrompt">Deskripsi konten yang kamu mau</label>'
       + '<div class="st-prompt-tools">'
+      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill st-tool-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
       + '<button type="button" class="st-tool-btn" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
       + '<button type="button" class="st-tool-btn" id="stCopyPromptBtn" title="Salin semua isi prompt untuk generate di luar aplikasi">' + icon('copy') + ' Copy</button>'
       + '</div>'
       + '</div>'
+      + '<div class="st-pop-backdrop st-hidden" id="stPopBackdrop"></div>'
+      + '<div class="st-composer">'
+      + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
+      + '<div class="st-mention-box">'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
@@ -1132,8 +1177,6 @@
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
       // D-203: kotak model gambar — muncul saat jenis konten Foto & mesin Kie (urutan keempat).
       + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
-      // D-208: Bank Prompt (gaya & template & blok) — urutan kelima, menggantikan pill Style.
-      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
@@ -1166,6 +1209,13 @@
     // D-208: aksi prompt di komposer.
     $('stOptimizeBtn')?.addEventListener('click', optimizeComposedPrompt);
     $('stCopyPromptBtn')?.addEventListener('click', copyComposedPrompt);
+    // D-210: tap backdrop menutup jendela prompt tengah.
+    $('stPopBackdrop')?.addEventListener('click', () => {
+      const el = $('stPop-prompt');
+      el?.classList.remove('open', 'st-pop-center');
+      popOpen = null;
+      syncBackdrop(null);
+    });
     $('stPromptPill')?.addEventListener('click', async () => {
       await loadPromptBank();
       buildPromptPop();

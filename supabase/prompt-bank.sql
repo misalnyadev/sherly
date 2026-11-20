@@ -49,4 +49,5 @@ with check (user_id = (select auth.uid())::uuid);
 
 -- D-208: label unik per user+mode+kinds, mode & group kolom baru.
 comment on column public.prompt_bank.mode is 'Jenis konten yang cocok untuk prompt ini: foto atau video.';
-comment on column public.prompt_bank."group" is 'Kelompok entri: style, fotovideo, produk, atau umum.';
+-- D-210: group 'flow' = 200 cheat code Google Flow (produk foto -> video).
+comment on column public.prompt_bank."group" is 'Kelompok entri: style, fotovideo, produk, flow, atau umum.';
