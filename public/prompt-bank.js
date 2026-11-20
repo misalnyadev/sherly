@@ -26,7 +26,16 @@
   let entries = [];
   let categories = CATEGORIES;
   let filter = 'all';
+  let modeFilter = 'all';
   let editingId = null;
+
+  const GROUPS = [
+    { key: 'umum', label: 'Umum' },
+    { key: 'style', label: 'Gaya / Style' },
+    { key: 'fotovideo', label: 'Kode Foto ke Video' },
+    { key: 'produk', label: 'Kode Video Produk' },
+  ];
+  const GROUP_LABEL = Object.fromEntries(GROUPS.map((g) => [g.key, g.label]));
 
   const authHeaders = async () => {
     const t = (await window.sherlyGetAccessToken?.()) || window.sherlyStoredToken?.()?.access_token || '';
@@ -52,6 +61,13 @@
     }
   }
 
+  /** Isi <select> grup dari daftar grup. */
+  function fillGroupSelect() {
+    const sel = $('pbGroup');
+    if (!sel) return;
+    sel.innerHTML = GROUPS.map((g) => '<option value="' + esc(g.key) + '">' + esc(g.label) + '</option>').join('');
+  }
+
   /** Isi <select> kategori dari daftar kategori server. */
   function fillCategorySelect() {
     const sel = $('pbCategory');
@@ -63,7 +79,8 @@
   function render() {
     const box = $('pbList');
     if (!box) return;
-    const list = filter === 'all' ? entries : entries.filter((e) => e.kind === filter);
+    let list = filter === 'all' ? entries : entries.filter((e) => e.kind === filter);
+    if (modeFilter !== 'all') list = list.filter((e) => (e.mode || 'foto') === modeFilter);
     if (!list.length) {
       box.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:6px 0">Belum ada entri. Klik <b>Tambah Entri</b> untuk membuat.</p>';
       return;
@@ -75,6 +92,8 @@
         + '<b>' + esc(e.label) + '</b>'
         + '<span class="pb-tag">' + esc(e.kind === 'template' ? 'Template' : 'Blok') + '</span>'
         + '<span class="pb-tag">' + esc(CAT_LABEL[e.category] || e.category) + '</span>'
+        + '<span class="pb-tag">' + esc(e.mode === 'video' ? 'Video' : 'Foto') + '</span>'
+        + (e.group && e.group !== 'umum' ? '<span class="pb-tag">' + esc(GROUP_LABEL[e.group] || e.group) + '</span>' : '')
         + (e.is_active === false ? '<span class="pb-tag pb-tag-off">nonaktif</span>' : '')
         + (slots.length ? '<span class="pb-tag">isi: ' + esc(slots.join(', ')) + '</span>' : '')
         + '<p>' + esc(e.content) + '</p>'
@@ -103,6 +122,8 @@
     const e = id ? entries.find((x) => x.id === id) : null;
     if ($('pbKind')) $('pbKind').value = e ? e.kind : 'block';
     if ($('pbCategory')) $('pbCategory').value = e ? e.category : 'umum';
+    if ($('pbMode')) $('pbMode').value = e ? (e.mode || 'foto') : 'foto';
+    if ($('pbGroup')) $('pbGroup').value = e ? (e.group || 'umum') : 'umum';
     if ($('pbLabel')) $('pbLabel').value = e ? e.label : '';
     if ($('pbSlots')) $('pbSlots').value = e && Array.isArray(e.slots) ? e.slots.join(', ') : '';
     if ($('pbContent')) $('pbContent').value = e ? e.content : '';
@@ -135,6 +156,8 @@
     const body = {
       kind: $('pbKind')?.value || 'block',
       category: $('pbCategory')?.value || 'umum',
+      mode: $('pbMode')?.value || 'foto',
+      group: $('pbGroup')?.value || 'umum',
       label: $('pbLabel')?.value || '',
       slots: $('pbSlots')?.value || '',
       content: $('pbContent')?.value || '',
@@ -194,6 +217,7 @@
   // ===== init =====
   document.addEventListener('DOMContentLoaded', () => {
     fillCategorySelect();
+    fillGroupSelect();
     $('pbAddBtn')?.addEventListener('click', () => openForm(null));
     $('pbCancelBtn')?.addEventListener('click', closeForm);
     $('pbSaveBtn')?.addEventListener('click', save);
@@ -202,6 +226,12 @@
     document.querySelectorAll('.pb-filter').forEach((b) => b.addEventListener('click', () => {
       filter = b.dataset.pbFilter;
       document.querySelectorAll('.pb-filter').forEach((x) => x.classList.toggle('active', x === b));
+      render();
+    }));
+    // D-208: filter mode (Foto | Video) — prompt dipisah per jenis konten.
+    document.querySelectorAll('.pb-mode-filter').forEach((b) => b.addEventListener('click', () => {
+      modeFilter = b.dataset.pbModeFilter;
+      document.querySelectorAll('.pb-mode-filter').forEach((x) => x.classList.toggle('active', x === b));
       render();
     }));
   });

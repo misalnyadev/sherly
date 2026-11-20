@@ -50,13 +50,6 @@
     if (!m) return false;
     return Number(m[1]) < Number(m[2]);
   };
-  const STYLES = {
-    lifestyle: { label: 'Lifestyle', suffix: 'sehari-hari cozy dan estetik ala Bogor, cahaya alami, komposisi bersih dengan ruang bernapas' },
-    beauty: { label: 'Beauty & Skincare', suffix: 'visual beauty & skincare yang bersih dan elegan, cahaya lembut, nuansa cream' },
-    timeless: { label: 'Timeless Style', suffix: 'outfit elegan ala capsule wardrobe yang timeless, tidak dikendalikan tren musiman' },
-    inspire: { label: 'Inspire & Grow', suffix: 'momen tumbuh menjadi kreator yang hangat dan inspiratif' },
-    free: { label: 'Bebas', suffix: '' }
-  };
   // D-200: katalog model video diambil dari server (/api/ai/video/models) agar
   // provider/model/durasi/resolusi/aspek di UI selalu sinkron dengan provider.
   // Fallback lokal: dipakai kalau endpoint katalog gagal (offline / belum login).
@@ -166,6 +159,7 @@
   let promptBankLoaded = false;
   let selectedBlocks = [];      // id blok yang sudah dipilih user (ditumpuk di prompt)
   let promptBankTab = 'template'; // tab aktif di popover bank prompt
+  let promptBankMode = 'foto';     // D-208: mode prompt (foto|video) ikut jenis konten
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
@@ -541,7 +535,6 @@
   }
 
   function aspectLabel() { const a = ASPECTS.find((x) => x[0] === state.aspect); return a ? a[0] : state.aspect; }
-  function styleLabel() { return (STYLES[state.style] || STYLES.free).label; }
 
   // D-203: jenis konten dipilih lewat satu kotak pilihan (pill "Jenis Konten").
   const CONTENT_TYPES = [
@@ -564,7 +557,15 @@
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
-    $('stStylePillWrap')?.classList.toggle('st-hidden', isVideo);
+    // D-208: pill Style dihapus — semua gaya jadi template transparan di Bank Prompt.
+    // Bank prompt mengikuti jenis konten (foto <-> video) supaya tidak salah pilih.
+    // mode konten di Studio: 'photo' | 'video'  ->  mode prompt: 'foto' | 'video'
+    const pbMode = mode === 'video' ? 'video' : 'foto';
+    if (promptBankMode !== pbMode) {
+      promptBankMode = pbMode;
+      promptBankLoaded = false;   // muat ulang daftar untuk mode baru
+      selectedBlocks = [];        // blok dari mode lama tidak relevan
+    }
     // D-203: pill model gambar hanya saat foto & mesin memakai Kie.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
     $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || !kieEngine);
@@ -574,9 +575,8 @@
   }
 
   function updatePillLabels() {
-    const a = $('stAspectPill'), s = $('stStylePill'), d = $('stDurPill');
+    const a = $('stAspectPill'), d = $('stDurPill');
     if (a) a.querySelector('b').textContent = aspectLabel();
-    if (s) s.querySelector('b').textContent = styleLabel();
     const durLabel = durationOptions().find((x) => x[0] === state.duration);
     if (d) d.querySelector('b').textContent = durLabel ? durLabel[1] : state.duration + ' detik';
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || engines[0])[1];
@@ -640,7 +640,6 @@
       const list = state.mode === 'video' ? aspectOptions() : ASPECTS;
       items = list.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.aspect === v ? 'on' : '') + '">' + l + '</button>').join('');
     }
-    else if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     else if (which === 'dur') items = durationOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + l + '</button>').join('');
     else if (which === 'engine') {
       // D-204: label pill ringkas ("Otomatis") — penjelasan lengkap tetap di popover.
@@ -672,7 +671,6 @@
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
-      if (which === 'style') state.style = b.dataset.v;
       if (which === 'dur') state.duration = b.dataset.v;
       if (which === 'engine') {
         state.engine = b.dataset.v;
@@ -719,11 +717,12 @@
     negative: 'Negative Prompt', umum: 'Umum',
   };
 
-  /** Ambil entri bank prompt dari server (sekali saja, disimpan di cache). */
+  /** Ambil entri bank prompt dari server (sekali saja per mode, disimpan di cache). */
   async function loadPromptBank(force) {
     if (promptBankLoaded && !force) return promptBank;
     try {
-      const r = await fetch('/api/prompt-bank', { headers: await authHeaders() });
+      // D-208: hanya prompt untuk jenis konten aktif (foto <-> video).
+      const r = await fetch('/api/prompt-bank?mode=' + encodeURIComponent(promptBankMode), { headers: await authHeaders() });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Gagal memuat bank prompt.');
       promptBank = Array.isArray(d.entries) ? d.entries : [];
@@ -815,10 +814,84 @@
       if (list && list.length) parts.push(list.join(' '));
     }
     let out = parts.join('\n\n');
-    const st = STYLES[state.style];
-    if (st && st.suffix) out += '\n\nGaya visual: ' + st.suffix + '.';
+    // D-208: suffix gaya dihapus — gaya kini jadi template transparan di Bank Prompt.
     out += '\n(Komposisi gambar dengan rasio aspek ' + state.aspect + '.)';
     return out;
+  }
+
+  // ===== D-208: aksi prompt — optimasi susunan & copy semua isi prompt =====
+
+  /**
+   * Optimalkan susunan prompt.
+   * Mengelompokkan prompt bebas per kategori (kamera/cahaya/teksur/color/
+   * kualitas/negative) lalu menyusun ulang sesuai alur fokus hasil riset,
+   * supaya hasil generate maksimal. Anti-duplikat: frasa sama tidak diulang.
+   */
+  async function optimizeComposedPrompt() {
+    const ta = $('stPrompt');
+    const raw = (ta?.value || '').trim();
+    if (!raw && !selectedBlocks.length) {
+      window.toast?.('Isi prompt dulu sebelum dioptimalkan.');
+      ta?.focus();
+      return;
+    }
+    const btn = $('stOptimizeBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Mengatur…'; }
+    try {
+      const r = await fetch('/api/prompt-bank/optimize', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          prompt: raw,
+          blocks: selectedBlocks.map((b) => ({ category: b.category, content: b.content })),
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Gagal mengoptimalkan prompt.');
+      if (ta && d.prompt) {
+        ta.value = d.prompt;
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      // Blok yang sudah dipilih tetap aktif (isi-nya sudah ikut dirakit).
+      window.toast?.('Prompt sudah dioptimalkan & diurutkan.');
+    } catch (e) {
+      window.toast?.(e.message || 'Gagal mengoptimalkan prompt.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = icon('sparkles') + ' Optimalkan'; }
+    }
+  }
+
+  /**
+   * Salin SEMUA isi prompt (isi komposer + blok terpilih + keterangan rasio)
+   * ke clipboard — untuk generate di luar aplikasi.
+   */
+  async function copyComposedPrompt() {
+    const ta = $('stPrompt');
+    const raw = (ta?.value || '').trim();
+    if (!raw && !selectedBlocks.length) {
+      window.toast?.('Belum ada prompt untuk disalin.');
+      return;
+    }
+    const text = composedPrompt(raw);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback untuk browser tanpa Clipboard API.
+        const ta2 = document.createElement('textarea');
+        ta2.value = text;
+        ta2.setAttribute('readonly', '');
+        ta2.style.position = 'fixed';
+        ta2.style.opacity = '0';
+        document.body.appendChild(ta2);
+        ta2.select();
+        document.execCommand?.('copy');
+        ta2.remove();
+      }
+      window.toast?.('Prompt disalin — siap dipakai di luar aplikasi.');
+    } catch (e) {
+      window.toast?.('Gagal menyalin prompt.');
+    }
   }
 
   /** Label ringkas untuk pill Bank Prompt. */
@@ -839,12 +912,25 @@
 
     let body = '';
     if (promptBankTab === 'template') {
-      body = templates.length ? templates.map((t) => {
-        const slots = Array.isArray(t.slots) ? t.slots : [];
-        return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
-          + '<span class="st-pop-model">' + esc(t.label)
-          + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.category) + '</small>')
-          + '</span></button>';
+      // D-208: template dikelompokkan per "group" (gaya, kode foto-ke-video, kode produk).
+      const groups = [
+        { key: 'style', label: 'Gaya & Style' },
+        { key: 'umum', label: 'Template Umum' },
+        { key: 'fotovideo', label: 'Kode Foto ke Video' },
+        { key: 'produk', label: 'Kode Video Produk' },
+      ];
+      const usedGroups = groups.filter((g) => templates.some((t) => (t.group || 'umum') === g.key));
+      body = templates.length ? usedGroups.map((g) => {
+        const list = templates.filter((t) => (t.group || 'umum') === g.key);
+        if (!list.length) return '';
+        return '<div class="st-pb-group"><b>' + esc(g.label) + '</b>'
+          + list.map((t) => {
+            const slots = Array.isArray(t.slots) ? t.slots : [];
+            return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
+              + '<span class="st-pop-model">' + esc(t.label)
+              + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</small>')
+              + '</span></button>';
+          }).join('') + '</div>';
       }).join('') : '<p class="st-pb-empty">Belum ada template. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
     } else {
       // Blok dikelompokkan per kategori, sesuai urutan susun prompt.
@@ -906,7 +992,9 @@
       if (!r.ok) throw new Error(d.error || 'Generator gambar gagal.');
       // D-198: hasil foto langsung disimpan sebagai aset & tampil di galeri.
       const meta = {
-        aspect: state.aspect, style: state.style,
+        aspect: state.aspect,
+        // D-208: gaya tidak lagi jadi pilihan terpisah — sudah menyatu di prompt template.
+        promptBankMode,
         characters: mentioned.map((c) => c.name), scene: sceneNumber || 0,
         // D-203: catat model gambar yang dipakai.
         model: d.model || state.imageModel, modelLabel: d.model_label || null,
@@ -1025,6 +1113,11 @@
       + '<label for="stPrompt">Deskripsi konten yang kamu mau</label>'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
+      // D-208: aksi prompt — optimasi susunan & salin semua isi prompt.
+      + '<div class="st-prompt-tools">'
+      + '<button type="button" class="st-tool-btn" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
+      + '<button type="button" class="st-tool-btn" id="stCopyPromptBtn" title="Salin semua isi prompt untuk generate di luar aplikasi">' + icon('copy') + ' Copy</button>'
+      + '</div>'
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       + '<div class="st-controls">'
@@ -1037,9 +1130,7 @@
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
       // D-203: kotak model gambar — muncul saat jenis konten Foto & mesin Kie (urutan keempat).
       + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
-      // Gaya — urutan kelima.
-      + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
-      // D-207: Bank Prompt — template utuh + blok modular (urutan keenam).
+      // D-208: Bank Prompt (gaya & template & blok) — urutan kelima, menggantikan pill Style.
       + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
@@ -1069,8 +1160,10 @@
     loadAssets();
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
-    $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
     // D-207: Bank Prompt — muat daftar entri lalu buka popover.
+    // D-208: aksi prompt di komposer.
+    $('stOptimizeBtn')?.addEventListener('click', optimizeComposedPrompt);
+    $('stCopyPromptBtn')?.addEventListener('click', copyComposedPrompt);
     $('stPromptPill')?.addEventListener('click', async () => {
       await loadPromptBank();
       buildPromptPop();
