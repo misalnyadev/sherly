@@ -238,7 +238,17 @@
     const out = []; const seen = new Set();
     const re = /@([a-z0-9][a-z0-9_-]{0,59})/gi; let m;
     while ((m = re.exec(text))) {
-      const id = bySlug.get(String(m[1] || '').toLowerCase());
+      const raw = String(m[1] || '').toLowerCase();
+      let id = bySlug.get(raw);
+      if (!id) {
+        // D-220: user masih mengetik di belakang token -> "@aset-kopiabcde"
+        // harus tetap dikenali sebagai "@aset-kopi". Cocokkan PREFIX terpanjang.
+        let bestSlug = null; let bestId = null;
+        for (const [slug, aid] of bySlug) {
+          if (raw.startsWith(slug) && (!bestSlug || slug.length > bestSlug.length)) { bestSlug = slug; bestId = aid; }
+        }
+        id = bestId;
+      }
       if (!id || seen.has(id)) continue;
       seen.add(id); out.push(id);
     }
@@ -252,6 +262,10 @@
   async function syncMentionedAssetRefs() {
     const wanted = mentionedAssetIds();
     const current = sceneRefs.map((r) => r.fromId).filter(Boolean);
+    // D-220: kalau tidak ada perubahan -> jangan sentuh apa pun. Menyentuh
+    // header saat mengetik = layout bergeser = kursor meloncat ke atas.
+    const same = wanted.length === current.length && wanted.every((id) => current.includes(id));
+    if (same) return;
     // Buang yang tidak lagi di-mention.
     let changed = false;
     for (const id of current) {
@@ -317,7 +331,14 @@
     try {
       const r = await fetch('/api/studio/assets', { headers: await authHeaders() });
       const d = await r.json();
-      if (r.ok) { assets = Array.isArray(d?.assets) ? d.assets : []; renderGallery(); }
+      if (r.ok) {
+        assets = Array.isArray(d?.assets) ? d.assets : [];
+        renderGallery();
+        // D-220: aset baru termuat -> sinkronkan dengan mention yang sudah ada
+        // di prompt (sebelumnya mention aset gambar gagal karena aset belum
+        // tersedia saat prompt diketik).
+        await syncMentionedAssetRefs();
+      }
     } catch { /* galeri diam-diam */ }
   }
   /** Simpan aset hasil generate langsung ke server sebagai aset. */
@@ -502,8 +523,17 @@
       );
     }
     // D-197: tanpa aset aktif -> header disembunyikan (bukan kotak kosong) supaya tampilan simpel.
-    box.innerHTML = parts.join('');
-    box.classList.toggle('st-hidden', !parts.length);
+    // D-220: HANYA re-render kalau isinya benar-benar berubah. Re-render tiap
+    // ketikan mengubah DOM -> layout di atas composer bergeser -> kursor
+    // meloncat ke atas (paling terasa saat ada referensi aktif).
+    const html = parts.join('');
+    const hidden = !parts.length;
+    if (box.dataset.renderedHtml === html && box.classList.contains('st-hidden') === hidden) return;
+    box.dataset.renderedHtml = html;
+    box.innerHTML = html;
+    box.classList.toggle('st-hidden', hidden);
+    // Kursor mungkin bergeser karena DOM header berubah -> pulihkan posisinya.
+    if (typeof window.__sherlyRestoreCaret === 'function') window.__sherlyRestoreCaret();
     box.querySelectorAll('[data-mention-remove]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       removeMentionFromPrompt(b.dataset.mentionRemove);
@@ -1560,6 +1590,18 @@
     // Scroll dijalankan setelah layout selesai -> posisi caret akurat.
     const scheduleCaretScroll = () => {
       setTimeout(scrollCaretIntoView, 0);
+    };
+    /**
+     * D-220: pulihkan posisi kursor setelah DOM di atas composer berubah
+     * (mis. header referensi bertambah/pengurang). Tanpa ini kursor meloncat
+     * ke atas setiap kali referensi aktif.
+     */
+    window.__sherlyRestoreCaret = () => {
+      if (!ta) return;
+      const pos = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? pos;
+      try { ta.setSelectionRange(pos, end); } catch { /* ignore */ }
+      scheduleCaretScroll();
     };
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';

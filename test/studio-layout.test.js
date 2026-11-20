@@ -1068,3 +1068,48 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
   assert.equal(broken.length, 0, 'semua [data-icon] harus punya SVG; yang rusak: '
     + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
+
+// ===== D-220: kursor tidak meloncat saat ada referensi aktif =====
+
+test('D-220: header referensi hanya re-render kalau isinya berubah', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Guard: bandingkan HTML hasil render dengan yang terpasang.
+  assert.ok(body.includes('box.dataset.renderedHtml'), 'harus menyimpan HTML terakhir');
+  assert.ok(body.includes('if (box.dataset.renderedHtml === html'), 're-render hanya kalau HTML berubah');
+  assert.ok(body.includes("box.dataset.renderedHtml = html"), 'harus menyimpan HTML baru');
+});
+
+test('D-220: syncMentionedAssetRefs tidak menyentuh apa pun bila tidak berubah', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('async function syncMentionedAssetRefs()'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('const same = wanted.length === current.length'), 'harus mendeteksi kondisi tidak berubah');
+  assert.ok(body.includes('if (same) return;'), 'harus keluar cepat bila tidak berubah');
+});
+
+test('D-220: mention aset tetap dikenali saat user lanjut mengetik di belakang token', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function mentionedAssetIds()'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Prefix fallback: "@aset-kopiabcde" -> "@aset-kopi".
+  assert.ok(body.includes('raw.startsWith(slug)'), 'harus cocokkan prefix');
+  assert.ok(body.includes('bestSlug'), 'harus memilih prefix terpanjang');
+  assert.ok(body.includes('id = bestId'), 'harus memakai ID hasil prefix match');
+  // Penting: jangan sampai mengembalikan slug, bukan ID.
+  assert.ok(!body.includes('best = slug, aid'), 'nilai fallback harus ID, bukan slug');
+});
+
+test('D-220: caret dipulihkan setelah DOM header berubah', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('window.__sherlyRestoreCaret = () => {'), 'restoreCaret harus ada');
+  assert.ok(studio.includes('ta.setSelectionRange(pos, end)'), 'harus memulihkan posisi caret');
+  const fn = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("window.__sherlyRestoreCaret"), 'renderAssetHeader harus memanggil restoreCaret');
+  // loadAssets harus sinkronkan mention yang sudah ada (aset baru termuat).
+  const la = studio.slice(studio.indexOf('async function loadAssets()'));
+  const lbody = la.slice(0, la.indexOf('\n  }'));
+  assert.ok(lbody.includes('await syncMentionedAssetRefs()'), 'loadAssets harus sinkronkan mention aset');
+});
