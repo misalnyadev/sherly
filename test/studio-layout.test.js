@@ -69,12 +69,12 @@ test('D-202: section studioView tidak punya page-heading (judul & deskripsi diha
   assert.ok(!m[0].includes('Generator konten'), 'deskripsi Studio masih ada');
 });
 
-test('D-205: composer menempel di dasar viewport (tidak terangkat ke atas)', () => {
+test('D-205/D-206: composer di bawah tapi ada ruang napas dari tepi layar', () => {
   // Jarak atas content = padding atas main 18 + topbar ~44 + margin 17 = 79px.
-  // Tinggi view = 100vh - 79px -> dasar view tepat di y = 100vh.
-  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 79px\)/.test(html),
-    'tinggi view Studio bukan calc(100vh - 79px)');
-  // margin-bottom negatif menompah padding bawah main (28px) supaya tak ada celah.
+  // D-206: tinggi 100vh - 91px -> dasar view di y = 100vh - 12px (ruang napas 12px).
+  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 91px\)/.test(html),
+    'tinggi view Studio bukan calc(100vh - 91px)');
+  // margin-bottom negatif menompah padding bawah main (28px) supaya tak ada celah dobel.
   assert.ok(/#studioView\.active\{[^}]*margin-bottom:-28px/.test(html),
     'margin-bottom penyaring celah bawah hilang');
   // studioRoot tanpa padding bawah -> komposer duduk persis di dasar view.
@@ -82,6 +82,9 @@ test('D-205: composer menempel di dasar viewport (tidak terangkat ke atas)', () 
     'studioRoot masih punya padding-bottom (composer tidak menempel)');
   // Height lama (96px) bikin composer terangkat ~45px dari bawah.
   assert.ok(!/height:calc\(100vh - 96px\)/.test(html), 'tinggi view lama masih dipakai');
+  // D-206: composer jangan nempel di batas layar bawah.
+  assert.ok(!/height:calc\(100vh - 79px\)/.test(html),
+    'tinggi 100vh - 79px membuat composer nempel di tepi layar');
 });
 
 test('D-202: tombol Unggah diposisikan di sudut kanan area Studio', () => {
