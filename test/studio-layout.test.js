@@ -889,7 +889,7 @@ test('D-216: petak referensi (karakter & gambar) berbentuk KOTAK', () => {
   assert.ok(scene, 'aturan .st-asset-scene-img tidak ada');
   assert.ok(scene.includes('border-radius:8px'), 'gambar referensi harus kotak');
   // Thumbnail di mention picker juga kotak.
-  assert.ok(css.includes('.st-mention-face-box{border-radius:7px}'), 'thumbnail mention harus kotak');
+  assert.ok(/\.st-mention-face-box\{[^}]*border-radius:7px/.test(css), 'thumbnail mention harus kotak');
 });
 
 // ===== D-217: outline karakter + kursor composer HP =====
@@ -935,7 +935,7 @@ test('D-217: kursor composer ikut naik sesuai baris yang diketik', () => {
   // Dipanggil pada event yang relevan.
   assert.ok(studio.includes("ta?.addEventListener('keyup'"), 'keyup harus memicu scroll');
   assert.ok(studio.includes("ta?.addEventListener('click'"), 'click harus memicu scroll');
-  assert.ok(studio.includes("ta?.addEventListener('focus', scrollCaretIntoView)"), 'focus harus memicu scroll');
+  assert.ok(studio.includes("ta?.addEventListener('focus', scheduleCaretScroll)"), 'focus harus memicu scroll');
   // Tidak boleh pakai variabel global yang tak terdefinisi.
   assert.ok(!body.includes('win.getComputedStyle'), 'harus pakai window.getComputedStyle');
 });
@@ -968,21 +968,103 @@ test('D-218: kursor composer di HP pas di teks, tidak nongol ke atas', () => {
   const body = fn.slice(0, fn.indexOf('\n    };'));
   // Offset caret harus memperhitungkan border textarea juga.
   assert.ok(body.includes('borderTop'), 'harus menghitung border-top textarea');
-  assert.ok(body.includes('borderTop + paddingTop'), 'offset caret = border + padding');
+  assert.ok(body.includes('m.borderTop + m.paddingTop'), 'offset caret = border + padding');
   // Saat caret di atas area view -> scroll ke baris itu (bukan ke paling atas).
-  assert.ok(body.includes('caretTop < ta.scrollTop + borderTop + paddingTop'), 'kondisi scroll ke atas harus ada');
-  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop - borderTop - paddingTop)'), 'scroll ke baris caret');
+  assert.ok(body.includes('caretTop < ta.scrollTop'), 'kondisi scroll ke atas harus ada');
+  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop - m.borderTop - m.paddingTop)'), 'scroll ke baris caret');
   // Saat caret melewati bawah -> geser tepat seperlunya.
-  assert.ok(body.includes('caretTop + lineHeight > viewBottom'), 'kondisi scroll ke bawah harus ada');
-  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop + lineHeight - clientH)'), 'scroll ke bawah tepat seperlunu');
+  assert.ok(body.includes('caretTop + m.lineHeight > viewBottom'), 'kondisi scroll ke bawah harus ada');
+  assert.ok(body.includes('ta.scrollTop = Math.max(0, caretTop + m.lineHeight - clientH)'), 'scroll ke bawah tepat seperlunu');
   // Tidak boleh scroll ke 0 saat caret ada di baris jauh.
   assert.ok(!body.includes('ta.scrollTop = 0;'), 'scroll tidak boleh di-reset ke 0');
 });
 
 test('D-218: kursor ikutadjust saat caret berpindah (selectionchange)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
-  assert.ok(studio.includes("ta?.addEventListener('selectionchange', scrollCaretIntoView)"),
+  assert.ok(studio.includes("ta?.addEventListener('selectionchange', scheduleCaretScroll)"),
     'textarea harus listen selectionchange');
   assert.ok(studio.includes("document.addEventListener('selectionchange'"), 'document harus listen selectionchange');
   assert.ok(studio.includes('document.activeElement === ta'), 'hanya saat textarea aktif');
+});
+
+// ===== D-219: badge icon user, thumbnail mention, kursor stabil =====
+
+test('D-219: badge penanda pakai icon user (bukan mic)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
+  assert.ok(hbody.includes("icon('user')"), 'badge profil suara harus pakai icon user');
+  assert.ok(!hbody.includes("icon('mic')"), 'badge tidak boleh pakai icon mic');
+  // Mention picker juga.
+  const ren = studio.slice(studio.indexOf('function renderMention'));
+  const rbody = ren.slice(0, ren.indexOf('\n  }'));
+  assert.ok(rbody.includes("icon('user')"), 'penanda di mention picker harus icon user');
+  // ICONS harus punya 'user' & 'user-round' (dipakai sidebar/settings).
+  const html = readFileSync('public/index.html', 'utf8');
+  assert.ok(html.includes("user:'<path"), "ICONS harus punya ikon 'user'");
+  // Kunci dengan tanda hubung WAJIB quoted ('user-round':) — kalau tidak, inline
+  // script index.html gagal parse & seluruh aplikasi ikut rusak.
+  assert.ok(html.includes("'user-round':'<"), "ICONS harus punya ikon 'user-round' (dipakai nav & settings)");
+  assert.ok(!html.includes(" user-round:'<"), "kunci 'user-round' harus quoted, bukan identifier mentah");
+});
+
+test('D-219: thumbnail di daftar mention benar-benar tampil', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Gambar di dalam face harus full-size.
+  assert.ok(css.includes('.st-mention-face img{width:100%;height:100%;object-fit:cover;display:block'),
+    'img di mention face harus full-size');
+  // Kotak putih dihindari: ada handling gambar rusak.
+  assert.ok(css.includes('.st-mention-face img.is-broken{display:none}'), 'gambar rusak harus disembunyikan');
+  // Thumbnail aset pakai <img> (bukan <video>) supaya konsisten.
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('function mentionAssetThumb('), 'mentionAssetThumb harus ada');
+  const fn = studio.slice(studio.indexOf('function mentionAssetThumb'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('<img src='), 'mention thumb harus pakai img');
+  assert.ok(!body.includes('<video'), 'mention thumb tidak boleh pakai elemen video');
+  // Dipakai di item picker.
+  assert.ok(studio.includes('mentionAssetThumb(a)'), 'mentionAssetThumb harus dipakai di picker');
+});
+
+test('D-219: kursor composer stabil — autoFit preservasi scroll, metrik di-cache', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // autoFit harus menyimpan & mengembalikan scrollTop.
+  const fit = studio.slice(studio.indexOf('const autoFit = () => {'));
+  const fbody = fit.slice(0, fit.indexOf('\n    };'));
+  assert.ok(fbody.includes('const keepScroll = ta.scrollTop'), 'autoFit harus menyimpan scrollTop');
+  assert.ok(fbody.includes('ta.scrollTop = keepScroll'), 'autoFit harus mengembalikan scrollTop');
+  // Metrik textarea di-cache (line-height tidak stale).
+  assert.ok(studio.includes('let taMetrics = null'), 'metrik textarea harus di-cache');
+  assert.ok(studio.includes('const readMetrics = () => {'), 'readMetrics harus ada');
+  const rm = studio.slice(studio.indexOf('const readMetrics = () => {'));
+  const rbody = rm.slice(0, rm.indexOf('\n    };'));
+  assert.ok(rbody.includes('if (taMetrics) return taMetrics'), 'metrik harus dipakai dari cache');
+  // Scroll dijadwalkan (deferred) supaya layout selesai dulu.
+  assert.ok(studio.includes('const scheduleCaretScroll = () => {'), 'scheduleCaretScroll harus ada');
+  assert.ok(studio.includes('setTimeout(scrollCaretIntoView, 0)'), 'scroll harus dijadwalkan via setTimeout');
+  // Semua pemanggilan memakai scheduleCaretScroll, bukan langsung.
+  assert.ok(!studio.includes('autoFit();\n      renderAssetHeader(); updatePillLabels(); syncMentionFromText();\n      // D-216: mention aset gambar -> masuk ke header sebagai referensi.\n      syncMentionedAssetRefs();\n      // D-217: kursor naik sesuai baris yang sedang diketik.\n      scrollCaretIntoView();'),
+    'input handler harus memakai scheduleCaretScroll');
+  // Metrik di-reset saat resize (keyboard mobile buka/tutup).
+  assert.ok(studio.includes("ta?.addEventListener('resize'"), 'resize harus trigger refresh metrik');
+});
+
+// ===== D-219: regresi — inline script index.html tidak boleh gagal parse =====
+
+test('D-219: inline script index.html jalan (window.toast = function, ICONS terpasang)', () => {
+  const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'http://localhost/' });
+  const win = dom.window;
+  // Kalau ada SyntaxError di inline script, window.toost jadi elemen DOM (named
+  // access property) bukan fungsi -> seluruh aplikasi error.
+  assert.equal(typeof win.toast, 'function', 'window.toast harus fungsi (inline script tidak boleh gagal parse)');
+  assert.equal(typeof win.ICONS, 'object', 'window.ICONS harus terpasang');
+  // Kunci ICONS dengan tanda hubung harus quoted (user-round, refresh-cw, dll).
+  const iconKeys = [...win.ICONS ? Object.keys(win.ICONS) : []];
+  assert.ok(iconKeys.includes('user-round'), "ICONS harus punya 'user-round'");
+  assert.ok(iconKeys.includes('user'), "ICONS harus punya 'user'");
+  // Semua elemen data-icon harus punya SVG (kalau inline script gagal, semua hilang).
+  const all = [...win.document.querySelectorAll('[data-icon]')];
+  const broken = all.filter((el) => !el.querySelector('svg'));
+  assert.equal(broken.length, 0, 'semua [data-icon] harus punya SVG; yang rusak: '
+    + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
