@@ -568,10 +568,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-202: judul & deskripsi halaman dihapus -> grid lebih luas.
    Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28).
    Composer turun lebih rendah (tempel di dasar area), jadi grid dapat ruang lebih. */
-/* D-203: komposer turun lebih rendah lagi -> area grid lebih luas.
-   Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28). */
-#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 96px);min-height:420px;padding:0;margin-bottom:-28px}
-#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:28px}
+/* D-205: komposer HARUS menempel di dasar viewport.
+   Jarak atas content = padding atas main 18 + topbar ~44 + margin 17 = 79px.
+   Tinggi view = 100vh - 79px -> dasar view tepat di y = 100vh, composer menempel bawah.
+   Padding bawah main (28px) dikompensasi margin-bottom -28px supaya tak ada celah bawah
+   DAN komposer tak terpotong. D-202/D-203 sebelumnya salah: margin negatif +
+   tinggi 100vh-96px membuat komposer justru terangkat ~45px dari bawah. */
+#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 79px);min-height:420px;padding:0;margin-bottom:-28px}
+#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:0}
 .st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
 .st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
@@ -1530,6 +1534,7 @@ plus:'<path d="M12 5v14M5 12h14"/>',
  eye:'<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/>',
  film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
  smartphone:'<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+ monitor:'<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
  file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>',
  x:'<path d="M18 6 6 18M6 6l12 12"/>'
 };
