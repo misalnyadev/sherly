@@ -19,10 +19,8 @@ import {
   saveAsset, saveGeneratedAsset, listAssets, signedAsset, deleteAsset, getAsset,
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
 } from './studio-assets.js';
-import {
-  generateVideoWithKie, pollKieVideoTask,
-  sanitizeVideoTier, sanitizeVideoDuration, sanitizeVideoResolution, sanitizeVideoAspect,
-} from './ai.js';
+import { generateVideoWithKie, pollKieVideoTask } from './ai.js';
+import { normalizeVideoParams, videoCatalog } from './video-models.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -601,20 +599,30 @@ app.delete('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res)
   }
 });
 
-// ===== D-198: Engine video (Kie / Veo 3.1) =====
+// ===== D-198/D-200: Engine video (Kie, katalog model) =====
 // Pembuatan task & pengecekan status dipisah: maxDuration server 60 dtk < durasi generate video.
+
+// D-200: katalog model video (provider + model + durasi) untuk UI.
+app.get('/api/ai/video/models', requireUser, requireAdmin, (req, res) => {
+  try { res.json({ ok: true, ...videoCatalog() }); }
+  catch (error) { res.status(500).json({ ok: false, error: error.message || 'Gagal memuat katalog model.' }); }
+});
+
 app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
   try {
     const {
       prompt: rawPrompt, tier: rawTier, aspect: rawAspect, duration: rawDuration,
-      resolution: rawResolution, sceneRef: rawSceneRef, model: rawModel,
+      resolution: rawResolution, sceneRef: rawSceneRef, model: rawModel, audio: rawAudio,
     } = req.body || {};
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ ok: false, error: 'Deskripsi video wajib diisi (3-1500 karakter).' });
-    const tier = sanitizeVideoTier(rawTier || rawModel);
-    const aspect = sanitizeVideoAspect(rawAspect);
-    const duration = sanitizeVideoDuration(rawDuration);
-    const resolution = sanitizeVideoResolution(rawResolution);
+    // Validasi parameter terhadap model terpilih (durasi/resolusi/aspek harus sesuaiCapabilities).
+    const spec = normalizeVideoParams({
+      model: rawModel, tier: rawTier, duration: rawDuration,
+      resolution: rawResolution, aspect: rawAspect, audio: rawAudio,
+    });
+    if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
+    const { model: videoModel, tier, aspect, duration, resolution, audio } = spec;
 
     // Karakter yang disebut ("@nama") -> potret + master sheet + profil suara.
     const { data: ownedChars, error: charsErr } = await req.supabase
@@ -640,14 +648,16 @@ app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
     const images = sceneImage ? [sceneImage, ...charImages].slice(0, 3) : charImages.slice(0, 3);
 
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
-    const created = await generateVideoWithKie(finalPrompt, auth, { tier, aspect, duration, resolution, images });
+    const created = await generateVideoWithKie(finalPrompt, auth, {
+      model: videoModel.id, tier, aspect, duration, resolution, audio, images,
+    });
     const task = await createVideoTask(req.supabase, req.user.id, {
       provider: created.provider, model: created.model, taskId: created.taskId, prompt,
-      meta: { aspect, duration, resolution },
+      meta: { aspect, duration, resolution, tier, audio, modelLabel: videoModel.label },
     });
     res.status(202).json({
       ok: true, id: task.id, task_id: created.taskId, model: created.model,
-      tier, aspect, duration, resolution,
+      tier, aspect, duration, resolution, audio,
       characters: mentions.map((m) => ({ name: m.name, token: m.token })),
     });
   } catch (error) {

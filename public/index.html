@@ -555,6 +555,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 @media(hover:none){.cal-add{display:grid;width:26px;height:26px;opacity:.55}}
 @media(max-width:560px){.cal-cell{min-height:64px;padding:24px 4px 4px}.cal-chip{font-size:9.5px;padding:2px 4px}.cal-legend{gap:10px}}
 /* Studio */
+/* D-200: baris atas Studio — tab Foto/Video + tombol Unggah di sudut kanan */
+.st-topbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.st-topbar .st-tabs{margin-bottom:0}
+.st-topbar .st-upload-btn{margin-left:auto}
 .st-tabs{display:flex;gap:8px;margin-bottom:14px}
 .st-tab{padding:9px 18px;border-radius:30px;border:1px solid var(--line);background:#101b2c;color:#cfd6e4;font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
 .st-tab svg{width:15px;height:15px}
@@ -633,6 +637,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pop button{display:flex;width:100%;text-align:left;background:transparent;border:0;color:#cfd6e4;font:inherit;font-size:12.5px;padding:9px 11px;border-radius:8px;cursor:pointer}
 .st-pop button:hover{background:#24142a;color:#fff}
 .st-pop button.on{background:#24142a;color:#ffd0ec}
+.st-pop-model{display:flex;flex-direction:column;gap:2px;line-height:1.35}
+.st-pop-model small{font-size:10px;color:var(--muted);letter-spacing:.02em}
+.st-pop button.on .st-pop-model small{color:#ff9bdc}
 .st-count{margin-left:auto;color:var(--muted);font-size:11px}
 .st-hidden{display:none!important}
 .st-note{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-top:14px;background:#24142a;border:1px solid #49334e;border-radius:12px;padding:13px 15px;font-size:12.5px;color:#cfd6e4;line-height:1.65}

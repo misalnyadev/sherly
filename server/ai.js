@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -198,6 +199,32 @@ export function kieConfig() {
 export const KIE_BOARD_MODEL = process.env.KIE_BOARD_MODEL || 'gpt-image-2-5-flare-image-to-image';
 const KIE_EDIT_MODEL = process.env.KIE_EDIT_MODEL || 'google/nano-banana-edit';
 
+// D-200: sanitisator lama (Veo-only) dipertahankan sebagai pembungkus katalog,
+// supaya pemanggil lawas tetap aman. Katalog model video jadi sumber kebenaran.
+const VEO_MODEL = findVideoModel('veo-3-1');
+export const KIE_VIDEO_TIERS = VEO_MODEL.tiers.map((t) => t.id);
+export const KIE_VIDEO_DURATIONS = [...VEO_MODEL.durations];
+export const KIE_VIDEO_RESOLUTIONS = [...VEO_MODEL.resolutions];
+export const KIE_VIDEO_ASPECTS = [...VEO_MODEL.aspects];
+
+export function sanitizeVideoTier(tier) {
+  const t = String(tier ?? '');
+  return KIE_VIDEO_TIERS.includes(t) ? t : VEO_MODEL.defaultTier;
+}
+export function sanitizeVideoDuration(duration) {
+  const d = Number(duration);
+  return KIE_VIDEO_DURATIONS.includes(d) ? d : VEO_MODEL.defaultDuration;
+}
+export function sanitizeVideoResolution(resolution) {
+  const r = String(resolution ?? '');
+  return KIE_VIDEO_RESOLUTIONS.includes(r) ? r : VEO_MODEL.resolutions[0];
+}
+export function sanitizeVideoAspect(aspect) {
+  const a = String(aspect ?? '');
+  // Fallback lama (D-198) = 16:9, dipertahankan agar pemanggil lawas tidak berubah.
+  return KIE_VIDEO_ASPECTS.includes(a) ? a : '16:9';
+}
+
 /** Upload foto referensi (base64) ke Kie → URL publik untuk input.image_urls. */
 async function kieUploadReference(apiKey, mime, data) {
   const dataUrl = 'data:' + (mime || 'image/png') + ';base64,' + data;
@@ -299,46 +326,15 @@ export async function generateImageWithCustom(cfg, prompt, aspect) {
   throw Object.assign(new Error('Provider kustom tidak mengembalikan gambar.'), { status: 502 });
 }
 
-// ===== D-198: Engine video via Kie (Veo 3.1 & model Market lain) =====
-
-/** Tier Veo 3.1 yang didukung Kie. */
-export const KIE_VIDEO_TIERS = ['veo3_fast', 'veo3_lite', 'veo3'];
-/** Durasi (detik) yang didukung Veo 3.1. */
-export const KIE_VIDEO_DURATIONS = [4, 6, 8];
-/** Resolusi yang didukung Veo 3.1. */
-export const KIE_VIDEO_RESOLUTIONS = ['720p', '1080p', '4k'];
-
-/** Normalisasi tierVeo (default fast). */
-export function sanitizeVideoTier(value) {
-  const v = String(value || '').toLowerCase();
-  return KIE_VIDEO_TIERS.includes(v) ? v : 'veo3_fast';
-}
-
-/** Normalisasi durasi video (detik) — hanya 4/6/8. */
-export function sanitizeVideoDuration(value) {
-  const n = Number(value);
-  return KIE_VIDEO_DURATIONS.includes(n) ? n : 8;
-}
-
-/** Normalisasi resolusi video. */
-export function sanitizeVideoResolution(value) {
-  const v = String(value || '').toLowerCase();
-  return KIE_VIDEO_RESOLUTIONS.includes(v) ? v : '720p';
-}
-
-/** Rasio aspek video — Veo 3.1 hanya 16:9 & 9:16 (Auto dipetakan ke 16:9). */
-export function sanitizeVideoAspect(value) {
-  const v = String(value || '').trim();
-  return v === '9:16' ? '9:16' : '16:9';
-}
+// ===== D-198/D-200: Engine video via Kie (katalog model) =====
 
 /**
- * Buat task video di Kie (Veo 3.1) — TIDAK poll di sini.
+ * Buat task video di Kie — TIDAK poll di sini.
  * Batas maxDuration server (60 dtk) lebih pendek dari durasi generate video,
  * jadi pembuatan task dipisah dari pengecekan status (lihat pollKieVideoTask).
  *
- * opts: { tier, aspect, duration, resolution, images: [{ mime, data }] }
- * Return { taskId, model, provider }.
+ * opts: { model, tier, aspect, duration, resolution, audio, images: [{ mime, data }] }
+ * Return { taskId, model, provider, tier }.
  */
 export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
   const attempts = await kieAttempts(auth);
@@ -346,10 +342,7 @@ export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
     throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
   }
   const { base } = kieConfig();
-  const tier = sanitizeVideoTier(opts.tier);
-  const aspect = sanitizeVideoAspect(opts.aspect);
-  const duration = sanitizeVideoDuration(opts.duration);
-  const resolution = sanitizeVideoResolution(opts.resolution);
+  const spec = findVideoModel(opts.model) || findVideoModel(DEFAULT_VIDEO_MODEL);
   const images = Array.isArray(opts.images)
     ? opts.images.filter((r) => r && typeof r.data === 'string' && r.data.length > 8)
     : [];
@@ -362,25 +355,19 @@ export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
         const url = await kieUploadReference(attempt.apiKey, img.mime, img.data);
         imageUrls.push(url);
       }
-      const input = {
+      const params = {
         prompt: String(prompt || '').slice(0, 4000),
-        model: tier,
-        aspect_ratio: aspect,
-        duration,
-        resolution,
-        enable_translation: true,
+        tier: opts.tier || spec.defaultTier,
+        duration: Number(opts.duration) || spec.durations[spec.durations.length - 1],
+        resolution: opts.resolution || spec.resolutions[0],
+        aspect: opts.aspect || spec.aspects[0],
+        audio: opts.audio === undefined ? true : Boolean(opts.audio),
       };
-      if (imageUrls.length) {
-        input.image_urls = imageUrls;
-        // 1 gambar = frame pertama; 2 gambar = first & last frame (transisi adegan).
-        input.generation_type = 'FIRST_AND_LAST_FRAMES_2_VIDEO';
-      } else {
-        input.generation_type = 'TEXT_2_VIDEO';
-      }
+      const input = buildVideoInput(spec.schema, params, imageUrls);
       const res = await fetch(base + '/api/v1/jobs/createTask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
-        body: JSON.stringify({ model: 'veo-3-1', input }),
+        body: JSON.stringify({ model: spec.id, input }),
         signal: AbortSignal.timeout(30000),
       }).catch(() => null);
       if (!res || !res.ok) {
@@ -394,14 +381,14 @@ export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
       }
       const taskId = data?.data?.taskId || data?.taskId;
       if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task video.');
-      return { taskId: String(taskId), model: tier, provider: 'kie', imageCount: imageUrls.length };
+      return { taskId: String(taskId), model: spec.id, tier: params.tier, provider: 'kie', imageCount: imageUrls.length };
     } catch (error) { lastError = error; }
   }
   throw Object.assign(lastError || new Error('Generator video gagal membuat task.'), { status: 502 });
 }
 
 /**
- * Cek status satu task video Kie (dipakai route status — dipanggil client berkali-kali).
+ * Cek status task video di Kie (dipisah dari pembuatan task).
  * Return { state, progress, resultUrls, error }.
  */
 export async function pollKieVideoTask(auth = {}, taskId) {
