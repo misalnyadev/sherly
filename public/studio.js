@@ -136,8 +136,14 @@
   }
   function renderGallery() {
     const box = $('stGallery'); if (!box) return;
-    if (!assets.length) { box.classList.add('st-hidden'); box.innerHTML = ''; return; }
+    const empty = $('stStageEmpty');
+    if (!assets.length) {
+      box.classList.add('st-hidden'); box.innerHTML = '';
+      empty?.classList.remove('st-hidden');
+      return;
+    }
     box.classList.remove('st-hidden');
+    empty?.classList.add('st-hidden');
     box.innerHTML = assets.map(assetCardHtml).join('');
     box.querySelectorAll('[data-asset-open]').forEach((b) => b.addEventListener('click', () => {
       const a = assets.find((x) => x.id === b.dataset.assetOpen);
@@ -460,7 +466,6 @@
     $('stStylePillWrap')?.classList.toggle('st-hidden', isVideo);
     $('stGenBtn')?.classList.toggle('st-hidden', isVideo);
     $('stVideoBtn')?.classList.toggle('st-hidden', !isVideo);
-    $('stVideoNote')?.classList.toggle('st-hidden', !isVideo);
     updatePillLabels();
   }
 
@@ -472,20 +477,6 @@
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || engines[0])[1];
     const t = $('stTierPill'); if (t) t.querySelector('b').textContent = (VIDEO_TIERS.find((x) => x[0] === state.tier) || VIDEO_TIERS[0])[1];
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
-    const rn = $('stRefNote');
-    if (rn) {
-      const mentioned = mentionedCharacters();
-      const hasScene = !!sceneRef;
-      const on = mentioned.length > 0 || hasScene;
-      rn.classList.toggle('st-hidden', !on);
-      if (on) {
-        const parts = [];
-        if (mentioned.length) parts.push(mentioned.length + ' karakter disematkan (potret + master sheet + suara)');
-        if (hasScene) parts.push('referensi gambar adegan aktif');
-        const forceNote = state.mode === 'video' ? '' : ' <b>Multi-referensi hanya didukung Gemini</b> — request ini otomatis memakai Gemini.';
-        rn.innerHTML = icon('eye') + ' ' + parts.join(' · ') + ' —<b> wajah & suara dijaga konsisten</b>.' + forceNote;
-      }
-    }
   }
 
   function togglePop(which) {
@@ -648,8 +639,12 @@
       + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
       + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
       + '</div>'
-      // D-198: galeri aset (flat grid) DI ATAS komposer — tanpa kotak "hasil" terpisah.
+      // D-199: area atas = galeri aset (scrollable), komposer menempel di bawah.
+      + '<div class="st-stage">'
       + '<div class="st-gallery st-hidden" id="stGallery"></div>'
+      + '<div class="st-stage-empty" id="stStageEmpty">' + icon('image-plus') + '<b>Hasil generate & asetmu muncul di sini</b>'
+      + '<p>Ketik <b>@</b> untuk menyematkan karakter, atau unggah aset untuk dipakai ulang.</p></div>'
+      + '</div>'
       + '<div class="st-composer">'
       + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
       + '<div class="st-mention-box">'
@@ -671,8 +666,6 @@
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn">' + icon('film') + ' Buat Video</button>'
       + '</div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
-      + '<div class="st-note st-hidden" id="stRefNote"></div>'
-      + '<div class="st-note st-hidden" id="stVideoNote">' + icon('film') + '<div><b>Video dengan Kie / Veo 3.1.</b> Reference gambar (frame adegan atau aset) jadi <b>frame pertama</b> video. Butuh ±1-3 menit.</div></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
       + '<div class="st-lightbox" id="stLightbox"></div>';
 
@@ -698,8 +691,17 @@
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
     const ta = $('stPrompt');
+    // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
+    const autoFit = () => {
+      if (!ta) return;
+      ta.style.height = '44px';
+      const next = Math.min(Math.max(ta.scrollHeight, 44), 150);
+      ta.style.height = next + 'px';
+      ta.style.overflowY = ta.scrollHeight > 150 ? 'auto' : 'hidden';
+    };
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
+      autoFit();
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
     });
     ta?.addEventListener('keyup', syncMentionFromText);
