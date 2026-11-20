@@ -597,7 +597,8 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   padding:0;background:transparent;border:0}
 .st-asset{position:relative;display:inline-flex;align-items:center;flex:none;cursor:default;animation:stAssetIn .2s ease}
 @keyframes stAssetIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
-.st-asset-face{width:28px;height:28px;border-radius:50%;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20;display:block}
+/* D-216: avatar karakter jadi KOTAK — sama seperti thumbnail gambar referensi. */
+.st-asset-face{width:28px;height:28px;border-radius:8px;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20;display:block}
 .st-asset-char:hover .st-asset-face,.st-asset-char:focus-visible .st-asset-face{border-color:#f044a8}
 .st-asset-scene:hover .st-asset-scene-img,.st-asset-scene:focus-visible .st-asset-scene-img{border-color:#f044a8}
 /* D-215: tooltip info aset — muncul saat kursor di atas ikon. */
@@ -609,7 +610,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-asset-face img{width:100%;height:100%;object-fit:cover;display:block}
 .st-asset-initial{width:28px;height:28px;display:grid;place-items:center;font-size:12px;color:#ffd0ec;font-weight:700;background:#160f20}
 /* D-215: badge penanda (suara / master sheet) menempel di pojok avatar. */
-.st-asset-badge{position:absolute;left:19px;bottom:-3px;display:inline-grid;place-items:center;width:13px;height:13px;
+.st-asset-badge{position:absolute;top:-4px;left:-4px;display:inline-grid;place-items:center;width:13px;height:13px;
   border-radius:50%;background:#0f1828;border:1px solid #49334e}
 .st-asset-badge svg{width:10px;height:10px;stroke:#ff9bdc}
 /* D-215: tombol hapus hanya muncul saat hover (hemat tempat). */
@@ -627,8 +628,15 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-mention-list.open{display:block}
 .st-mention-item{display:flex;width:100%;align-items:center;gap:9px;padding:7px 9px;border:0;border-radius:9px;background:transparent;color:#cfd6e4;font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
 .st-mention-item:hover,.st-mention-item.on{background:#24142a;color:#ffd0ec}
+/* D-216: thumbnail di mention picker jadi KOTAK (konsisten dengan header). */
 .st-mention-face{width:26px;height:26px;border-radius:50%;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20;display:block}
-.st-mention-face img{width:100%;height:100%;object-fit:cover;display:block}
+.st-mention-face-box{border-radius:7px}
+.st-mention-face-asset video{width:100%;height:100%;object-fit:cover;display:block}
+.st-mention-face-asset .st-gal-badge{display:none}
+/* D-216: grup label (Karakter / Aset Gambar) di mention picker. */
+.st-mention-group{display:flex;align-items:center;gap:6px;padding:8px 9px 4px;font-size:10.5px;
+  letter-spacing:.4px;text-transform:uppercase;color:var(--muted);font-weight:700}
+.st-mention-group svg{width:12px;height:12px;stroke:#ff9bdc}
 .st-mention-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .st-mention-marks{display:inline-flex;gap:4px}
 .st-mention-marks svg{width:13px;height:13px;stroke:#ff9bdc}

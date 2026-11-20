@@ -150,7 +150,9 @@
   };
   let assets = [];           // D-198: galeri aset (dari server)
   let chain = [];            // rantai adegan (lokal): frame terakhir jadi referensi gambar
-  let sceneRef = null;       // { mime, data, label } gambar referensi aktif (frame adegan / aset / lokasi)
+  let sceneRef = null;       // { mime, data, label } gambar referensi utama (dikirim ke server)
+  // D-216: semua gambar referensi aktif (dipilih lewat mention @ atau tombol lightbox).
+  let sceneRefs = [];        // [{ id, mime, data, label, fromId }]
   let popOpen = null;
   let mentionOpen = false;  // dropdown mention terbuka?
   let mentionIndex = 0;     // indeks highlight di dropdown mention
@@ -191,12 +193,15 @@
   function clearChain() {
     chain = [];
     sceneRef = null;
+    sceneRefs = [];
     try { localStorage.removeItem(CHAIN_KEY); } catch {}
     renderChain(); renderAssetHeader();
   }
   function removeChainFrame(id) {
     chain = chain.filter((f) => f.id !== id);
     if (sceneRef && sceneRef.fromId === id) sceneRef = null;
+    sceneRefs = sceneRefs.filter((r) => r.fromId !== id);
+    syncSceneRef();
     saveChain(); renderChain(); renderAssetHeader();
   }
 
@@ -220,6 +225,61 @@
       if (out.length >= MAX_CHARACTERS) break;
     }
     return out;
+  }
+  /**
+   * D-216: aset gambar yang di-mention di prompt.
+   * Token @slug-asetXx menuliskan aset gambar sebagai referensi di header komposer.
+   */
+  function mentionedAssetIds() {
+    const ta = $('stPrompt'); const text = ta?.value || '';
+    if (!text.includes('@')) return [];
+    const bySlug = new Map();
+    for (const a of assets) { if (!a || !a.url) continue; bySlug.set(assetTokenSlug(a), a.id); }
+    const out = []; const seen = new Set();
+    const re = /@([a-z0-9][a-z0-9_-]{0,59})/gi; let m;
+    while ((m = re.exec(text))) {
+      const id = bySlug.get(String(m[1] || '').toLowerCase());
+      if (!id || seen.has(id)) continue;
+      seen.add(id); out.push(id);
+    }
+    return out;
+  }
+  /**
+   * D-216: sinkronkan gambar referensi di header dengan mention di prompt.
+   * Aset yang di-mention -> dimuat jadi referensi; aset yang dihapus dari
+   * prompt -> dicabut dari header.
+   */
+  async function syncMentionedAssetRefs() {
+    const wanted = mentionedAssetIds();
+    const current = sceneRefs.map((r) => r.fromId).filter(Boolean);
+    // Buang yang tidak lagi di-mention.
+    let changed = false;
+    for (const id of current) {
+      if (!wanted.includes(id)) { sceneRefs = sceneRefs.filter((r) => r.fromId !== id); changed = true; }
+    }
+    // Tambah yang baru di-mention (bukan karakter -> skip).
+    for (const id of wanted) {
+      if (sceneRefs.some((r) => r.fromId === id)) continue;
+      const a = assets.find((x) => x.id === id); if (!a) continue;
+      try {
+        // Video -> ambil frame pertama; gambar -> muat langsung.
+        let mime = 'image/png', dataUrl = '';
+        if (a.media_type === 'video') {
+          dataUrl = await firstVideoFrame(a.url);
+          if (!dataUrl) continue;
+        } else {
+          const res = await fetch(a.url);
+          const blob = await res.blob();
+          mime = blob.type || 'image/png';
+          dataUrl = await blobToDataUrl(blob);
+        }
+        if (!dataUrl) continue;
+        sceneRefs.push({ mime, data: dataUrl, label: 'Aset: ' + String(a.file_name || 'Aset').slice(0, 28), fromId: a.id });
+        changed = true;
+      } catch { /* gagal muat -> lewati */ }
+    }
+    if (sceneRefs.length > 4) { sceneRefs = sceneRefs.slice(sceneRefs.length - 4); changed = true; }
+    if (changed) { syncSceneRef(); renderAssetHeader(); }
   }
 
   // ===== D-198: Galeri aset =====
@@ -312,17 +372,17 @@
       try {
         const dataUrl = await firstVideoFrame(a.url);
         if (!dataUrl) { window.toast?.('Gagal mengambil frame dari video.'); return; }
-        sceneRef = { mime: 'image/png', data: dataUrl, label: 'Frame video: ' + (a.file_name || '').slice(0, 28), fromId: a.id };
+        addSceneRef({ mime: 'image/png', data: dataUrl, label: 'Frame video: ' + (a.file_name || '').slice(0, 28), fromId: a.id });
       } catch { window.toast?.('Gagal mengambil frame dari video.'); return; }
     } else {
       try {
         const res = await fetch(a.url);
         const blob = await res.blob();
         const dataUrl = await blobToDataUrl(blob);
-        sceneRef = { mime: blob.type || 'image/png', data: dataUrl, label: 'Aset: ' + (a.file_name || '').slice(0, 28), fromId: a.id };
+        addSceneRef({ mime: blob.type || 'image/png', data: dataUrl, label: 'Aset: ' + (a.file_name || '').slice(0, 28), fromId: a.id });
       } catch { window.toast?.('Gagal memuat aset sebagai referensi.'); return; }
     }
-    renderAssetHeader(); updatePillLabels();
+    updatePillLabels();
     window.toast?.('Aset dipakai sebagai referensi ✨');
   }
   function blobToDataUrl(blob) {
@@ -370,6 +430,8 @@
       if (!r.ok) throw new Error('Gagal menghapus aset.');
       assets = assets.filter((x) => x.id !== a.id);
       if (sceneRef && sceneRef.fromId === a.id) sceneRef = null;
+      sceneRefs = sceneRefs.filter((ref) => ref.fromId !== a.id);
+      syncSceneRef();
       renderGallery(); renderAssetHeader();
       window.toast?.('Aset dihapus.');
     } catch (e) { window.toast?.(e.message || 'Gagal menghapus aset.'); }
@@ -424,12 +486,13 @@
         + '</span>'
       );
     }
-    if (sceneRef) {
-      const label = sceneRef.label || 'Referensi gambar';
+    // D-216: SEMUA gambar referensi (dipilih lewat mention @) ditampilkan sebagai petak.
+    for (const r of sceneRefs) {
+      const label = r.label || 'Referensi gambar';
       parts.push(
         '<span class="st-asset st-asset-scene" tabindex="0" aria-label="' + esc(label) + '" data-asset-tip="' + esc(label) + '">'
-        + '<span class="st-asset-scene-img"><img src="data:' + esc(sceneRef.mime || 'image/png') + ';base64,' + esc(sceneRef.data) + '" alt=""></span>'
-        + '<button type="button" class="st-asset-x" data-scene-remove="1" aria-label="Hapus referensi gambar">' + icon('x') + '</button>'
+        + '<span class="st-asset-scene-img"><img src="data:' + esc(r.mime || 'image/png') + ';base64,' + esc(r.data) + '" alt=""></span>'
+        + '<button type="button" class="st-asset-x" data-scene-remove="' + esc(r.fromId || '') + '" aria-label="Hapus referensi gambar">' + icon('x') + '</button>'
         + '<span class="st-asset-tip" role="tooltip">' + esc(label) + '</span>'
         + '</span>'
       );
@@ -443,7 +506,10 @@
     }));
     box.querySelectorAll('[data-scene-remove]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
-      sceneRef = null; renderAssetHeader(); window.toast?.('Referensi gambar dilepas.');
+      const fid = b.dataset.sceneRemove;
+      if (fid) removeSceneRef(fid);
+      else { sceneRef = null; sceneRefs = []; renderAssetHeader(); }
+      window.toast?.('Referensi gambar dilepas.');
     }));
   }
   /** Hapus @slug dari teks prompt (dan seluruh mention karakter itu). */
@@ -456,14 +522,69 @@
   }
 
   // ===== D-196: Mention picker =====
+  // ===== D-216: Mention = SATU-SATUNYA cara memuat aset =====
+  // Ketik "@" -> daftar SEMUA aset: karakter + gambar dari galeri aset.
+  // Pilih salah satu -> masuk ke header composer sebagai referensi & token
+  // @slug ditulis ke prompt (penandaan tepat untuk generator).
+  function assetTokenSlug(a) {
+    // Slug unik & stabil untuk aset gambar (bukan karakter).
+    // PREFIX 'aset-' mencegah tabrakan dengan slug karakter.
+    // Panjang dibatasi 60 char total supaya cocok regex mention.
+    const base = slugify(String(a?.file_name || 'aset').replace(/\.[a-z0-9]+$/i, '')) || 'aset';
+    return ('aset-' + base).slice(0, 60);
+  }
+  /** Daftar kandidat mention: karakter + aset gambar, satu daftar gabungan. */
   function mentionCandidates() {
     const q = mentionQuery.toLowerCase();
-    const mentioned = new Set(mentionedCharacters().map((c) => c.id));
-    return characters.filter((c) => {
-      if (mentioned.has(c.id)) return false;
-      if (!q) return true;
-      return slugify(c.name).includes(q) || String(c.name || '').toLowerCase().includes(q);
-    });
+    const usedChars = new Set(mentionedCharacters().map((c) => c.id));
+    const out = [];
+    // 1) Karakter (potret + sheet + suara) — maks 3.
+    for (const c of characters) {
+      if (usedChars.has(c.id)) continue;
+      if (q && !slugify(c.name).includes(q) && !String(c.name || '').toLowerCase().includes(q)) continue;
+      out.push({ kind: 'char', id: c.id, name: c.name, data: c });
+    }
+    // 2) Aset gambar dari galeri — dikecilkan ke label ringkas.
+    const usedAssets = new Set(referencedAssetIds());
+    for (const a of assets) {
+      if (!a || !a.url) continue;
+      if (usedAssets.has(a.id)) continue;
+      const label = String(a.file_name || 'Aset').replace(/\.[a-z0-9]+$/i, '');
+      if (q && !label.toLowerCase().includes(q) && !assetTokenSlug(a).includes(q)) continue;
+      out.push({ kind: 'asset', id: a.id, name: label, data: a });
+    }
+    return out;
+  }
+  /** ID aset gambar yang SEDANG aktif sebagai referensi di header. */
+  function referencedAssetIds() {
+    const ids = [];
+    for (const r of sceneRefs) if (r.fromId) ids.push(r.fromId);
+    if (sceneRef && sceneRef.fromId && !ids.includes(sceneRef.fromId)) ids.push(sceneRef.fromId);
+    return ids;
+  }
+  /** D-216: tambah gambar referensi (dari mention @ atau tombol "Jadikan Referensi"). */
+  function addSceneRef(ref) {
+    if (!ref || !ref.data) return;
+    // Ganti bila aset sama sudah ada (idempoten) — mention @ aset tidak boleh dobel.
+    if (ref.fromId) {
+      const i = sceneRefs.findIndex((r) => r.fromId === ref.fromId);
+      if (i >= 0) { sceneRefs[i] = ref; syncSceneRef(); renderAssetHeader(); return; }
+    }
+    sceneRefs.push(ref);
+    // Batas 4 gambar referensi — biar header tetap 1 baris.
+    if (sceneRefs.length > 4) sceneRefs.shift();
+    syncSceneRef();
+    renderAssetHeader();
+  }
+  /** D-216: hapus satu gambar referensi. */
+  function removeSceneRef(fromId) {
+    sceneRefs = sceneRefs.filter((r) => r.fromId !== fromId);
+    syncSceneRef();
+    renderAssetHeader();
+  }
+  /** sceneRef utama = gambar referensi pertama (dikirim ke server). */
+  function syncSceneRef() {
+    sceneRef = sceneRefs.length ? { mime: sceneRefs[0].mime, data: sceneRefs[0].data, label: sceneRefs[0].label, fromId: sceneRefs[0].fromId } : null;
   }
   function openMention(at, query) {
     mentionOpen = true; mentionAt = at; mentionQuery = query; mentionIndex = 0;
@@ -478,32 +599,64 @@
     if (!mentionOpen) { box.innerHTML = ''; box.classList.remove('open'); return; }
     const list = mentionCandidates();
     if (!list.length) {
-      box.innerHTML = '<div class="st-mention-empty">' + (characters.length ? 'Tidak ada karakter yang cocok.' : 'Belum ada karakter. Buat dulu di menu Karakter.') + '</div>';
+      box.innerHTML = '<div class="st-mention-empty">'
+        + (characters.length || assets.length
+            ? 'Tidak ada aset yang cocok.'
+            : 'Belum ada aset. Buat karakter dulu atau generate/unggah gambar.')
+        + '</div>';
       box.classList.add('open'); return;
     }
-    box.innerHTML = list.map((c, i) => {
-      const v = c.voice || {};
-      const marks = [];
-      if (v.name || v.style) marks.push(icon('mic'));
-      if (c.board_image_url) marks.push(icon('layers'));
-      return '<button type="button" class="st-mention-item' + (i === mentionIndex ? ' on' : '') + '" data-mention-pick="' + esc(c.id) + '">'
-        + '<span class="st-mention-face">' + characterThumb(c) + '</span>'
-        + '<span class="st-mention-name">' + esc(c.name) + '</span>'
-        + '<span class="st-mention-marks">' + marks.join('') + '</span></button>';
-    }).join('');
+    // D-216: satu daftar gabungan karakter + aset gambar, dikelompokkan.
+    const chars = list.filter((x) => x.kind === 'char');
+    const imgs = list.filter((x) => x.kind === 'asset');
+    let idx = 0;
+    const renderItem = (it) => {
+      const i = idx++;
+      const on = i === mentionIndex ? ' on' : '';
+      if (it.kind === 'char') {
+        const c = it.data; const v = c.voice || {};
+        const marks = [];
+        if (v.name || v.style) marks.push(icon('mic'));
+        if (c.board_image_url) marks.push(icon('layers'));
+        return '<button type="button" class="st-mention-item' + on + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
+          + '<span class="st-mention-face st-mention-face-box">' + characterThumb(c) + '</span>'
+          + '<span class="st-mention-name">' + esc(it.name) + '</span>'
+          + '<span class="st-mention-marks">' + marks.join('') + '</span></button>';
+      }
+      const a = it.data;
+      return '<button type="button" class="st-mention-item' + on + '" data-mention-pick="asset:' + esc(it.id) + '" data-mention-kind="asset">'
+        + '<span class="st-mention-face st-mention-face-box st-mention-face-asset">' + assetThumb(a) + '</span>'
+        + '<span class="st-mention-name">' + esc(it.name) + '</span>'
+        + '<span class="st-mention-marks">' + icon('image') + '</span></button>';
+    };
+    let html = '';
+    if (chars.length) html += '<div class="st-mention-group">' + icon('user') + ' Karakter</div>' + chars.map(renderItem).join('');
+    if (imgs.length) html += '<div class="st-mention-group">' + icon('image') + ' Aset Gambar</div>' + imgs.map(renderItem).join('');
+    box.innerHTML = html;
     box.classList.add('open');
     box.querySelectorAll('[data-mention-pick]').forEach((b) => b.addEventListener('mousedown', (e) => {
       e.preventDefault();
       pickMention(b.dataset.mentionPick);
     }));
   }
-  function pickMention(id) {
-    const c = characters.find((x) => x.id === id); if (!c) return;
+  function pickMention(key) {
     const ta = $('stPrompt'); if (!ta) return;
+    const raw = String(key || '');
+    const kind = raw.startsWith('asset:') ? 'asset' : 'char';
+    const id = raw.slice(kind.length + 1);
     const text = String(ta.value || '');
     const before = text.slice(0, mentionAt);
     const after = text.slice(mentionAt + 1 + mentionQuery.length);
-    const token = '@' + slugify(c.name);
+    let token = '';
+    if (kind === 'char') {
+      const c = characters.find((x) => x.id === id); if (!c) return;
+      token = '@' + slugify(c.name);
+    } else {
+      const a = assets.find((x) => x.id === id); if (!a) return;
+      token = '@' + assetTokenSlug(a);
+      // Referensi gambar dimuat oleh syncMentionedAssetRefs() (dari isi prompt),
+      // jadi tidak dobel kalau user mention aset yang sama lagi.
+    }
     ta.value = (before + token + ' ' + after).replace(/\s{2,}/g, ' ');
     closeMention();
     ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -551,7 +704,7 @@
     });
     $('stChainNew')?.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
-      sceneRef = null; renderChain(); renderAssetHeader();
+      sceneRef = null; sceneRefs = []; renderChain(); renderAssetHeader();
       $('stPrompt')?.focus();
       window.toast?.('Adegan baru — lanjutkan ceritanya.');
     });
@@ -1345,6 +1498,8 @@
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
       autoFit();
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
+      // D-216: mention aset gambar -> masuk ke header sebagai referensi.
+      syncMentionedAssetRefs();
     });
     ta?.addEventListener('keyup', syncMentionFromText);
     ta?.addEventListener('click', syncMentionFromText);
@@ -1353,7 +1508,11 @@
       const list = mentionCandidates();
       if (e.key === 'ArrowDown') { e.preventDefault(); mentionIndex = Math.min(mentionIndex + 1, Math.max(list.length - 1, 0)); renderMention(); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); mentionIndex = Math.max(mentionIndex - 1, 0); renderMention(); }
-      else if (e.key === 'Enter' && list[mentionIndex]) { e.preventDefault(); pickMention(list[mentionIndex].id); }
+      else if (e.key === 'Enter' && list[mentionIndex]) {
+        e.preventDefault();
+        const it = list[mentionIndex];
+        pickMention(it.kind === 'asset' ? 'asset:' + it.id : 'char:' + it.id);
+      }
       else if (e.key === 'Escape') { e.preventDefault(); closeMention(); }
     });
     ta?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));

@@ -837,3 +837,57 @@ test('D-215: badge penanda & tombol hapus tidak menambah lebar baris', () => {
   assert.ok(!item.includes('background:#24142a'), 'item tidak boleh pakai kapsul lama');
   assert.ok(!item.includes('border-radius:22px'), 'item tidak boleh bulat seperti kapsul');
 });
+
+// ===== D-216: mention = satu-satunya selector aset (gambar + karakter) =====
+
+test('D-216: mention picker menampilkan karakter DAN aset gambar', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // mentionCandidates -> gabungan dua sumber.
+  assert.ok(studio.includes('function mentionCandidates()'), 'mentionCandidates hilang');
+  const fn = studio.slice(studio.indexOf('function mentionCandidates'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("kind: 'char'"), 'kandidat karakter harus ada');
+  assert.ok(body.includes("kind: 'asset'"), 'kandidat aset gambar harus ada');
+  // Loop dua sumber: characters + assets.
+  assert.ok(body.includes('for (const c of characters)'), 'harus iterasi characters');
+  assert.ok(body.includes('for (const a of assets)'), 'harus iterasi assets');
+  // Grup label di picker.
+  const render = studio.slice(studio.indexOf('function renderMention'));
+  const rbody = render.slice(0, render.indexOf('\n  }'));
+  assert.ok(rbody.includes('st-mention-group'), 'harus ada grup label');
+  assert.ok(rbody.includes('Karakter'), 'grup Karakter harus ada');
+  assert.ok(rbody.includes('Aset Gambar'), 'grup Aset Gambar harus ada');
+});
+
+test('D-216: aset yang di-mention masuk ke header composer sebagai referensi', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Token slug aset -> parser mention aset.
+  assert.ok(studio.includes('function assetTokenSlug('), 'assetTokenSlug hilang');
+  assert.ok(studio.includes('function mentionedAssetIds()'), 'mentionedAssetIds hilang');
+  assert.ok(studio.includes('async function syncMentionedAssetRefs()'), 'syncMentionedAssetRefs hilang');
+  // Header me-render semua sceneRefs (bukan hanya satu sceneRef).
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
+  assert.ok(hbody.includes('for (const r of sceneRefs)'), 'header harus iterasi semua sceneRefs');
+  // addSceneRef/removeSceneRef managing daftar.
+  assert.ok(studio.includes('function addSceneRef('), 'addSceneRef hilang');
+  assert.ok(studio.includes('function removeSceneRef('), 'removeSceneRef hilang');
+  // Hook ke input textarea.
+  assert.ok(studio.includes('syncMentionedAssetRefs();'), 'sinkronisasi harus dipanggil dari input');
+});
+
+test('D-216: petak referensi (karakter & gambar) berbentuk KOTAK', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const faceRules = [...css.matchAll(/\.st-asset-face\{[^}]*\}/gs)].map((m) => m[0]);
+  const face = faceRules.find((r) => r.includes('border-radius')) || faceRules[0];
+  assert.ok(face, 'aturan .st-asset-face tidak ada');
+  assert.ok(face.includes('border-radius:8px'), 'avatar karakter harus KOTAK (bukan bulat)');
+  assert.ok(!face.includes('border-radius:50%'), 'avatar karakter tidak boleh bulat');
+  // Gambar referensi juga kotak (ambil aturan UTAMA, bukan turunan hover).
+  const sceneRules = [...css.matchAll(/\.st-asset-scene-img\{[^}]*\}/gs)].map((m) => m[0]);
+  const scene = sceneRules.find((r) => r.includes('border-radius')) || sceneRules[0];
+  assert.ok(scene, 'aturan .st-asset-scene-img tidak ada');
+  assert.ok(scene.includes('border-radius:8px'), 'gambar referensi harus kotak');
+  // Thumbnail di mention picker juga kotak.
+  assert.ok(css.includes('.st-mention-face-box{border-radius:7px}'), 'thumbnail mention harus kotak');
+});
