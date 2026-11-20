@@ -206,6 +206,28 @@ test('D-207: blok terpilih menambah label pill', async () => {
   assert.equal(label, '1 blok', 'label pill blok tidak sesuai: ' + label);
 });
 
+test('D-209: tombol Optimalkan & Copy sebaris dengan label prompt', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const box = doc.getElementById('stPrompt').closest('.st-mention-box');
+  assert.ok(box, 'kotak prompt tidak ditemukan');
+  // Label & tombol harus berada di baris yang sama (.st-prompt-head).
+  const head = box.querySelector('.st-prompt-head');
+  assert.ok(head, 'baris judul prompt (.st-prompt-head) tidak ada');
+  const label = head.querySelector('label[for="stPrompt"]');
+  assert.ok(label, 'label "Deskripsi konten yang kamu mau" tidak di baris judul');
+  assert.ok(label.textContent.includes('Deskripsi konten yang kamu mau'), 'teks label berubah');
+  const tools = head.querySelector('.st-prompt-tools');
+  assert.ok(tools, 'grup tombol tidak di baris judul');
+  // Kedua tombol harus di dalam baris yang sama dengan label.
+  assert.ok(tools.querySelector('#stOptimizeBtn'), 'tombol Optimalkan bukan di baris judul');
+  assert.ok(tools.querySelector('#stCopyPromptBtn'), 'tombol Copy bukan di baris judul');
+  // Textarea tetap di bawah baris judul.
+  const ta = doc.getElementById('stPrompt');
+  assert.equal(ta.previousElementSibling, head, 'textarea harus sesudah baris judul');
+});
+
 test('D-207: prompt yang dikirim ke server memuat blok urut kategori', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
