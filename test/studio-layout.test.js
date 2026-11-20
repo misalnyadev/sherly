@@ -223,9 +223,10 @@ test('D-210: baris judul prompt di atas kotak composer, tombol urut Prompt - Opt
     head.compareDocumentPosition(composer) & win.Node.DOCUMENT_POSITION_FOLLOWING,
     'baris judul harus di ATAS kotak composer'
   );
+  // D-211: label "Deskripsi konten yang kamu mau" dihapus (bikin tombol turun 5 baris di HP).
   const label = head.querySelector('label[for="stPrompt"]');
-  assert.ok(label, 'label "Deskripsi konten yang kamu mau" tidak di baris judul');
-  assert.ok(label.textContent.includes('Deskripsi konten yang kamu mau'), 'teks label berubah');
+  assert.equal(label, null, 'label "Deskripsi konten yang kamu mau" harus dihapus (D-211)');
+  // (string teks hanya boleh muncul di komentar kode, bukan di markup yang dirender)
   const tools = head.querySelector('.st-prompt-tools');
   assert.ok(tools, 'grup tombol tidak di baris judul');
   // Urutan tombol: Prompt -> Optimalkan -> Copy.
@@ -573,4 +574,30 @@ test('D-210: baris judul & composer adalah saudara di root (bukan composer di da
   // Kotak prompt (textarea) tetap di dalam composer.
   const ta = doc.getElementById('stPrompt');
   assert.ok(composer.contains(ta), 'textarea harus di dalam composer');
+});
+
+test('D-211: baris aksi prompt tanpa label — tombol rata kanan, layout HP tetap 1 baris', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const head = doc.querySelector('.st-prompt-head');
+  // Tidak ada elemen teks/label di baris aksi — hanya tombol.
+  assert.equal(head.querySelector('label'), null, 'label harus dihapus');
+  // (span di dalam head hanya ikon SVG di dalam tombol, bukan teks label)
+  // Semua anak baris aksi adalah tombol (Prompt, Optimalkan, Copy).
+  const kids = [...head.children];
+  assert.equal(kids.length, 1, 'baris aksi harus satu blok tombol');
+  const tools = kids[0];
+  assert.ok(tools.classList.contains('st-prompt-tools'), 'harus blok .st-prompt-tools');
+  assert.equal(tools.children.length, 3, 'harus 3 tombol: Prompt, Optimalkan, Copy');
+  // CSS: rata kanan (justify-content:flex-end) & tidak column di HP.
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-prompt-head\{[^}]*\}/);
+  assert.ok(rule, 'aturan .st-prompt-head tidak ada');
+  assert.ok(rule[0].includes('justify-content:flex-end'), 'baris aksi harus rata kanan');
+  assert.ok(!rule[0].includes('flex-direction:column'), 'baris aksi jangan jadi vertikal');
+  const mq = css.match(/@media\(max-width:560px\)\{\.st-prompt-head\{[^}]*\}[^}]*\}/);
+  assert.ok(mq, 'aturan mobile .st-prompt-head tidak ada');
+  assert.ok(!mq[0].includes('flex-direction:column'), 'baris aksi jangan vertikal di HP');
+  assert.ok(mq[0].includes('justify-content:flex-end'), 'tombol harus rata kanan di HP');
 });
