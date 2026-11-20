@@ -560,6 +560,58 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-tab svg{width:15px;height:15px}
 .st-tab.active{background:#24142a;border-color:#f044a8;color:#fff}
 .st-composer{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:18px;padding:18px}
+/* D-196: Header Aset ala Google Flow — penanda karakter & gambar referensi */
+.st-asset-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;min-height:40px;padding:7px 9px;border-radius:13px;background:#0c1422;border:1px solid #24344e}
+.st-asset-header.st-empty{background:transparent;border-style:dashed;border-color:#24344e}
+.st-asset-empty{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.st-asset-empty svg{width:14px;height:14px;stroke:#ff72c5}
+.st-asset-empty b{color:#ffd0ec}
+.st-asset{display:inline-flex;align-items:center;gap:7px;padding:4px 6px 4px 4px;border-radius:22px;background:#24142a;border:1px solid #49334e;animation:stAssetIn .2s ease}
+@keyframes stAssetIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.st-asset-face{width:28px;height:28px;border-radius:50%;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20;display:block}
+.st-asset-face img{width:100%;height:100%;object-fit:cover;display:block}
+.st-asset-initial{width:28px;height:28px;display:grid;place-items:center;font-size:12px;color:#ffd0ec;font-weight:700;background:#160f20}
+.st-asset-name{font-size:11.5px;color:#ffd0ec;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-asset-badge{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#0f1828;border:1px solid #49334e}
+.st-asset-badge svg{width:10px;height:10px;stroke:#ff9bdc}
+.st-asset-x{width:18px;height:18px;border-radius:50%;border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;padding:0;transition:.18s}
+.st-asset-x:hover{background:#f044a8;color:#fff}
+.st-asset-x svg{width:11px;height:11px}
+.st-asset-scene-img{width:26px;height:26px;border-radius:7px;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20}
+.st-asset-scene-img img{width:100%;height:100%;object-fit:cover;display:block}
+/* D-196: Mention picker */
+.st-mention-box{position:relative}
+.st-mention-list{display:none;position:absolute;left:0;right:0;top:100%;z-index:45;margin-top:-4px;background:#0c1422f7;border:1px solid #24344e;border-radius:12px;padding:5px;box-shadow:0 18px 50px #000c;max-height:230px;overflow-y:auto}
+.st-mention-list.open{display:block}
+.st-mention-item{display:flex;width:100%;align-items:center;gap:9px;padding:7px 9px;border:0;border-radius:9px;background:transparent;color:#cfd6e4;font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
+.st-mention-item:hover,.st-mention-item.on{background:#24142a;color:#ffd0ec}
+.st-mention-face{width:26px;height:26px;border-radius:50%;overflow:hidden;flex:none;border:1px solid #49334e;background:#160f20;display:block}
+.st-mention-face img{width:100%;height:100%;object-fit:cover;display:block}
+.st-mention-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-mention-marks{display:inline-flex;gap:4px}
+.st-mention-marks svg{width:13px;height:13px;stroke:#ff9bdc}
+.st-mention-empty{padding:11px;font-size:12px;color:var(--muted)}
+/* D-196: Rantai adegan (lokal) */
+.st-chain{margin-top:12px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:10px}
+.st-chain-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfd6e4;margin-bottom:9px}
+.st-chain-head svg{width:15px;height:15px;stroke:#ff72c5}
+.st-chain-head b{color:#fff;font-weight:600}
+.st-chain-head span{font-size:10.5px;color:var(--muted)}
+.st-chain-clear{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;border:1px solid #24344e;background:transparent;color:var(--muted);font:inherit;font-size:10.5px;cursor:pointer;transition:.18s}
+.st-chain-clear:hover{border-color:#f044a8;color:#ff9bdc}
+.st-chain-clear svg{width:12px;height:12px;stroke:currentColor}
+.st-chain-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:3px}
+.st-chain-frame{position:relative;width:62px;height:62px;border-radius:10px;overflow:hidden;flex:none;border:1px solid #24344e;background:#160f20}
+.st-chain-frame.on{border-color:#f044a8;box-shadow:0 0 0 2px #f044a833}
+.st-chain-frame img{width:100%;height:100%;object-fit:cover;display:block}
+.st-chain-no{position:absolute;left:3px;top:3px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#04070fcc;color:#ffd0ec;font-size:9.5px;display:grid;place-items:center}
+.st-chain-x{position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;border:0;background:#04070fcc;color:#cfd6e4;cursor:pointer;display:grid;place-items:center;padding:0}
+.st-chain-x:hover{background:#f044a8;color:#fff}
+.st-chain-x svg{width:9px;height:9px}
+.st-chain-add{width:62px;height:62px;border-radius:10px;border:1px dashed #49334e;background:transparent;color:var(--muted);font:inherit;font-size:9.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:none;transition:.18s}
+.st-chain-add:hover{border-color:#f044a8;color:#ffd0ec}
+.st-chain-add svg{width:15px;height:15px;stroke:currentColor}
+.st-card-chars{font-size:10.5px;color:#ffd0ec;letter-spacing:.02em}
 .st-composer label{display:block;font-size:12px;color:#cfd6e4;margin-bottom:8px}
 .st-composer textarea{width:100%;box-sizing:border-box;background:#0f1828;border:1px solid #24344e;border-radius:12px;color:#fff;font:inherit;font-size:13.5px;line-height:1.6;padding:12px 14px;resize:vertical;min-height:76px;outline:0}
 .st-composer textarea:focus{border-color:#f044a8}
@@ -1395,6 +1447,11 @@ plus:'<path d="M12 5v14M5 12h14"/>',
  'arrow-up-right':'<path d="M7 17 17 7M7 7h10v10"/>',
  play:'<path d="M8.5 6.5v11l9-5.5z" fill="currentColor" stroke="none"/>',
  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+ layers:'<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/>',
+ download:'<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17"/>',
+ cpu:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+ 'trash-2':'<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/>',
  sliders:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="15" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
  'layout-grid':'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>',
  upload:'<path d="M12 15V4m-4 4 4-4 4 4"/><path d="M4 17v1.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V17"/>',

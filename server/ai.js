@@ -336,20 +336,27 @@ export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {})
 
 /** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback).
  *  opts.aspect: rasio aspek ('4:5', dst — best effort via imageConfig, fallback tanpa aspek bila ditolak).
- *  opts.reference: { mime, data } foto referensi (img2img) — inlineData ikut dikirim sebagai bagian konten. */
+ *  opts.reference: { mime, data } foto referensi (img2img) — inlineData ikut dikirim sebagai bagian konten.
+ *  opts.references: array { mime, data } — D-196 multi-referensi (potret/sheet karakter + frame adegan). */
 export async function generateImageWithGemini(prompt, auth = {}, opts = {}) {
   const attempts = await buildAttempts('gemini', geminiImageModel(), auth.supabase);
   if (!attempts.length) {
     throw Object.assign(new Error('Kunci Gemini belum tersedia untuk generator gambar. Simpan kunci Gemini di vault (Pengaturan) atau set GEMINI_API_KEY.'), { status: 503 });
   }
   const reference = opts.reference && typeof opts.reference.data === 'string' && opts.reference.data.length > 8 ? opts.reference : null;
+  // D-196: multi-referensi (potret + master sheet per karakter + frame adegan sebelumnya).
+  // Semua gambar dikirim sebagai inlineData berurutan; label di prompt menjelaskan tiap gambar.
+  const extraRefs = Array.isArray(opts.references)
+    ? opts.references.filter((r) => r && typeof r.data === 'string' && r.data.length > 8)
+    : [];
+  const allRefs = reference ? [reference, ...extraRefs] : extraRefs;
   const aspect = typeof opts.aspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(opts.aspect) ? opts.aspect : null;
   let lastError = null;
   for (const attempt of attempts) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(attempt.model)}:generateContent`;
       const parts = [{ text: prompt }];
-      if (reference) parts.push({ inlineData: { mimeType: reference.mime || 'image/png', data: reference.data } });
+      for (const ref of allRefs) parts.push({ inlineData: { mimeType: ref.mime || 'image/png', data: ref.data } });
       const buildBody = (withAspect) => {
         const generationConfig = { responseModalities: ['TEXT', 'IMAGE'] };
         if (withAspect) generationConfig.imageConfig = { aspectRatio: aspect };

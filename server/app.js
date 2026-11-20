@@ -14,6 +14,7 @@ import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEM
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
 import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
+import { parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, sanitizeInlineImage } from './studio-characters.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -438,13 +439,42 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
 
 app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   try {
-    const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect, reference: rawReference, referenceCharacterId: rawRefCharId } = req.body || {};
+    const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect, reference: rawReference, referenceCharacterId: rawRefCharId,
+      sceneRef: rawSceneRef, sceneNumber: rawSceneNumber, sceneTotal: rawSceneTotal } = req.body || {};
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
     const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
     const provider = customId ? 'custom' : (['auto', 'gemini', 'kie'].includes(rawProvider) ? rawProvider : 'auto');
     const aspect = typeof rawAspect === 'string' && /^\d{1,2}:\d{1,2}$/.test(rawAspect) ? rawAspect : '1:1';
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
+
+    // ===== D-196: multi-karakter (@mention) + referensi gambar adegan =====
+    // 1) Muat karakter milik user (id, nama, identity, voice, potret, sheet).
+    const { data: ownedChars, error: charsErr } = await req.supabase
+      .from('characters').select('id,name,identity_prompt,voice,reference_image_path,board_path')
+      .eq('user_id', req.user.id);
+    if (charsErr) return res.status(400).json({ ok: false, error: charsErr.message });
+    const allCharacters = Array.isArray(ownedChars) ? ownedChars : [];
+    // 2) Parse "@nama" di prompt -> maksimal 3 karakter.
+    const mentions = parseMentions(prompt, allCharacters);
+    // 3) Resolve gambar referensi karakter (potret + master sheet) dari Storage.
+    const { images: charImages, labels: charLabels } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
+    // 4) Referensi gambar adegan (frame akhir adegan sebelumnya / referensi lokasi) — dikirim client.
+    const sceneImage = sanitizeInlineImage(rawSceneRef);
+    const references = sceneImage ? [...charImages, sceneImage] : charImages;
+    // 5) Susun prompt final: karakter + voice + continuity + label aset.
+    const sceneNo = Number.isInteger(rawSceneNumber) && rawSceneNumber > 0 ? rawSceneNumber : 0;
+    const sceneTot = Number.isInteger(rawSceneTotal) && rawSceneTotal > 0 ? rawSceneTotal : 0;
+    const promptBlocks = [];
+    if (sceneNo > 0 && sceneTot > 0) promptBlocks.push(`[Adegan ${sceneNo} dari ${sceneTot}]`);
+    promptBlocks.push(prompt);
+    const charBlock = buildCharacterPromptBlock(mentions, allCharacters);
+    if (charBlock) promptBlocks.push(charBlock);
+    if (sceneImage) {
+      promptBlocks.push('## Referensi gambar adegan\nGambar terakhir adegan sebelumnya (referensi continuity): pertahankan lokasi, pencahayaan, wardrobe, warna, dan wajah yang konsisten. Lanjutkan adegan dari gambar ini secara natural.');
+    }
+    const multiPrompt = promptBlocks.join('\n\n');
+
     // D-98: foto referensi (karakter) untuk img2img — di-resolve jadi { mime, data }.
     let reference = null;
     if (rawReference && typeof rawReference.data === 'string' && rawReference.data.length > 8) {
@@ -463,7 +493,12 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
       }
     }
     let image, usedProvider = 'gemini', fallbackUsed = false;
-    if (reference) {
+    if (references.length) {
+      // D-196: multi-referensi (potret + sheet karakter + frame adegan) hanya didukung Gemini.
+      if (provider !== 'gemini') fallbackUsed = true;
+      image = await generateImageWithGemini(multiPrompt, auth, { aspect, references }); usedProvider = 'gemini';
+    }
+    else if (reference) {
       // D-98: img2img dengan foto referensi hanya didukung Gemini — mesin lain dialihkan otomatis.
       if (provider !== 'gemini') fallbackUsed = true;
       image = await generateImageWithGemini(prompt, auth, { aspect, reference }); usedProvider = 'gemini';
@@ -490,7 +525,13 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
         if (!done) { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; fallbackUsed = true; }
       }
     }
-    res.json({ ok: true, provider: usedProvider, fallback_used: fallbackUsed, image });
+    res.json({
+      ok: true, provider: usedProvider, fallback_used: fallbackUsed, image,
+      // D-196: info penanda aset untuk UI (header aset di komposer).
+      characters: mentions.map((m) => ({ name: m.name, token: m.token })),
+      assets: charLabels.map((l) => ({ name: l.name, kind: l.kind })),
+      scene_reference: !!sceneImage,
+    });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'Generator gambar gagal.' });
