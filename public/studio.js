@@ -19,8 +19,12 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // D-214: `const ICONS` di index.html berada di global lexical scope yang TIDAK
+  // terjangkau dari file script terpisah — jadi pakai window.ICONS sebagai fallback.
+  // Tanpa ini semua ikon studio.js (upload, list-checks, dll.) tidak tampil.
   const icon = (key) => {
-    const paths = (typeof ICONS !== 'undefined' && ICONS[key]) || '';
+    const table = (typeof ICONS !== 'undefined' && ICONS) || window.ICONS || {};
+    const paths = table[key] || '';
     return '<span data-icon="' + key + '">' + (paths ? '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>' : '') + '</span>';
   };
   // D-205: ganti ikon pada sebuah pill — span[data-icon] lama diganti wholesale
@@ -597,10 +601,11 @@
     // D-205: ikon rasio ikut pilihan — vertikal (smartphone) / horizontal (monitor).
     const ap = $('stAspectPill');
     if (ap) setIcon(ap, isVerticalAspect(state.aspect) ? 'smartphone' : 'monitor');
-    // D-207/D-213: jumlah blok aktif tampil di item menu "Prompt" & di tombol menu.
+    // D-207/D-213/D-214: jumlah blok aktif tampil di item menu "Prompt" & di tombol menu.
+    // Penting: ambil span JUDUL (bukan span ikon pertama).
     const pp = $('stPromptPill');
     if (pp) {
-      const sp = pp.querySelector('span');
+      const sp = pp.querySelector('span:not([data-icon])');
       if (sp) sp.textContent = promptBankLabel();
       pp.classList.toggle('st-on', selectedBlocks.length > 0);
     }
@@ -1204,22 +1209,25 @@
       // dropdown di DALAM kotak composer, supaya header composer tetap pendek
       // (tidak lagi 2 baris di HP).
       + '<div class="st-composer">'
+      // D-214: baris ATAS composer = referensi (karakter/gambar) SEBARIS dengan
+      // menu dropdown prompt — jadi 1 baris, bukan 2 baris bertumpuk.
+      + '<div class="st-composer-top">'
       + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
-      + '<div class="st-mention-box">'
-      // Baris menu aksi prompt — di dalam composer, rata kanan, 1 baris.
       + '<div class="st-prompt-tools st-tools-menu-row">'
       + '<div class="st-pill-wrap st-menu-wrap" id="stPromptMenuWrap">'
       + '<button type="button" class="st-menu-btn" id="stPromptMenuBtn" title="Aksi prompt">' + icon('list-checks') + ' <b>Prompt</b>' + icon('chevron-down') + '</button>'
       + '<div class="st-pop st-pop-menu" id="stPop-actions">'
-      + '<button type="button" class="st-menu-item" id="stResetPromptBtn" data-action="reset">' + icon('rotate-ccw') + ' <span>Reset</span><small>Bersihkan komposer dari prompt</small></button>'
-      + '<button type="button" class="st-menu-item" id="stPromptPill" data-action="prompt">' + icon('message') + ' <span>Prompt</span><small>Pilih template &amp; blok prompt</small></button>'
-      + '<button type="button" class="st-menu-item" id="stOptimizeBtn" data-action="optimize">' + icon('sparkles') + ' <span>Optimalkan</span><small>Susun ulang alur prompt</small></button>'
-      + '<button type="button" class="st-menu-item" id="stCopyPromptBtn" data-action="copy">' + icon('copy') + ' <span>Copy</span><small>Salin semua isi prompt</small></button>'
+      + '<button type="button" class="st-menu-item" id="stResetPromptBtn" data-action="reset">' + icon('rotate-ccw') + ' <span>Reset</span></button>'
+      + '<button type="button" class="st-menu-item" id="stPromptPill" data-action="prompt">' + icon('message') + ' <span>Prompt</span></button>'
+      + '<button type="button" class="st-menu-item" id="stOptimizeBtn" data-action="optimize">' + icon('sparkles') + ' <span>Optimalkan</span></button>'
+      + '<button type="button" class="st-menu-item" id="stCopyPromptBtn" data-action="copy">' + icon('copy') + ' <span>Copy</span></button>'
       + '</div>'
       // Popover isi Bank Prompt — dibuka dari item "Prompt" di menu.
       + '<div class="st-pop st-pop-wide st-pop-bank" id="stPop-prompt"></div>'
       + '</div>'
       + '</div>'
+      + '</div>'
+      + '<div class="st-mention-box">'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'

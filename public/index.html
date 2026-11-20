@@ -586,6 +586,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-composer{position:sticky;bottom:0;z-index:30;flex-shrink:0;background:linear-gradient(180deg,rgba(4,7,15,0),#070b14 26%),linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:16px;padding:14px;box-shadow:0 -10px 30px #04070fcc}
 /* D-196: Header Aset ala Google Flow — penanda karakter & gambar referensi */
 /* D-197: header aset disembunyikan saat kosong — hanya muncul bila ada aset aktif */
+/* D-214: baris atas composer = referensi (karakter/gambar) + menu prompt SEBARIS.
+   Supaya composer cuma naik 1 baris, bukan 2x lipat. */
+.st-composer-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;min-width:0}
+.st-composer-top .st-asset-header{flex:1 1 auto;min-width:0;margin-bottom:0}
+.st-composer-top .st-tools-menu-row{flex-shrink:0;margin-bottom:0}
 .st-asset-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:6px 8px;border-radius:12px;background:#0c1422;border:1px solid #24344e}
 .st-asset{display:inline-flex;align-items:center;gap:7px;padding:4px 6px 4px 4px;border-radius:22px;background:#24142a;border:1px solid #49334e;animation:stAssetIn .2s ease}
 @keyframes stAssetIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
@@ -697,10 +702,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-menu-btn.st-on{border-color:#f044a8;color:#fff}
 .st-menu-btn b{color:#fff;font-weight:600}
 .st-menu-btn [data-icon],.st-menu-btn svg{width:13px;height:13px;stroke:#fff;fill:none}
-.st-pop-menu{min-width:210px;max-width:min(80vw,260px);padding:5px}
+.st-pop-menu{min-width:150px;max-width:min(60vw,190px);padding:5px}
 /* Item menu: ikon + judul + keterangan singkat. */
 .st-menu-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;
-  color:#fff;font:inherit;font-size:12.5px;padding:8px 10px;border-radius:8px;cursor:pointer}
+  color:#fff;font:inherit;font-size:12.5px;padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
 .st-menu-item:hover{background:#24142a}
 .st-menu-item [data-icon],.st-menu-item svg{width:15px;height:15px;stroke:#fff;fill:none;flex-shrink:0}
 .st-menu-item span{color:#fff;font-weight:600;white-space:nowrap}
@@ -708,8 +713,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-menu-item:hover small{color:#cfd6e4}
 /* Popover Bank Prompt (dibuka dari item "Prompt") — tetap panel tengah di HP. */
 .st-pop-bank{top:auto}
-@media(max-width:560px){.st-tools-menu-row{gap:6px;margin-bottom:4px}.st-menu-btn{padding:6px 10px;font-size:11px}
-.st-pop-menu{min-width:0;width:min(78vw,240px);max-width:min(78vw,240px)}}
+@media(max-width:560px){.st-tools-menu-row{gap:6px;margin-bottom:0}.st-menu-btn{padding:6px 10px;font-size:11px}
+.st-composer-top{gap:8px;margin-bottom:6px}
+.st-pop-menu{min-width:0;width:auto;max-width:min(60vw,180px)}}
 /* Tombol Prompt ikut bentuk petak seragam (override gaya .st-pill lama). */
 /* D-207: panel CRUD Bank Prompt di Pengaturan. */
 .pb-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
@@ -1644,6 +1650,9 @@ plus:'<path d="M12 5v14M5 12h14"/>',
  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
  x:'<path d="M18 6 6 18M6 6l12 12"/>'
 };
+// D-214: expose ke window — file terpisah (studio.js) memakai `const`
+// di script lain yang tidak terjangkau sebagai properti global.
+window.ICONS = ICONS;
 document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;const paths=ICONS[key];if(paths)el.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>'});
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
