@@ -726,14 +726,9 @@
     const root = $('studioRoot'); if (!root) return;
     loadChain();
     root.innerHTML =
-      // D-200: baris atas — tab Foto/Video + tombol Unggah di sudut kanan.
-      '<div class="st-topbar">'
-      + '<div class="st-tabs">'
-      + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
-      + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
-      + '</div>'
-      + '<button type="button" class="st-upload-btn" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
-      + '</div>'
+      // D-202: judul & deskripsi halaman dihapus; tombol Unggah naik ke sudut kanan
+      // area Studio (diposisikan absolute di luar grid), grid jadi lebih luas.
+      '<button type="button" class="st-upload-btn st-upload-corner" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
       // D-199: area atas = galeri aset (scrollable), komposer menempel di bawah.
       + '<div class="st-stage">'
       + '<div class="st-gallery st-hidden" id="stGallery"></div>'
@@ -749,8 +744,14 @@
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       + '<div class="st-controls">'
-      + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
+      // D-202: pilih jenis konten (Foto/Video) jadi urutan pertama di bawah komposer.
+      + '<div class="st-tabs st-tabs-inline">'
+      + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
+      + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
+      + '</div>'
+      // D-202: urutan — jenis konten (Foto/Video) -> vertikal/horizontal -> durasi -> dll.
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' <b>1:1</b></button><div class="st-pop" id="stPop-aspect"></div></div>'
+      + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
       + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
