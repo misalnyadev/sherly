@@ -891,3 +891,51 @@ test('D-216: petak referensi (karakter & gambar) berbentuk KOTAK', () => {
   // Thumbnail di mention picker juga kotak.
   assert.ok(css.includes('.st-mention-face-box{border-radius:7px}'), 'thumbnail mention harus kotak');
 });
+
+// ===== D-217: outline karakter + kursor composer HP =====
+
+test('D-217: avatar karakter pakai outline (garis luar) sebagai penanda status', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Outline lewat ::after di sekeliling avatar (bukan badge filled).
+  assert.ok(css.includes('.st-asset-char .st-asset-face::after'), 'outline karakter harus ada');
+  const outline = css.match(/\.st-asset-char \.st-asset-face::after\{[^}]*\}/s);
+  assert.ok(outline, 'aturan outline tidak ada');
+  assert.ok(outline[0].includes('inset:-3px'), 'outline harus di luar avatar');
+  assert.ok(outline[0].includes('border:1.5px solid #ff9bdc'), 'outline harus garis pink');
+  assert.ok(outline[0].includes('opacity:0'), 'outline default transparan');
+  // Karakter dengan suara/sheet -> outline tampil.
+  assert.ok(css.includes('.st-asset-char.has-voice .st-asset-face::after,.st-asset-char.has-sheet .st-asset-face::after{opacity:1}'),
+    'outline harus tampil untuk has-voice / has-sheet');
+  // Badge jadi ikon kecil outline (bukan filled circle gelap).
+  const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
+  assert.ok(badge, 'aturan .st-asset-badge tidak ada');
+  assert.ok(badge[0].includes('border:1px solid #ff9bdc'), 'badge harus outline pink');
+  assert.ok(!badge[0].includes('background:#0f1828'), 'badge tidak boleh filled gelap');
+});
+
+test('D-217: markup menandai kelas has-voice / has-sheet', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes("' has-voice'"), 'kelas has-voice harus ada di markup');
+  assert.ok(studio.includes("' has-sheet'"), 'kelas has-sheet harus ada di markup');
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const body = hdr.slice(0, hdr.indexOf('\n  }'));
+  assert.ok(body.includes('has-voice'), 'renderAssetHeader harus menambah kelas has-voice');
+  assert.ok(body.includes('has-sheet'), 'renderAssetHeader harus menambah kelas has-sheet');
+});
+
+test('D-217: kursor composer ikut naik sesuai baris yang diketik', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('const scrollCaretIntoView = () => {'), 'scrollCaretIntoView harus ada');
+  const fn = studio.slice(studio.indexOf('const scrollCaretIntoView'));
+  const body = fn.slice(0, fn.indexOf('\n    };'));
+  // Posisi caret -> baris -> offset.
+  assert.ok(body.includes('ta.selectionStart'), 'harus membaca selectionStart');
+  assert.ok(body.includes('lineHeight'), 'harum mengukur line-height');
+  assert.ok(body.includes('ta.scrollTop'), 'harus mengatur scrollTop');
+  // Dipanggil pada event yang relevan.
+  assert.ok(studio.includes("ta?.addEventListener('keyup'"), 'keyup harus memicu scroll');
+  assert.ok(studio.includes("ta?.addEventListener('click'"), 'click harus memicu scroll');
+  assert.ok(studio.includes("ta?.addEventListener('focus', scrollCaretIntoView)"), 'focus harus memicu scroll');
+  // Tidak boleh pakai variabel global yang tak terdefinisi.
+  assert.ok(!body.includes('win.getComputedStyle'), 'harus pakai window.getComputedStyle');
+});

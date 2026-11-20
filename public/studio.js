@@ -476,8 +476,11 @@
         notes.push('Punya master sheet');
       }
       if (c.role) notes.push(c.role);
+      // D-217: kelas has-voice / has-sheet -> outline pink di sekeliling avatar.
+      const outlineCls = (v.name || v.style) ? ' has-voice' : '';
+      const outlineCls2 = c.board_image_url ? ' has-sheet' : '';
       parts.push(
-        '<span class="st-asset st-asset-char" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
+        '<span class="st-asset st-asset-char' + outlineCls + outlineCls2 + '" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
         + '<span class="st-asset-face">' + characterThumb(c) + '</span>'
         + badges.join('')
         + '<button type="button" class="st-asset-x" data-mention-remove="' + esc(slugify(c.name)) + '" aria-label="Hapus ' + esc(c.name) + '">'
@@ -618,7 +621,8 @@
         const marks = [];
         if (v.name || v.style) marks.push(icon('mic'));
         if (c.board_image_url) marks.push(icon('layers'));
-        return '<button type="button" class="st-mention-item' + on + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
+        const ocls = (v.name || v.style) ? ' has-voice' : (c.board_image_url ? ' has-sheet' : '');
+        return '<button type="button" class="st-mention-item' + on + ocls + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
           + '<span class="st-mention-face st-mention-face-box">' + characterThumb(c) + '</span>'
           + '<span class="st-mention-name">' + esc(it.name) + '</span>'
           + '<span class="st-mention-marks">' + marks.join('') + '</span></button>';
@@ -1494,15 +1498,44 @@
       ta.style.height = next + 'px';
       ta.style.overflowY = ta.scrollHeight > 150 ? 'auto' : 'hidden';
     };
+    /**
+     * D-217: kursor (caret) harus selalu terlihat di baris yang sedang diketik.
+     * Di HP, textarea yang auto-grow + overflow-y:auto sering menyisakan kursor
+     * di luar area view (scroll tidak sinkron). Kita hitung posisi caret lalu
+     * set scrollTop manual supaya baris aktif tetap terlihat.
+     */
+    const scrollCaretIntoView = () => {
+      if (!ta) return;
+      const pos = ta.selectionStart ?? 0;
+      const upto = String(ta.value || '').slice(0, pos);
+      // Baris terakhir sebelum caret.
+      const lineCount = upto.split('\n').length;
+      const cs = window.getComputedStyle ? window.getComputedStyle(ta) : null;
+      const lineHeight = parseFloat(cs?.lineHeight) || 21;
+      const paddingTop = parseFloat(cs?.paddingTop) || 10;
+      const clientH = ta.clientHeight || 44;
+      // Offset caret dari atas content box.
+      const caretTop = paddingTop + (lineCount - 1) * lineHeight;
+      // Kalau caret melewati area bawah -> scroll ke posisi itu.
+      if (caretTop > ta.scrollTop + clientH - lineHeight) {
+        ta.scrollTop = Math.max(0, caretTop - clientH + lineHeight + 4);
+      } else if (caretTop < ta.scrollTop) {
+        ta.scrollTop = Math.max(0, caretTop - 4);
+      }
+    };
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
       autoFit();
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
       // D-216: mention aset gambar -> masuk ke header sebagai referensi.
       syncMentionedAssetRefs();
+      // D-217: kursor naik sesuai baris yang sedang diketik.
+      scrollCaretIntoView();
     });
-    ta?.addEventListener('keyup', syncMentionFromText);
-    ta?.addEventListener('click', syncMentionFromText);
+    ta?.addEventListener('keyup', (e) => { syncMentionFromText(); scrollCaretIntoView(); });
+    ta?.addEventListener('click', () => { syncMentionFromText(); scrollCaretIntoView(); });
+    ta?.addEventListener('focus', scrollCaretIntoView);
+    ta?.addEventListener('select', scrollCaretIntoView);
     ta?.addEventListener('keydown', (e) => {
       if (!mentionOpen) return;
       const list = mentionCandidates();
