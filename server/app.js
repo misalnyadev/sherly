@@ -15,6 +15,14 @@ import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
 import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
 import { parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, sanitizeInlineImage } from './studio-characters.js';
+import {
+  saveAsset, saveGeneratedAsset, listAssets, signedAsset, deleteAsset, getAsset,
+  createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
+} from './studio-assets.js';
+import {
+  generateVideoWithKie, pollKieVideoTask,
+  sanitizeVideoTier, sanitizeVideoDuration, sanitizeVideoResolution, sanitizeVideoAspect,
+} from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -538,7 +546,177 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   }
 });
 
-// D-98: analisis foto wajah -> traits terstruktur (wizard Karakter, langkah 2).
+// ===== D-198: Galeri Aset Studio =====
+// Middleware khusus aset: foto + video, sampai 25 MB (upload umum hanya gambar 8 MB).
+const assetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ASSET_BYTES },
+  fileFilter: (_req, file, cb) => cb(null, ASSET_MIME.includes(String(file.mimetype || '').toLowerCase())),
+}).single('file');
+
+app.get('/api/studio/assets', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const assets = await listAssets(req.supabase, req.user.id);
+    res.json({ assets });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat aset.' });
+  }
+});
+
+app.post('/api/studio/assets', requireUser, requireAdmin, assetUpload, async (req, res) => {
+  try {
+    // D-198: dua jalur — multipart (unggahan user) & JSON base64 (hasil generate).
+    if (req.body && typeof req.body.data === 'string' && req.body.data.length > 8) {
+      const mime = String(req.body.mime || '').toLowerCase();
+      if (!ASSET_MIME.includes(mime)) return res.status(400).json({ ok: false, error: 'Format aset harus JPG, PNG, WebP, GIF, MP4, WebM, atau MOV.' });
+      const asset = await saveGeneratedAsset(req.supabase, req.user.id, {
+        data: req.body.data, mime,
+        prompt: String(req.body.prompt || ''),
+        meta: req.body.meta && typeof req.body.meta === 'object' ? req.body.meta : {},
+        width: Number(req.body.width) || undefined,
+        height: Number(req.body.height) || undefined,
+        durationMs: Number(req.body.durationMs) || undefined,
+      });
+      return res.status(201).json({ asset: await signedAsset(asset, req.supabase) });
+    }
+    const file = req.file;
+    if (!file) return res.status(400).json({ ok: false, error: 'File aset wajib diunggah.' });
+    if (file.size > MAX_ASSET_BYTES) return res.status(400).json({ ok: false, error: 'Ukuran aset melebihi 25 MB.' });
+    if (!ASSET_MIME.includes(String(file.mimetype || '').toLowerCase())) {
+      return res.status(400).json({ ok: false, error: 'Format aset harus JPG, PNG, WebP, GIF, MP4, WebM, atau MOV.' });
+    }
+    const asset = await saveAsset(req.supabase, req.user.id, file, { kind: 'upload' });
+    res.status(201).json({ asset: await signedAsset(asset, req.supabase) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal mengunggah aset.' });
+  }
+});
+
+app.delete('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const result = await deleteAsset(req.supabase, req.user.id, req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menghapus aset.' });
+  }
+});
+
+// ===== D-198: Engine video (Kie / Veo 3.1) =====
+// Pembuatan task & pengecekan status dipisah: maxDuration server 60 dtk < durasi generate video.
+app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const {
+      prompt: rawPrompt, tier: rawTier, aspect: rawAspect, duration: rawDuration,
+      resolution: rawResolution, sceneRef: rawSceneRef, model: rawModel,
+    } = req.body || {};
+    const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
+    if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ ok: false, error: 'Deskripsi video wajib diisi (3-1500 karakter).' });
+    const tier = sanitizeVideoTier(rawTier || rawModel);
+    const aspect = sanitizeVideoAspect(rawAspect);
+    const duration = sanitizeVideoDuration(rawDuration);
+    const resolution = sanitizeVideoResolution(rawResolution);
+
+    // Karakter yang disebut ("@nama") -> potret + master sheet + profil suara.
+    const { data: ownedChars, error: charsErr } = await req.supabase
+      .from('characters').select('id,name,identity_prompt,voice,reference_image_path,board_path')
+      .eq('user_id', req.user.id);
+    if (charsErr) return res.status(400).json({ ok: false, error: charsErr.message });
+    const allCharacters = Array.isArray(ownedChars) ? ownedChars : [];
+    const mentions = parseMentions(prompt, allCharacters);
+    const { images: charImages } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
+    const sceneImage = sanitizeInlineImage(rawSceneRef);
+
+    // Prompt final: deskripsi + blok karakter (identitas & suara) + continuity adegan.
+    const promptBlocks = [prompt];
+    const charBlock = buildCharacterPromptBlock(mentions, allCharacters);
+    if (charBlock) promptBlocks.push(charBlock);
+    if (sceneImage) {
+      promptBlocks.push('## Referensi gambar adegan\nGambar terakhir adegan sebelumnya (referensi continuity): pertahankan lokasi, pencahayaan, wardrobe, warna, dan wajah yang konsisten. Jadikan gambar ini frame pertama adegan.');
+    }
+    promptBlocks.push('Gaya video: sinematik, gerakan kamera halus dan natural, pencahayaan konsisten.');
+    const finalPrompt = promptBlocks.join('\n\n');
+
+    // Maksimal 3 gambar: 1 frame adegan (frame pertama) + 2 potret karakter.
+    const images = sceneImage ? [sceneImage, ...charImages].slice(0, 3) : charImages.slice(0, 3);
+
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    const created = await generateVideoWithKie(finalPrompt, auth, { tier, aspect, duration, resolution, images });
+    const task = await createVideoTask(req.supabase, req.user.id, {
+      provider: created.provider, model: created.model, taskId: created.taskId, prompt,
+      meta: { aspect, duration, resolution },
+    });
+    res.status(202).json({
+      ok: true, id: task.id, task_id: created.taskId, model: created.model,
+      tier, aspect, duration, resolution,
+      characters: mentions.map((m) => ({ name: m.name, token: m.token })),
+    });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 502;
+    res.status(status).json({ ok: false, error: error.message || 'Generator video gagal.' });
+  }
+});
+
+app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const task = await getVideoTask(req.supabase, req.user.id, req.params.id);
+    if (!task) return res.status(404).json({ ok: false, error: 'Task video tidak ditemukan.' });
+    // Sukses: pastikan aset video tersimpan & kembalikan URL-nya.
+    if (task.status === 'success' && task.asset_id) {
+      const asset = await getAsset(req.supabase, req.user.id, task.asset_id);
+      const signed = await signedAsset(asset, req.supabase);
+      return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
+    }
+    if (task.status === 'fail') {
+      return res.json({ ok: true, status: 'fail', progress: task.progress, error: task.error || 'Generator video gagal.' });
+    }
+    // Masih jalan: tanya Kie soal progres.
+    if (!task.task_id) return res.json({ ok: true, status: task.status, progress: task.progress });
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    const info = await pollKieVideoTask(auth, task.task_id);
+    const state = String(info.state || '').toLowerCase();
+    const progress = Math.max(Number(info.progress) || 0, task.progress || 0);
+    if ((state === 'success' || state === 'completed') && info.resultUrls.length) {
+      // Unduh video -> simpan sebagai aset -> tautkan ke task.
+      const videoRes = await fetch(info.resultUrls[0], { signal: AbortSignal.timeout(120000) });
+      if (!videoRes.ok) throw new Error('Gagal mengunduh hasil video (' + videoRes.status + ').');
+      const buffer = Buffer.from(await videoRes.arrayBuffer());
+      const mime = (videoRes.headers.get('content-type') || 'video/mp4').split(';')[0];
+      const taskMeta = task.meta && typeof task.meta === 'object' ? task.meta : {};
+      const durationSec = Number(taskMeta.duration) || 8;
+      const asset = await saveAsset(req.supabase, req.user.id, {
+        buffer, mimetype: ASSET_MIME.includes(mime) ? mime : 'video/mp4',
+        originalname: 'studio-video-' + Date.now() + '.mp4',
+      }, {
+        kind: 'generate', prompt: task.prompt,
+        meta: { model: task.model, aspect: taskMeta.aspect || '16:9', duration_ms: durationSec * 1000 },
+        durationMs: durationSec * 1000,
+      });
+      await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'success', progress: 100, asset_id: asset.id });
+      const signed = await signedAsset(asset, req.supabase);
+      return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
+    }
+    if (state === 'fail' || state === 'failed' || state === 'error') {
+      const message = info.error || 'Generator video gagal.';
+      await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
+      return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
+    }
+    await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'running', progress });
+    return res.json({ ok: true, status: 'running', progress });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 502;
+    res.status(status).json({ ok: false, error: error.message || 'Gagal mengecek status video.' });
+  }
+});
+
+app.get('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const tasks = await listVideoTasks(req.supabase, req.user.id, 10);
+    res.json({ tasks });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat task video.' });
+  }
+});
+
 app.post('/api/ai/vision', requireUser, requireAdmin, async (req, res) => {
   try {
     const { image, provider: rawProvider } = req.body || {};

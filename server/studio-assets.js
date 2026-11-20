@@ -1,0 +1,207 @@
+// ===== D-198: Galeri Aset Studio + Engine Video =====
+//
+// Semua media Studio (hasil generate foto/video maupun hasil upload) disimpan
+// sebagai ASET di bucket "studio-assets" + tabel public.assets.
+// Galeri grid di atas komposer menampilkan daftar aset tersebut; aset bisa
+// dipakai ulang sebagai referensi, diunduh, di-preview, atau dikirim ke Editor Video.
+//
+// Video generation berjalan sebagai TASK (tabel public.sherly_video_tasks)
+// karena batas maxDuration server (60 dtk) lebih pendek dari durasi generate video.
+
+export const STUDIO_BUCKET = 'studio-assets';
+
+/** Batas ukuran upload aset (25 MB). */
+export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+
+/** MIME yang diizinkan untuk aset (foto + video). */
+export const ASSET_MIME = [
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+];
+
+/** Turunkan jenis media dari mime. */
+export function mediaKind(mime) {
+  return /^video\//i.test(String(mime || '')) ? 'video' : 'image';
+}
+
+/** Sanitasi nama file agar aman untuk path Storage. */
+export function safeFileName(name) {
+  const base = String(name || 'aset')
+    .replace(/\.[a-z0-9]{1,5}$/i, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'aset';
+  return base;
+}
+
+/** Ekstensi file untuk mime. */
+export function extForMime(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m === 'image/png') return 'png';
+  if (m === 'image/jpeg') return 'jpg';
+  if (m === 'image/webp') return 'webp';
+  if (m === 'image/gif') return 'gif';
+  if (m === 'video/mp4') return 'mp4';
+  if (m === 'video/webm') return 'webm';
+  if (m === 'video/quicktime') return 'mov';
+  return 'bin';
+}
+
+/**
+ * Simpan satu aset ke Storage + tabel public.assets.
+ * file: { buffer, mimetype, originalname }
+ */
+export async function saveAsset(supabase, userId, file, opts = {}) {
+  if (!file || !file.buffer || !file.buffer.length) {
+    throw Object.assign(new Error('File aset kosong.'), { status: 400 });
+  }
+  const mime = String(file.mimetype || 'application/octet-stream').toLowerCase();
+  if (!ASSET_MIME.includes(mime)) {
+    throw Object.assign(new Error('Format aset harus JPG, PNG, WebP, GIF, MP4, WebM, atau MOV.'), { status: 400 });
+  }
+  if (file.buffer.length > MAX_ASSET_BYTES) {
+    throw Object.assign(new Error('Ukuran aset melebihi 25 MB.'), { status: 400 });
+  }
+  const kind = mediaKind(mime);
+  const ext = extForMime(mime);
+  const name = safeFileName(file.originalname);
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${name}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(STUDIO_BUCKET).upload(path, file.buffer, {
+    contentType: mime, upsert: false,
+  });
+  if (upErr) throw Object.assign(new Error('Gagal menyimpan aset: ' + upErr.message), { status: 500 });
+  const meta = opts.meta && typeof opts.meta === 'object' ? opts.meta : {};
+  const row = {
+    user_id: userId,
+    file_path: path,
+    file_name: String(file.originalname || name + '.' + ext).slice(0, 200),
+    media_type: kind,
+    alt_text: String(opts.altText || opts.prompt || '').slice(0, 400),
+    kind: opts.kind === 'generate' ? 'generate' : 'upload',
+    prompt: String(opts.prompt || '').slice(0, 2000),
+    meta,
+    width: Number.isFinite(opts.width) ? opts.width : null,
+    height: Number.isFinite(opts.height) ? opts.height : null,
+    duration_ms: Number.isFinite(opts.durationMs) ? Math.round(opts.durationMs) : null,
+  };
+  const { data, error } = await supabase.from('assets').insert(row).select('*').single();
+  if (error) {
+    await supabase.storage.from(STUDIO_BUCKET).remove([path]).catch(() => {});
+    throw Object.assign(new Error('Gagal mencatat aset: ' + error.message), { status: 500 });
+  }
+  return data;
+}
+
+/**
+ * Simpan aset hasil generate (bukan upload) — sumbernya base64 dari model.
+ * data: base64 string, mime: string
+ */
+export async function saveGeneratedAsset(supabase, userId, { data, mime, prompt, meta, width, height, durationMs, fileName }) {
+  if (typeof data !== 'string' || data.length < 8) {
+    throw Object.assign(new Error('Data aset hasil generate kosong.'), { status: 400 });
+  }
+  const cleanMime = ASSET_MIME.includes(mime) ? mime : 'image/png';
+  const buffer = Buffer.from(data, 'base64');
+  return saveAsset(supabase, userId, {
+    buffer,
+    mimetype: cleanMime,
+    originalname: fileName || ('studio-' + Date.now() + '.' + extForMime(cleanMime)),
+  }, { kind: 'generate', prompt, meta, width, height, durationMs });
+}
+
+/** Daftar aset milik user (terbaru dulu) + signed URL. */
+export async function listAssets(supabase, userId) {
+  const { data, error } = await supabase
+    .from('assets').select('*').eq('user_id', userId)
+    .order('created_at', { ascending: false }).limit(200);
+  if (error) throw Object.assign(new Error(error.message), { status: 400 });
+  const rows = Array.isArray(data) ? data : [];
+  return Promise.all(rows.map((a) => signedAsset(a, supabase)));
+}
+
+/** Satu aset + signed URL (1 jam). */
+export async function signedAsset(asset, supabase) {
+  if (!asset) return null;
+  const out = {
+    id: asset.id,
+    file_name: asset.file_name,
+    media_type: asset.media_type,
+    kind: asset.kind || 'upload',
+    prompt: asset.prompt || '',
+    meta: asset.meta || {},
+    width: asset.width || null,
+    height: asset.height || null,
+    duration_ms: asset.duration_ms || null,
+    created_at: asset.created_at,
+    url: null,
+  };
+  if (asset.file_path) {
+    try {
+      const { data } = await supabase.storage.from(STUDIO_BUCKET).createSignedUrl(asset.file_path, 3600);
+      out.url = data?.signedUrl || null;
+    } catch { /* signed URL gagal -> aset tetap dikembalikan tanpa url */ }
+  }
+  return out;
+}
+
+/** Hapus aset milik user (baris + file Storage). */
+export async function deleteAsset(supabase, userId, id) {
+  const { data: row } = await supabase.from('assets').select('*').eq('id', id).maybeSingle();
+  if (!row) throw Object.assign(new Error('Aset tidak ditemukan.'), { status: 404 });
+  if (row.user_id !== userId) throw Object.assign(new Error('Aset tidak ditemukan.'), { status: 404 });
+  await supabase.from('assets').delete().eq('id', id).eq('user_id', userId);
+  if (row.file_path) await supabase.storage.from(STUDIO_BUCKET).remove([row.file_path]).catch(() => {});
+  return { ok: true };
+}
+
+/** Ambil satu aset milik user (untuk dipakai ulang sebagai referensi). */
+export async function getAsset(supabase, userId, id) {
+  const { data: row } = await supabase.from('assets').select('*').eq('id', id).maybeSingle();
+  if (!row || row.user_id !== userId) return null;
+  return row;
+}
+
+// ===== Task video =====
+
+/** Buat baris task video baru. */
+export async function createVideoTask(supabase, userId, patch = {}) {
+  const row = {
+    user_id: userId,
+    provider: String(patch.provider || 'kie'),
+    model: String(patch.model || 'veo3_fast'),
+    status: 'queued',
+    progress: 0,
+    prompt: String(patch.prompt || '').slice(0, 2000),
+    task_id: patch.taskId ? String(patch.taskId) : null,
+    meta: patch.meta && typeof patch.meta === 'object' ? patch.meta : {},
+  };
+  const { data, error } = await supabase.from('sherly_video_tasks').insert(row).select('*').single();
+  if (error) throw Object.assign(new Error(error.message), { status: 500 });
+  return data;
+}
+
+/** Update status/progres task (pemilik saja). */
+export async function updateVideoTask(supabase, userId, id, patch = {}) {
+  const allowed = ['status', 'progress', 'task_id', 'asset_id', 'error'];
+  const clean = {};
+  for (const k of allowed) if (k in patch) clean[k] = patch[k];
+  clean.updated_at = new Date().toISOString();
+  const { data, error } = await supabase.from('sherly_video_tasks')
+    .update(clean).eq('id', id).eq('user_id', userId).select('*').single();
+  if (error) throw Object.assign(new Error(error.message), { status: 400 });
+  return data;
+}
+
+/** Ambil task milik user. */
+export async function getVideoTask(supabase, userId, id) {
+  const { data } = await supabase.from('sherly_video_tasks').select('*').eq('id', id).maybeSingle();
+  if (!data || data.user_id !== userId) return null;
+  return data;
+}
+
+/** Daftar task video milik user (terbaru dulu). */
+export async function listVideoTasks(supabase, userId, limit = 10) {
+  const { data } = await supabase.from('sherly_video_tasks')
+    .select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
+  return Array.isArray(data) ? data : [];
+}

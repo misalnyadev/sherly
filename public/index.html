@@ -650,6 +650,48 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-suggest button{padding:8px 14px;border-radius:30px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;font:inherit;font-size:11.5px;cursor:pointer;transition:border-color .18s,color .18s}
 .st-suggest button:hover{border-color:#49334e;color:#ffd0ec}
 .st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#111a2e 30%,#1c2b40 50%,#111a2e 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
+
+/* ===== D-198: Galeri Aset Studio (flat grid di atas komposer) ===== */
+.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:0 0 14px}
+.st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:12px;background:#101b2c;overflow:hidden;cursor:pointer;aspect-ratio:1/1;transition:border-color .18s,box-shadow .18s}
+.st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
+.st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
+.st-gal-thumb img,.st-gal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.st-gal-empty{width:100%;height:100%;display:grid;place-items:center}
+.st-gal-empty svg{width:20px;height:20px;stroke:#49334e}
+.st-gal-badge{position:absolute;left:4px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:8px;background:#04070fcc;color:#ffd0ec;font-size:9.5px}
+.st-gal-badge svg{width:9px;height:9px;stroke:currentColor}
+.st-gal-kind{position:absolute;right:4px;top:4px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:#04070fcc}
+.st-gal-kind svg{width:9px;height:9px;stroke:#ffd0ec}
+.st-upload-btn{height:38px;padding:0 12px;border-radius:10px;border:1px dashed #49334e;background:transparent;color:#cfd6e4;font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .18s,color .18s}
+.st-upload-btn:hover{border-color:#f044a8;color:#ffd0ec}
+.st-upload-btn svg{width:14px;height:14px;stroke:#ff72c5}
+
+/* ===== D-198: Lightbox preview aset ===== */
+.st-lightbox{position:fixed;inset:0;z-index:120;display:none}
+.st-lightbox.open{display:block}
+.st-lb-backdrop{position:absolute;inset:0;background:#04070fe0;backdrop-filter:blur(6px)}
+.st-lb-panel{position:relative;margin:4vh auto;max-width:min(860px,92vw);max-height:92vh;display:flex;flex-direction:column;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:18px;overflow:hidden;box-shadow:0 30px 90px #000c}
+.st-lb-head{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.st-lb-head b{display:block;color:#fff;font-size:13.5px;font-weight:600;word-break:break-all}
+.st-lb-head span{font-size:11px;color:var(--muted)}
+.st-lb-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:#cfd6e4;cursor:pointer;display:grid;place-items:center;margin-left:auto;flex:none;transition:.18s}
+.st-lb-x:hover{border-color:#f044a8;color:#ff9bdc}
+.st-lb-x svg{width:13px;height:13px}
+.st-lb-body{overflow:auto;background:#070b14;display:grid;place-items:center}
+.st-lb-media{max-width:100%;max-height:56vh;display:block}
+.st-lb-prompt{margin:0;padding:11px 15px;font-size:11.5px;color:#cfd6e4;line-height:1.6;border-top:1px solid var(--line)}
+.st-lb-actions{display:flex;gap:8px;padding:12px 15px;border-top:1px solid var(--line);flex-wrap:wrap}
+.st-lb-actions .st-act{flex:0 1 auto;min-width:96px}
+
+/* ===== D-198: Progress video ===== */
+.st-video-progress{margin-top:12px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:11px 13px}
+.st-vp-bar{height:6px;border-radius:6px;background:#1c2b40;overflow:hidden}
+.st-vp-bar span{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#f044a8,#ff72c5);transition:width .4s}
+.st-video-progress p{display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:11.5px;color:#cfd6e4}
+.st-video-progress p svg{width:14px;height:14px;stroke:#ff72c5}
+.st-vp-cancel{margin-left:auto;padding:4px 10px;border-radius:8px;border:1px solid #24344e;background:transparent;color:var(--muted);font:inherit;font-size:10.5px;cursor:pointer}
+.st-vp-cancel:hover{border-color:#f044a8;color:#ff9bdc}
 @keyframes stShimmer{to{background-position:-200% 0}}
 @media(max-width:560px){.st-composer{padding:14px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pl-actions{display:flex;gap:6px}
