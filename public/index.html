@@ -568,13 +568,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-202: judul & deskripsi halaman dihapus -> grid lebih luas.
    Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28).
    Composer turun lebih rendah (tempel di dasar area), jadi grid dapat ruang lebih. */
-/* D-205: komposer HARUS menempel di dasar viewport.
+/* D-205/D-206: komposer turun ke bawah, tapi jangan nempel di batas layar.
    Jarak atas content = padding atas main 18 + topbar ~44 + margin 17 = 79px.
-   Tinggi view = 100vh - 79px -> dasar view tepat di y = 100vh, composer menempel bawah.
+   D-206: tinggi 100vh - 91px -> dasar view di y = 100vh - 12px, ada ruang napas
+   12px di bawah composer (tidak menempel tepi layar).
    Padding bawah main (28px) dikompensasi margin-bottom -28px supaya tak ada celah bawah
    DAN komposer tak terpotong. D-202/D-203 sebelumnya salah: margin negatif +
    tinggi 100vh-96px membuat komposer justru terangkat ~45px dari bawah. */
-#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 79px);min-height:420px;padding:0;margin-bottom:-28px}
+#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 91px);min-height:420px;padding:0;margin-bottom:-28px}
 #studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:0}
 .st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
