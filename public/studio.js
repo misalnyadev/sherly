@@ -889,6 +889,34 @@
   }
 
   /**
+   * D-212: Reset — bersihkan komposer dari prompt.
+   * Mengosongkan isi textarea, melepas blok prompt yang dipilih, dan
+   * menutup daftar '@mention'. Rantai adegan & aset TIDAK ikut terhapus
+   * (itu bukan bagian dari prompt).
+   */
+  function resetPromptComposer() {
+    const ta = $('stPrompt');
+    const hadText = !!(ta?.value || '').trim();
+    const hadBlocks = selectedBlocks.length > 0;
+    if (ta) ta.value = '';
+    selectedBlocks = [];
+    closeMention();
+    // Tutup jendela pilih prompt kalau sedang terbuka.
+    const pop = $('stPop-prompt');
+    if (pop) pop.classList.remove('open', 'st-pop-center');
+    popOpen = null;
+    syncBackdrop(null);
+    updatePillLabels();
+    try {
+      if (hadText || hadBlocks) {
+        window.toast?.('Komposer dibersihkan dari prompt.');
+      } else {
+        window.toast?.('Komposer sudah kosong.');
+      }
+    } catch (e) { /* toast tidak tersedia — abaikan */ }
+  }
+
+  /**
    * Salin SEMUA isi prompt (isi komposer + blok terpilih + keterangan rasio)
    * ke clipboard — untuk generate di luar aplikasi.
    */
@@ -1152,11 +1180,14 @@
       // D-210: baris judul prompt DI ATAS kotak composer.
       // D-211: label "Deskripsi konten yang kamu mau" dihapus — bikin teks turun
       // 5 baris di HP. Sisanya tombol Prompt / Optimalkan / Copy rata kanan.
+      // D-212: tombol Reset ditambah di depan; semua 4 tombol seragam bentuk petak
+      // dengan icon + tulisan putih. Urutan: Reset - Prompt - Optimalkan - Copy.
       + '<div class="st-prompt-head">'
       + '<div class="st-prompt-tools">'
-      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill st-tool-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
-      + '<button type="button" class="st-tool-btn" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
-      + '<button type="button" class="st-tool-btn" id="stCopyPromptBtn" title="Salin semua isi prompt untuk generate di luar aplikasi">' + icon('copy') + ' Copy</button>'
+      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stResetPromptBtn" title="Bersihkan komposer dari prompt">' + icon('rotate-ccw') + ' Reset</button>'
+      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-tool-btn st-tool-btn-box st-tool-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
+      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
+      + '<button type="button" class="st-tool-btn st-tool-btn-box" id="stCopyPromptBtn" title="Salin semua isi prompt untuk generate di luar aplikasi">' + icon('copy') + ' Copy</button>'
       + '</div>'
       + '</div>'
       + '<div class="st-pop-backdrop st-hidden" id="stPopBackdrop"></div>'
@@ -1209,6 +1240,8 @@
     // D-208: aksi prompt di komposer.
     $('stOptimizeBtn')?.addEventListener('click', optimizeComposedPrompt);
     $('stCopyPromptBtn')?.addEventListener('click', copyComposedPrompt);
+    // D-212: tombol Reset — bersihkan komposer dari prompt.
+    $('stResetPromptBtn')?.addEventListener('click', resetPromptComposer);
     // D-210: tap backdrop menutup jendela prompt tengah.
     $('stPopBackdrop')?.addEventListener('click', () => {
       const el = $('stPop-prompt');

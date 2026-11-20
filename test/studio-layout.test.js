@@ -234,13 +234,17 @@ test('D-210: baris judul prompt di atas kotak composer, tombol urut Prompt - Opt
     const b = c.querySelector('button') || c;
     return b.id || '';
   });
+  const iReset = ids.indexOf('stResetPromptBtn');
   const iPrompt = ids.indexOf('stPromptPill');
   const iOpt = ids.indexOf('stOptimizeBtn');
   const iCopy = ids.indexOf('stCopyPromptBtn');
+  assert.ok(iReset > -1, 'tombol Reset bukan di baris judul');
   assert.ok(iPrompt > -1, 'tombol Prompt bukan di baris judul');
   assert.ok(iOpt > -1, 'tombol Optimalkan bukan di baris judul');
   assert.ok(iCopy > -1, 'tombol Copy bukan di baris judul');
-  assert.ok(iPrompt < iOpt && iOpt < iCopy, 'urutan tombol harus Prompt - Optimalkan - Copy');
+  // D-212: urutan Reset - Prompt - Optimalkan - Copy.
+  assert.ok(iReset < iPrompt && iPrompt < iOpt && iOpt < iCopy,
+    'urutan tombol harus Reset - Prompt - Optimalkan - Copy');
   // Textarea tetap di bawah baris judul (baris judul mendahului kotak composer).
   const ta = doc.getElementById('stPrompt');
   const boxEl = ta.closest('.st-mention-box');
@@ -589,7 +593,7 @@ test('D-211: baris aksi prompt tanpa label — tombol rata kanan, layout HP teta
   assert.equal(kids.length, 1, 'baris aksi harus satu blok tombol');
   const tools = kids[0];
   assert.ok(tools.classList.contains('st-prompt-tools'), 'harus blok .st-prompt-tools');
-  assert.equal(tools.children.length, 3, 'harus 3 tombol: Prompt, Optimalkan, Copy');
+  assert.equal(tools.children.length, 4, 'harus 4 tombol: Reset, Prompt, Optimalkan, Copy');
   // CSS: rata kanan (justify-content:flex-end) & tidak column di HP.
   const css = readFileSync('public/index.html', 'utf8');
   const rule = css.match(/\.st-prompt-head\{[^}]*\}/);
@@ -600,4 +604,67 @@ test('D-211: baris aksi prompt tanpa label — tombol rata kanan, layout HP teta
   assert.ok(mq, 'aturan mobile .st-prompt-head tidak ada');
   assert.ok(!mq[0].includes('flex-direction:column'), 'baris aksi jangan vertikal di HP');
   assert.ok(mq[0].includes('justify-content:flex-end'), 'tombol harus rata kanan di HP');
+});
+
+// ===== D-212: 4 tombol aksi prompt seragam petak, warna putih, + tombol Reset =====
+
+test('D-212: 4 tombol aksi prompt seragam bentuk petak (class st-tool-btn-box)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const tools = doc.querySelector('.st-prompt-tools');
+  const buttons = [...tools.querySelectorAll('button')];
+  assert.equal(buttons.length, 4, 'harus ada 4 tombol aksi prompt');
+  for (const b of buttons) {
+    assert.ok(b.classList.contains('st-tool-btn-box'), 'tombol ' + b.id + ' harus pakai .st-tool-btn-box');
+  }
+  // Tiap tombol punya ikon + tulisan.
+  for (const b of buttons) {
+    assert.ok(b.querySelector('svg'), 'tombol ' + b.id + ' harus punya ikon');
+    assert.ok(b.textContent.trim().length > 0, 'tombol ' + b.id + ' harus punya tulisan');
+  }
+});
+
+test('D-212: CSS tombol petak — border-radius sama & icon/tulisan putih', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-tool-btn-box\{[^}]*\}/);
+  assert.ok(rule, 'aturan .st-tool-btn-box tidak ada');
+  assert.ok(rule[0].includes('border-radius:10px'), 'bentuk tombol harus petak (border-radius)');
+  // Tulisan putih pada tombol petak (cek di aturan .st-tool-btn-box maupun turunannya).
+  const whiteText = /\.st-tool-btn-box[^{]*\{[^}]*color:#fff/.test(css);
+  assert.ok(whiteText, 'tulisan tombol harus putih');
+  // Ikon putih (stroke) & ikut saat hover.
+  const iconRule = css.match(/\.st-tool-btn-box \[data-icon\][^{]*\{[^}]*stroke:#fff[^}]*\}/);
+  assert.ok(iconRule, 'ikon tombol harus stroke:#fff');
+  const hoverIcon = css.match(/\.st-tool-btn-box:hover:not\(:disabled\) \[data-icon\][^{]*\{[^}]*stroke:#fff[^}]*\}/);
+  assert.ok(hoverIcon, 'ikon tombol harus tetap putih saat hover');
+  // Tulisan bold putih.
+  assert.ok(css.includes('.st-tool-btn-box b{color:#fff'), 'tulisan <b> di tombol harus putih');
+});
+
+test('D-212: tombol Reset membersihkan komposer dari prompt', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'promo kopi susu untuk anak muda';
+  const btn = doc.getElementById('stResetPromptBtn');
+  assert.ok(btn, 'tombol Reset tidak ada');
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.equal(ta.value, '', 'Reset harus mengosongkan isi prompt');
+  // Label pill kembali ke "Prompt" (blok terpilih dilepas).
+  assert.equal(doc.querySelector('#stPromptPill b').textContent.trim(), 'Prompt',
+    'label pill harus kembali ke Prompt setelah Reset');
+});
+
+test('D-212: Reset menutup jendela pilih prompt yang sedang terbuka', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  assert.ok(pop.classList.contains('open'), 'jendela prompt tidak terbuka');
+  doc.getElementById('stResetPromptBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.ok(!pop.classList.contains('open'), 'Reset harus menutup jendela prompt');
 });
