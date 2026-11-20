@@ -161,6 +161,11 @@
   let mentionAt = -1;       // posisi karakter "@" yang memicu dropdown
   let videoTask = null;     // D-198: task video yang sedang berjalan
   let videoTimer = null;
+  // D-207: Bank Prompt — template utuh + blok modular.
+  let promptBank = [];          // entri dari server (template & block)
+  let promptBankLoaded = false;
+  let selectedBlocks = [];      // id blok yang sudah dipilih user (ditumpuk di prompt)
+  let promptBankTab = 'template'; // tab aktif di popover bank prompt
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
@@ -535,14 +540,6 @@
     });
   }
 
-  function composedPrompt(raw) {
-    let p = raw;
-    const st = STYLES[state.style];
-    if (st && st.suffix) p += '\n\nGaya visual: ' + st.suffix + '.';
-    p += '\n(Komposisi gambar dengan rasio aspek ' + state.aspect + '.)';
-    return p;
-  }
-
   function aspectLabel() { const a = ASPECTS.find((x) => x[0] === state.aspect); return a ? a[0] : state.aspect; }
   function styleLabel() { return (STYLES[state.style] || STYLES.free).label; }
 
@@ -595,6 +592,13 @@
     // D-205: ikon rasio ikut pilihan — vertikal (smartphone) / horizontal (monitor).
     const ap = $('stAspectPill');
     if (ap) setIcon(ap, isVerticalAspect(state.aspect) ? 'smartphone' : 'monitor');
+    // D-207: label pill Bank Prompt menampilkan jumlah blok aktif.
+    const pp = $('stPromptPill');
+    if (pp) {
+      const b = pp.querySelector('b');
+      if (b) b.textContent = promptBankLabel();
+      pp.classList.toggle('st-on', selectedBlocks.length > 0);
+    }
     const im = imageModel();
     const imp = $('stImgModelPill'); if (imp) imp.querySelector('b').textContent = im ? im.label : 'Model';
     const tierLabel = tierOptions().find((x) => x[0] === state.tier);
@@ -603,7 +607,7 @@
   }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -700,6 +704,180 @@
       }
       updatePillLabels();
       el.classList.remove('open'); popOpen = null;
+    }));
+  }
+
+  // ===== D-207: Bank Prompt (template utuh + blok modular) =====
+
+  // Urutan kategori saat blok dirakit menjadi satu prompt.
+  // Mengikuti urutan fokal hasil riset: kamera (sudut pandang) -> cahaya (realisme)
+  // -> gaya -> tekstur -> color -> kualitas -> negative (penjaga, selalu akhir).
+  const PROMPT_CATEGORY_ORDER = ['kamera', 'cahaya', 'gaya', 'tekstur', 'color', 'kualitas', 'negative', 'umum'];
+  const PROMPT_CATEGORY_LABEL = {
+    kamera: 'Kamera & Angle', cahaya: 'Cahaya & Mood', gaya: 'Gaya Visual',
+    tekstur: 'Tekstur & Detail', color: 'Color & Tone', kualitas: 'Kualitas & Realisme',
+    negative: 'Negative Prompt', umum: 'Umum',
+  };
+
+  /** Ambil entri bank prompt dari server (sekali saja, disimpan di cache). */
+  async function loadPromptBank(force) {
+    if (promptBankLoaded && !force) return promptBank;
+    try {
+      const r = await fetch('/api/prompt-bank', { headers: await authHeaders() });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Gagal memuat bank prompt.');
+      promptBank = Array.isArray(d.entries) ? d.entries : [];
+      promptBankLoaded = true;
+    } catch (e) {
+      promptBankLoaded = false;
+      window.toast?.('Bank prompt gagal dimuat: ' + (e.message || 'cek koneksi.'));
+    }
+    return promptBank;
+  }
+
+  /** Entri bank prompt yang aktif saja (is_active tidak false). */
+  function activeBankEntries(kind) {
+    return promptBank.filter((e) => e.kind === kind && e.is_active !== false);
+  }
+
+  /** Isi placeholder { ... } pada template. */
+  function fillSlots(content, values) {
+    const missing = [];
+    const text = String(content || '').replace(/\{([a-z0-9_ -]{1,40})\}/gi, (_m, key) => {
+      const k = key.trim().toLowerCase();
+      const v = String((values || {})[k] ?? '').trim();
+      if (!v) { missing.push(k); return '[' + k + ']'; }
+      return v;
+    });
+    return { text, missing };
+  }
+
+  /**
+   * Terapkan sebuah template ke komposer.
+   * Kalau template punya placeholder, buka dialog kecil agar user mengisinya.
+   */
+  function applyTemplate(entry) {
+    const ta = $('stPrompt'); if (!ta) return;
+    const slots = Array.isArray(entry.slots) ? entry.slots : [];
+    if (!slots.length) {
+      // Template utuh: isi komposer (append kalau sudah ada isi).
+      const cur = ta.value.trim();
+      ta.value = cur ? cur + '\n\n' + entry.content : entry.content;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      window.toast?.('Template "' + entry.label + '" ditambahkan ke prompt.');
+      return;
+    }
+    // Template ber-placeholder: minta isian dulu.
+    const names = slots.join(', ');
+    const answer = window.prompt('Isi bagian untuk "' + entry.label + '" (' + names + '):');
+    if (answer === null) return;
+    const values = {};
+    // Jawaban tunggal -> isi slot pertama; multi baris -> satu per slot.
+    const lines = answer.split('\n');
+    slots.forEach((s, i) => { values[s] = (lines[i] ?? lines[0] ?? '').trim(); });
+    const filled = fillSlots(entry.content, values);
+    const cur = ta.value.trim();
+    ta.value = cur ? cur + '\n\n' + filled.text : filled.text;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    window.toast?.(filled.missing.length
+      ? 'Template "' + entry.label + '" ditambahkan — belum diisi: ' + filled.missing.join(', ')
+      : 'Template "' + entry.label + '" ditambahkan ke prompt.');
+  }
+
+  /** Tambah/hapus sebuah blok dari prompt yang dirakit. */
+  function toggleBlock(entry) {
+    const idx = selectedBlocks.findIndex((b) => b.id === entry.id);
+    if (idx > -1) selectedBlocks.splice(idx, 1);
+    else selectedBlocks.push(entry);
+    updatePillLabels();
+    // Bangun ulang isi popover (bukan buildPop generik) supaya tab & daftar blok tetap ada.
+    buildPromptPop();
+  }
+
+  /**
+   * Susun prompt akhir: isi komposer + blok terpilih (urutan kategori),
+   * lalu gaya visual + rasio aspek seperti sebelumnya.
+   */
+  function composedPrompt(raw) {
+    let p = String(raw || '').trim();
+    const byCat = new Map();
+    for (const b of selectedBlocks) {
+      const cat = PROMPT_CATEGORY_ORDER.includes(b.category) ? b.category : 'umum';
+      const text = String(b.content || '').trim();
+      if (!text) continue;
+      if (!byCat.has(cat)) byCat.set(cat, []);
+      byCat.get(cat).push(text);
+    }
+    const parts = [];
+    if (p) parts.push(p);
+    for (const cat of PROMPT_CATEGORY_ORDER) {
+      const list = byCat.get(cat);
+      if (list && list.length) parts.push(list.join(' '));
+    }
+    let out = parts.join('\n\n');
+    const st = STYLES[state.style];
+    if (st && st.suffix) out += '\n\nGaya visual: ' + st.suffix + '.';
+    out += '\n(Komposisi gambar dengan rasio aspek ' + state.aspect + '.)';
+    return out;
+  }
+
+  /** Label ringkas untuk pill Bank Prompt. */
+  function promptBankLabel() {
+    if (selectedBlocks.length) return selectedBlocks.length + ' blok';
+    return 'Prompt';
+  }
+
+  /** Isi konten popover Bank Prompt (2 tab: Template | Blok). */
+  function buildPromptPop() {
+    const el = $('stPop-prompt'); if (!el) return;
+    const templates = activeBankEntries('template');
+    const blocks = activeBankEntries('block');
+    const tabs = '<div class="st-pb-tabs">'
+      + '<button type="button" class="st-pb-tab' + (promptBankTab === 'template' ? ' on' : '') + '" data-pb-tab="template">Template</button>'
+      + '<button type="button" class="st-pb-tab' + (promptBankTab === 'block' ? ' on' : '') + '" data-pb-tab="block">Blok</button>'
+      + '</div>';
+
+    let body = '';
+    if (promptBankTab === 'template') {
+      body = templates.length ? templates.map((t) => {
+        const slots = Array.isArray(t.slots) ? t.slots : [];
+        return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
+          + '<span class="st-pop-model">' + esc(t.label)
+          + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.category) + '</small>')
+          + '</span></button>';
+      }).join('') : '<p class="st-pb-empty">Belum ada template. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
+    } else {
+      // Blok dikelompokkan per kategori, sesuai urutan susun prompt.
+      body = PROMPT_CATEGORY_ORDER.map((cat) => {
+        const list = blocks.filter((b) => (b.category || 'umum') === cat);
+        if (!list.length) return '';
+        return '<div class="st-pb-group"><b>' + esc(PROMPT_CATEGORY_LABEL[cat] || cat) + '</b>'
+          + list.map((b) => {
+            const on = selectedBlocks.some((s) => s.id === b.id);
+            return '<button type="button" class="st-pb-item' + (on ? ' on' : '') + '" data-pb-block="' + esc(b.id) + '">'
+              + '<span class="st-pop-model">' + esc(b.label) + '<small>' + esc(b.content.slice(0, 70)) + (b.content.length > 70 ? '…' : '') + '</small></span></button>';
+          }).join('') + '</div>';
+      }).join('');
+      if (!body) body = '<p class="st-pb-empty">Belum ada blok. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
+    }
+
+    el.innerHTML = tabs + '<div class="st-pb-body">' + body + '</div>';
+
+    el.querySelectorAll('[data-pb-tab]').forEach((t) => t.addEventListener('click', (e) => {
+      e.stopPropagation();
+      promptBankTab = t.dataset.pbTab;
+      buildPromptPop();
+    }));
+    el.querySelectorAll('[data-pb-template]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const entry = templates.find((t) => t.id === b.dataset.pbTemplate);
+      if (entry) applyTemplate(entry);
+      el.classList.remove('open'); popOpen = null;
+    }));
+    el.querySelectorAll('[data-pb-block]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const entry = blocks.find((t) => t.id === b.dataset.pbBlock);
+      if (entry) toggleBlock(entry);
     }));
   }
 
@@ -861,6 +1039,8 @@
       + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
       // Gaya — urutan kelima.
       + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
+      // D-207: Bank Prompt — template utuh + blok modular (urutan keenam).
+      + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
@@ -890,6 +1070,12 @@
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
+    // D-207: Bank Prompt — muat daftar entri lalu buka popover.
+    $('stPromptPill')?.addEventListener('click', async () => {
+      await loadPromptBank();
+      buildPromptPop();
+      togglePop('prompt');
+    });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
     // D-203: pill jenis konten (satu kotak) & pill model gambar.

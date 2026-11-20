@@ -15,7 +15,8 @@ function buildStudio(fetchImpl) {
   win.sherlyStoredToken = () => null;
   win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const doc = win.document;
-  doc.body.innerHTML = '<div id="studioRoot"></div>';
+  // #toast dipakai modul Studio untuk pesan; tanpa itu generate() melempar.
+  doc.body.innerHTML = '<div id="studioRoot"></div><div id="toast"></div>';
   const script = doc.createElement('script');
   script.textContent = studio;
   doc.body.appendChild(script);
@@ -54,8 +55,23 @@ const IMAGE_CATALOG = {
   ],
 };
 // Routing fetch berdasarkan URL: katalog video vs katalog gambar.
+const PROMPT_BANK = {
+  ok: true,
+  entries: [
+    { id: 't1', kind: 'template', label: 'Try Outfit', category: 'umum', content: 'full-body shot { outfit }', slots: ['outfit'], is_active: true },
+    { id: 't2', kind: 'template', label: 'Drone View', category: 'kamera', content: 'aerial drone shot', slots: [], is_active: true },
+    { id: 'b1', kind: 'block', label: 'Low Angle', category: 'kamera', content: 'low-angle shot', slots: [], is_active: true },
+    { id: 'b2', kind: 'block', label: 'Golden Hour', category: 'cahaya', content: 'warm golden hour sunlight', slots: [], is_active: true },
+    { id: 'b3', kind: 'block', label: 'No Cartoon', category: 'negative', content: 'no cartoon', slots: [], is_active: true },
+    { id: 'b4', kind: 'block', label: 'Nonaktif', category: 'gaya', content: 'x', slots: [], is_active: false },
+  ],
+};
+
 const okFetch = async (url) => {
-  const body = String(url || '').includes('/api/ai/image/models') ? IMAGE_CATALOG : CATALOG;
+  const u = String(url || '');
+  const body = u.includes('/api/ai/image/models') ? IMAGE_CATALOG
+    : u.includes('/api/prompt-bank') ? PROMPT_BANK
+    : CATALOG;
   return { ok: true, json: async () => JSON.parse(JSON.stringify(body)) };
 };
 
@@ -104,6 +120,141 @@ test('D-203: jenis konten jadi SATU kotak pilihan (pill), bukan dua tab', () => 
   // Tidak ada lagi dua tab Foto/Video terpisah.
   assert.ok(!studio.includes('st-tabs-inline'), 'masih ada tab Foto/Video terpisah');
   assert.ok(!studio.includes('data-mode="photo"'), 'masih ada tab data-mode');
+});
+
+// --- D-207: Bank Prompt di Studio ---
+
+test('D-207: pill Bank Prompt ada di baris kontrol, setelah Style', () => {
+  const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2600);
+  const iStyle = controls.indexOf('stStylePill');
+  const iPrompt = controls.indexOf('stPromptPill');
+  assert.ok(iPrompt > -1, 'pill Bank Prompt tidak ada');
+  assert.ok(iStyle > -1 && iStyle < iPrompt, 'pill Bank Prompt harus setelah Style');
+});
+
+test('D-207: popover Bank Prompt punya tab Template & Blok', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  assert.ok(pop, 'popover prompt tidak ada');
+  const tabs = [...pop.querySelectorAll('[data-pb-tab]')].map((t) => t.dataset.pbTab);
+  assert.deepEqual(tabs, ['template', 'block'], 'tab Template/Blok tidak lengkap');
+});
+
+test('D-207: template yang dipilih mengisi komposer', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  const btn = [...pop.querySelectorAll('[data-pb-template]')].find((b) => b.dataset.pbTemplate === 't2');
+  assert.ok(btn, 'template Drone View tidak tampil');
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const val = doc.getElementById('stPrompt').value;
+  assert.ok(val.includes('aerial drone shot'), 'isi template tidak masuk komposer: ' + val);
+});
+
+test('D-207: template ber-placeholder meminta isian user', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  let asked = null;
+  win.prompt = (msg) => { asked = msg; return 'kemeja batik'; };
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  const btn = [...pop.querySelectorAll('[data-pb-template]')].find((b) => b.dataset.pbTemplate === 't1');
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.ok(asked, 'placeholder template tidak meminta isian');
+  assert.ok(/outfit/.test(asked), 'prompt isian tidak menyebut slot: ' + asked);
+  const val = doc.getElementById('stPrompt').value;
+  assert.ok(val.includes('kemeja batik'), 'isi slot tidak masuk komposer: ' + val);
+});
+
+test('D-207: blok nonaktif tidak muncul di popover', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  // Beralih ke tab Blok.
+  [...pop.querySelectorAll('[data-pb-tab]')].find((t) => t.dataset.pbTab === 'block')
+    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const labels = [...pop.querySelectorAll('[data-pb-block]')].map((b) => b.textContent);
+  assert.ok(labels.some((l) => l.includes('Low Angle')), 'blok aktif tidak tampil');
+  assert.ok(!labels.some((l) => l.includes('Nonaktif')), 'blok nonaktif ikut tampil');
+});
+
+test('D-207: blok terpilih menambah label pill', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  let pop = doc.getElementById('stPop-prompt');
+  [...pop.querySelectorAll('[data-pb-tab]')].find((t) => t.dataset.pbTab === 'block')
+    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  pop = doc.getElementById('stPop-prompt');
+  const btn = [...pop.querySelectorAll('[data-pb-block]')].find((b) => b.dataset.pbBlock === 'b1');
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const label = doc.querySelector('#stPromptPill b').textContent.trim();
+  assert.equal(label, '1 blok', 'label pill blok tidak sesuai: ' + label);
+});
+
+test('D-207: prompt yang dikirim ke server memuat blok urut kategori', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  [...doc.getElementById('stPop-prompt').querySelectorAll('[data-pb-tab]')].find((t) => t.dataset.pbTab === 'block')
+    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // Pilih blok: cahaya (b2), kamera (b1), negative (b3) — urutan pilihan sengaja dibalik.
+  for (const id of ['b2', 'b1', 'b3']) {
+    const btn = [...doc.getElementById('stPop-prompt').querySelectorAll('[data-pb-block]')].find((b) => b.dataset.pbBlock === id);
+    assert.ok(btn, 'blok ' + id + ' tidak ada');
+    btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  }
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'woman wearing casual outfit';
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  let sent = null;
+  const origFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (String(url).includes('/api/ai/image') && opts && opts.body) sent = JSON.parse(opts.body);
+    return origFetch(url, opts);
+  };
+  doc.getElementById('stGenBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+
+  assert.ok(sent, 'request generate tidak terkirim');
+  const p = sent.prompt;
+  const iSubject = p.indexOf('woman wearing casual outfit');
+  const iCamera = p.indexOf('low-angle shot');
+  const iLight = p.indexOf('warm golden hour sunlight');
+  const iNegative = p.indexOf('no cartoon');
+  assert.ok(iSubject > -1 && iCamera > -1 && iLight > -1 && iNegative > -1, 'bagian prompt hilang: ' + p);
+  assert.ok(iSubject < iCamera, 'subject harus sebelum kamera');
+  assert.ok(iCamera < iLight, 'kamera harus sebelum cahaya');
+  assert.ok(iLight < iNegative, 'cahaya harus sebelum negative');
+});
+
+test('D-207: prompt akhir merakit blok urut kategori (kamera -> cahaya -> negative)', () => {
+  // composedPrompt harus: prompt utama dulu, lalu blok per kategori, negative paling akhir.
+  const fn = studio.slice(studio.indexOf('function composedPrompt'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('PROMPT_CATEGORY_ORDER'), 'composedPrompt tidak memakai urutan kategori');
+  const orderIdx = body.indexOf('for (const cat of PROMPT_CATEGORY_ORDER)');
+  assert.ok(orderIdx > -1, 'blok tidak dirakit per kategori');
+  // Gaya visual & rasio tetap ditambahkan di akhir (perilaku lama).
+  assert.ok(body.includes('Gaya visual'), 'suffix gaya hilang');
+  assert.ok(body.includes('rasio aspek'), 'keterangan rasio hilang');
 });
 
 test('D-204: urutan baris kontrol FOTO — jenis konten, rasio, provider, model, style', () => {
