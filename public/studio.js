@@ -1513,14 +1513,18 @@
       const cs = window.getComputedStyle ? window.getComputedStyle(ta) : null;
       const lineHeight = parseFloat(cs?.lineHeight) || 21;
       const paddingTop = parseFloat(cs?.paddingTop) || 10;
+      const borderTop = parseFloat(cs?.borderTopWidth) || 1;
       const clientH = ta.clientHeight || 44;
-      // Offset caret dari atas content box.
-      const caretTop = paddingTop + (lineCount - 1) * lineHeight;
-      // Kalau caret melewati area bawah -> scroll ke posisi itu.
-      if (caretTop > ta.scrollTop + clientH - lineHeight) {
-        ta.scrollTop = Math.max(0, caretTop - clientH + lineHeight + 4);
-      } else if (caretTop < ta.scrollTop) {
-        ta.scrollTop = Math.max(0, caretTop - 4);
+      // Offset caret dari atas textarea (termasuk border + padding).
+      const caretTop = borderTop + paddingTop + (lineCount - 1) * lineHeight;
+      // Batas bawah area terlihat: caret harus utuh di dalam area view.
+      const viewBottom = ta.scrollTop + clientH;
+      if (caretTop + lineHeight > viewBottom) {
+        // Geser tepat seperlunya -> caret berada di baris paling bawah area view.
+        ta.scrollTop = Math.max(0, caretTop + lineHeight - clientH);
+      } else if (caretTop < ta.scrollTop + borderTop + paddingTop) {
+        // Caret di atas area view -> scroll ke baris itu, bukan ke paling atas.
+        ta.scrollTop = Math.max(0, caretTop - borderTop - paddingTop);
       }
     };
     ta?.addEventListener('input', () => {
@@ -1536,6 +1540,12 @@
     ta?.addEventListener('click', () => { syncMentionFromText(); scrollCaretIntoView(); });
     ta?.addEventListener('focus', scrollCaretIntoView);
     ta?.addEventListener('select', scrollCaretIntoView);
+    // D-218: saat caret berpindah (klik, panah, pilih) kursor harus tetap pas
+    // di baris yang sedang diketik — karena sering tidak memicu event input/keyup.
+    ta?.addEventListener('selectionchange', scrollCaretIntoView);
+    document.addEventListener('selectionchange', () => {
+      if (document.activeElement === ta) scrollCaretIntoView();
+    });
     ta?.addEventListener('keydown', (e) => {
       if (!mentionOpen) return;
       const list = mentionCandidates();
