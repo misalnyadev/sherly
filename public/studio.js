@@ -468,7 +468,8 @@
       const notes = [];
       notes.push(c.name);
       if (v.name || v.style) {
-        badges.push('<span class="st-asset-badge">' + icon('mic') + '</span>');
+        // D-219: ikon user (bukan mic) sebagai penanda profil suara.
+        badges.push('<span class="st-asset-badge">' + icon('user') + '</span>');
         notes.push('Suara: ' + (v.name || v.style));
       }
       if (c.board_image_url) {
@@ -558,6 +559,18 @@
     }
     return out;
   }
+  /**
+   * D-219: thumbnail untuk daftar mention. Selalu <img> supaya thumbnail benar-
+   * benar tampil (video memakai <img> + ikon film, bukan elemen <video>).
+   */
+  function mentionAssetThumb(a) {
+    if (!a || !a.url) return '<span class="st-mention-empty-thumb">' + icon('image') + '</span>';
+    if (a.media_type === 'video') {
+      return '<img src="' + esc(a.url) + '" alt="" loading="lazy" onerror="this.classList.add(\'is-broken\')">'
+        + '<span class="st-mention-video-dot">' + icon('film') + '</span>';
+    }
+    return '<img src="' + esc(a.url) + '" alt="' + esc(String(a.file_name || 'Aset').slice(0, 40)) + '" loading="lazy" onerror="this.classList.add(\'is-broken\')">';
+  }
   /** ID aset gambar yang SEDANG aktif sebagai referensi di header. */
   function referencedAssetIds() {
     const ids = [];
@@ -619,7 +632,7 @@
       if (it.kind === 'char') {
         const c = it.data; const v = c.voice || {};
         const marks = [];
-        if (v.name || v.style) marks.push(icon('mic'));
+        if (v.name || v.style) marks.push(icon('user'));
         if (c.board_image_url) marks.push(icon('layers'));
         const ocls = (v.name || v.style) ? ' has-voice' : (c.board_image_url ? ' has-sheet' : '');
         return '<button type="button" class="st-mention-item' + on + ocls + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
@@ -629,7 +642,7 @@
       }
       const a = it.data;
       return '<button type="button" class="st-mention-item' + on + '" data-mention-pick="asset:' + esc(it.id) + '" data-mention-kind="asset">'
-        + '<span class="st-mention-face st-mention-face-box st-mention-face-asset">' + assetThumb(a) + '</span>'
+        + '<span class="st-mention-face st-mention-face-box st-mention-face-asset">' + mentionAssetThumb(a) + '</span>'
         + '<span class="st-mention-name">' + esc(it.name) + '</span>'
         + '<span class="st-mention-marks">' + icon('image') + '</span></button>';
     };
@@ -1493,39 +1506,60 @@
     // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
     const autoFit = () => {
       if (!ta) return;
+      // D-219: pertahankan posisi scroll saat mengubah tinggi.
+      // Mengubah height mengembalikan scrollTop ke 0 -> kursor meloncat ke atas.
+      const keepScroll = ta.scrollTop;
       ta.style.height = '44px';
       const next = Math.min(Math.max(ta.scrollHeight, 44), 150);
       ta.style.height = next + 'px';
       ta.style.overflowY = ta.scrollHeight > 150 ? 'auto' : 'hidden';
+      ta.scrollTop = keepScroll;
     };
     /**
-     * D-217: kursor (caret) harus selalu terlihat di baris yang sedang diketik.
-     * Di HP, textarea yang auto-grow + overflow-y:auto sering menyisakan kursor
-     * di luar area view (scroll tidak sinkron). Kita hitung posisi caret lalu
-     * set scrollTop manual supaya baris aktif tetap terlihat.
+     * D-219: kursor (caret) harus selalu TEPAT di samping teks yang sedang diketik.
+     *
+     * Dua penyebab kursor meloncat ke atas di HP:
+     *  1) Mengubah `height` textarea mengembalikan scrollTop ke 0 (lihat autoFit).
+     *  2) `getComputedStyle` dibaca SETIAP ketikan -> line-height bisa stale
+     *     (masih nilai lama) sehingga perkiraan posisi caret meleset.
+     *
+     * Solusi: cache metrik textarea sekali (line-height, padding, border),
+     * dan lakukan scroll pada frame berikutnya (setTimeout 0) supaya layout
+     * selesai dulu sebelum posisi caret dihitung.
      */
+    let taMetrics = null;
+    const readMetrics = () => {
+      if (taMetrics) return taMetrics;
+      const cs = window.getComputedStyle ? window.getComputedStyle(ta) : null;
+      taMetrics = {
+        lineHeight: parseFloat(cs?.lineHeight) || 21,
+        paddingTop: parseFloat(cs?.paddingTop) || 10,
+        borderTop: parseFloat(cs?.borderTopWidth) || 1,
+      };
+      return taMetrics;
+    };
     const scrollCaretIntoView = () => {
       if (!ta) return;
       const pos = ta.selectionStart ?? 0;
       const upto = String(ta.value || '').slice(0, pos);
-      // Baris terakhir sebelum caret.
       const lineCount = upto.split('\n').length;
-      const cs = window.getComputedStyle ? window.getComputedStyle(ta) : null;
-      const lineHeight = parseFloat(cs?.lineHeight) || 21;
-      const paddingTop = parseFloat(cs?.paddingTop) || 10;
-      const borderTop = parseFloat(cs?.borderTopWidth) || 1;
+      const m = readMetrics();
       const clientH = ta.clientHeight || 44;
       // Offset caret dari atas textarea (termasuk border + padding).
-      const caretTop = borderTop + paddingTop + (lineCount - 1) * lineHeight;
+      const caretTop = m.borderTop + m.paddingTop + (lineCount - 1) * m.lineHeight;
       // Batas bawah area terlihat: caret harus utuh di dalam area view.
       const viewBottom = ta.scrollTop + clientH;
-      if (caretTop + lineHeight > viewBottom) {
+      if (caretTop + m.lineHeight > viewBottom) {
         // Geser tepat seperlunya -> caret berada di baris paling bawah area view.
-        ta.scrollTop = Math.max(0, caretTop + lineHeight - clientH);
-      } else if (caretTop < ta.scrollTop + borderTop + paddingTop) {
-        // Caret di atas area view -> scroll ke baris itu, bukan ke paling atas.
-        ta.scrollTop = Math.max(0, caretTop - borderTop - paddingTop);
+        ta.scrollTop = Math.max(0, caretTop + m.lineHeight - clientH);
+      } else if (caretTop < ta.scrollTop) {
+        // Caret benar-benar di luar area atas -> scroll ke baris itu.
+        ta.scrollTop = Math.max(0, caretTop - m.borderTop - m.paddingTop);
       }
+    };
+    // Scroll dijalankan setelah layout selesai -> posisi caret akurat.
+    const scheduleCaretScroll = () => {
+      setTimeout(scrollCaretIntoView, 0);
     };
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
@@ -1533,19 +1567,21 @@
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
       // D-216: mention aset gambar -> masuk ke header sebagai referensi.
       syncMentionedAssetRefs();
-      // D-217: kursor naik sesuai baris yang sedang diketik.
-      scrollCaretIntoView();
+      // D-219: kursor tetap di samping teks yang sedang diketik.
+      scheduleCaretScroll();
     });
-    ta?.addEventListener('keyup', (e) => { syncMentionFromText(); scrollCaretIntoView(); });
-    ta?.addEventListener('click', () => { syncMentionFromText(); scrollCaretIntoView(); });
-    ta?.addEventListener('focus', scrollCaretIntoView);
-    ta?.addEventListener('select', scrollCaretIntoView);
+    ta?.addEventListener('keyup', (e) => { syncMentionFromText(); scheduleCaretScroll(); });
+    ta?.addEventListener('click', () => { syncMentionFromText(); scheduleCaretScroll(); });
+    ta?.addEventListener('focus', scheduleCaretScroll);
+    ta?.addEventListener('select', scheduleCaretScroll);
     // D-218: saat caret berpindah (klik, panah, pilih) kursor harus tetap pas
     // di baris yang sedang diketik — karena sering tidak memicu event input/keyup.
-    ta?.addEventListener('selectionchange', scrollCaretIntoView);
+    ta?.addEventListener('selectionchange', scheduleCaretScroll);
     document.addEventListener('selectionchange', () => {
-      if (document.activeElement === ta) scrollCaretIntoView();
+      if (document.activeElement === ta) scheduleCaretScroll();
     });
+    // Ukuran font HP berubah saat keyboard muncul -> metrik textarea stale.
+    ta?.addEventListener('resize', () => { taMetrics = null; scheduleCaretScroll(); });
     ta?.addEventListener('keydown', (e) => {
       if (!mentionOpen) return;
       const list = mentionCandidates();
