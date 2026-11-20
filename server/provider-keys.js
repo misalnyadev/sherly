@@ -337,7 +337,9 @@ export function assertSafeBaseUrl(raw) {
 export async function fetchProviderModels(provider, apiKey, baseUrl) {
   const controller = AbortSignal.timeout(15000);
   let models = [];
-  if (provider === 'kie') throw new Error('Daftar model Kie belum tersedia — model gambar Kie diatur lewat KIE_IMAGE_MODEL (opsional).');
+  // D-203: model Kie (gambar & video) memakai katalog internal server/image-models.js
+  // & server/video-models.js — daftar model tidak diambil live dari API Kie.
+  if (provider === 'kie') throw new Error('Daftar model Kie dikelola lewat katalog Studio (pilihan model di komposer).');
   if (provider === 'gemini') {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey }, signal: controller });
     const data = await res.json().catch(() => ({}));

@@ -65,6 +65,30 @@
       tiers: [{ id: 'fast', label: 'Fast' }],
       defaultTier: 'fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
   ];
+  // D-203: katalog model gambar (Kie: Nano Banana / GPT Image / Seedream / FLUX).
+  const FALLBACK_IMAGE_MODELS = [
+    { id: 'nano-banana-2', provider: 'kie', label: 'Nano Banana 2', maker: 'Google', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'Google Nano Banana 2 — cepat & konsisten.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'nano-banana-pro', provider: 'kie', label: 'Nano Banana Pro', maker: 'Google', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 8, note: 'Google Nano Banana Pro — kualitas premium.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'gpt-image-2-text-to-image', provider: 'kie', label: 'GPT Image 2', maker: 'OpenAI', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 16, note: 'OpenAI GPT Image 2 — teks & fotorealisme.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'bytedance/seedream-5.0-lite', provider: 'kie', label: 'Seedream 5.0 Lite', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'ByteDance Seedream Lite — cepat & murah.',
+      defaultResolution: '1K', defaultAspect: '4:5' },
+    { id: 'bytedance/seedream-5.0-pro', provider: 'kie', label: 'Seedream 5.0 Pro', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'ByteDance Seedream Pro — detail tajam.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'flux-2-pro-text-to-image', provider: 'kie', label: 'FLUX 2 Pro', maker: 'Black Forest Labs', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 4, note: 'FLUX 2 Pro — komposisi & tipografi.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+  ];
+  let imageCatalog = { defaultModel: 'nano-banana-2', models: FALLBACK_IMAGE_MODELS };
+  const imageModel = () => imageCatalog.models.find((m) => m.id === state.imageModel) || imageCatalog.models[0] || null;
+  const imageResolutionOptions = () => (imageModel()?.resolutions || ['1K', '2K', '4K']).map((r) => [r, r]);
   let videoCatalog = { defaultModel: 'veo-3-1', models: FALLBACK_VIDEO_MODELS };
   const videoModel = () => videoCatalog.models.find((m) => m.id === state.videoModel) || videoCatalog.models[0] || null;
   const durationOptions = () => (videoModel()?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
@@ -107,6 +131,8 @@
     resolution: '720p', engine: 'auto',
     // D-200: provider + model video (dipilih lewat pill "Model").
     videoModel: 'veo-3-1', audio: true,
+    // D-203: model gambar (Kie) + jenis konten (satu kotak pilihan).
+    imageModel: 'nano-banana-2', imageResolution: '2K', contentType: 'photo',
   };
   let assets = [];           // D-198: galeri aset (dari server)
   let chain = [];            // rantai adegan (lokal): frame terakhir jadi referensi gambar
@@ -503,10 +529,16 @@
   function aspectLabel() { const a = ASPECTS.find((x) => x[0] === state.aspect); return a ? a[0] : state.aspect; }
   function styleLabel() { return (STYLES[state.style] || STYLES.free).label; }
 
+  // D-203: jenis konten dipilih lewat satu kotak pilihan (pill "Jenis Konten").
+  const CONTENT_TYPES = [
+    ['photo', 'Foto', 'image-plus'],
+    ['video', 'Video', 'video'],
+  ];
   function setMode(m) {
-    state.mode = m;
-    document.querySelectorAll('#studioRoot .st-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
-    const isVideo = m === 'video';
+    const mode = m === 'video' ? 'video' : 'photo';
+    state.mode = mode;
+    state.contentType = mode;
+    const isVideo = mode === 'video';
     // Rasio aspek video mengikuti kapabilitas model terpilih.
     if (isVideo) {
       const aspects = videoModel()?.aspects || ['16:9', '9:16'];
@@ -519,6 +551,9 @@
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
     $('stStylePillWrap')?.classList.toggle('st-hidden', isVideo);
+    // D-203: pill model gambar hanya saat foto & mesin memakai Kie.
+    const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || !kieEngine);
     $('stGenBtn')?.classList.toggle('st-hidden', isVideo);
     $('stVideoBtn')?.classList.toggle('st-hidden', !isVideo);
     updatePillLabels();
@@ -533,13 +568,23 @@
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || engines[0])[1];
     const m = videoModel();
     const mp = $('stModelPill'); if (mp) mp.querySelector('b').textContent = m ? m.label : 'Model';
+    // D-203: label jenis konten & model gambar.
+    const tp = $('stTypePill');
+    if (tp) {
+      const ct = CONTENT_TYPES.find((c) => c[0] === state.mode);
+      const b = tp.querySelector('b');
+      b.textContent = ct ? ct[1] : 'Foto';
+      tp.querySelector('svg')?.setAttribute('data-icon', ct ? ct[2] : 'image-plus');
+    }
+    const im = imageModel();
+    const imp = $('stImgModelPill'); if (imp) imp.querySelector('b').textContent = im ? im.label : 'Model';
     const tierLabel = tierOptions().find((x) => x[0] === state.tier);
     const t = $('stTierPill'); if (t) t.querySelector('b').textContent = tierLabel ? tierLabel[1] : state.tier;
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
   }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -575,6 +620,16 @@
     else if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     else if (which === 'dur') items = durationOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + l + '</button>').join('');
     else if (which === 'engine') items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">' + l + '</button>').join('');
+    else if (which === 'type') {
+      // D-203: satu kotak pilihan jenis konten (Foto / Video).
+      items = CONTENT_TYPES.map(([v, l, ico]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.mode === v ? 'on' : '') + '">'
+        + icon(ico) + ' ' + esc(l) + '</button>').join('');
+    }
+    else if (which === 'imgmodel') {
+      // D-203: pilih model gambar Kie (Nano Banana / GPT Image / Seedream / FLUX).
+      items = imageCatalog.models.map((m) => '<button type="button" data-v="' + esc(m.id) + '" class="' + (state.imageModel === m.id ? 'on' : '') + '">'
+        + '<span class="st-pop-model">' + esc(m.label) + '<small>' + esc(m.maker) + ' · ' + esc(m.resolutions.join('/')) + '</small></span></button>').join('');
+    }
     else if (which === 'model') {
       // D-200: pilih model video — tiap model punya durasi/resolusi/aspek sendiri.
       items = videoCatalog.models.map((m) => '<button type="button" data-v="' + esc(m.id) + '" class="' + (state.videoModel === m.id ? 'on' : '') + '">'
@@ -587,9 +642,28 @@
       if (which === 'aspect') state.aspect = b.dataset.v;
       if (which === 'style') state.style = b.dataset.v;
       if (which === 'dur') state.duration = b.dataset.v;
-      if (which === 'engine') state.engine = b.dataset.v;
+      if (which === 'engine') {
+        state.engine = b.dataset.v;
+        // D-203: pill model gambar hanya relevan untuk mesin Kie (atau auto/custom).
+        const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+      }
       if (which === 'tier') state.tier = b.dataset.v;
       if (which === 'res') state.resolution = b.dataset.v;
+      if (which === 'type') {
+        // D-203: pilih jenis konten -> pindah mode (pilihan jenis konten tunggal).
+        const next = b.dataset.v;
+        if (next !== state.mode) setMode(next);
+      }
+      if (which === 'imgmodel') {
+        // D-203: pilih model gambar -> sesuaikan resolusi ke kapabilitas model.
+        state.imageModel = b.dataset.v;
+        const im = imageModel();
+        if (im) {
+          if (!im.resolutions.includes(state.imageResolution)) state.imageResolution = im.defaultResolution || im.resolutions[0];
+          if (!im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
+        }
+      }
       if (which === 'model') {
         // Model baru -> samakan durasi/resolusi/aspek/tier ke capabilities model itu.
         state.videoModel = b.dataset.v;
@@ -615,7 +689,8 @@
     if (grid) { grid.classList.remove('st-hidden'); grid.prepend(skel); }
     try {
       const prompt = composedPrompt(raw);
-      const reqBody = { prompt, provider: state.engine, aspect: state.aspect };
+      // D-203: kirim model gambar terpilih + resolusi ke server.
+      const reqBody = { prompt, provider: state.engine, aspect: state.aspect, model: state.imageModel, resolution: state.imageResolution };
       if (mentioned.length) reqBody.characterMentions = mentioned.map((c) => ({ id: c.id, name: c.name }));
       if (sceneRef) reqBody.sceneRef = { mime: sceneRef.mime, data: sceneRef.data };
       const sceneNumber = chain.length ? chain.length + 1 : 0;
@@ -627,6 +702,9 @@
       const meta = {
         aspect: state.aspect, style: state.style,
         characters: mentioned.map((c) => c.name), scene: sceneNumber || 0,
+        // D-203: catat model gambar yang dipakai.
+        model: d.model || state.imageModel, modelLabel: d.model_label || null,
+        resolution: d.resolution || state.imageResolution,
       };
       await persistGenerated(d.image?.mime || 'image/png', d.image?.data || '', raw, meta);
       // Rantai adegan: simpan frame terakhir sebagai referensi adegan berikutnya.
@@ -744,12 +822,11 @@
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       + '<div class="st-controls">'
-      // D-202: pilih jenis konten (Foto/Video) jadi urutan pertama di bawah komposer.
-      + '<div class="st-tabs st-tabs-inline">'
-      + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
-      + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
-      + '</div>'
-      // D-202: urutan — jenis konten (Foto/Video) -> vertikal/horizontal -> durasi -> dll.
+      // D-203: jenis konten jadi SATU kotak pilihan (Foto / Video), bukan dua tab terpisah.
+      + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stTypePill">' + icon('image-plus') + ' <b>Foto</b></button><div class="st-pop" id="stPop-type"></div></div>'
+      // D-203: kotak model gambar — muncul saat jenis konten Foto & mesin Kie.
+      + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
+      // D-202: urutan — jenis konten -> vertikal/horizontal -> durasi -> dll.
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' <b>1:1</b></button><div class="st-pop" id="stPop-aspect"></div></div>'
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
       + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
@@ -779,14 +856,27 @@
     }).catch(() => {});
     // D-198: galeri aset dari server.
     loadAssets();
-    document.querySelectorAll('#studioRoot .st-tab').forEach((t) => t.addEventListener('click', () => setMode(t.dataset.mode)));
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     $('stStylePill')?.addEventListener('click', () => { buildPop('style'); togglePop('style'); });
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
+    // D-203: pill jenis konten (satu kotak) & pill model gambar.
+    $('stTypePill')?.addEventListener('click', () => { buildPop('type'); togglePop('type'); });
+    $('stImgModelPill')?.addEventListener('click', () => { buildPop('imgmodel'); togglePop('imgmodel'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
+    // D-203: katalog model gambar dari server (/api/ai/image/models).
+    fetch('/api/ai/image/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
+      imageCatalog = { defaultModel: d.defaultModel || imageCatalog.defaultModel, models: d.models };
+      const m = imageModel();
+      if (m) {
+        state.imageModel = m.id;
+        if (!m.resolutions.includes(state.imageResolution)) state.imageResolution = m.defaultResolution || m.resolutions[0];
+      }
+      updatePillLabels();
+    }).catch(() => {});
     // D-200: katalog model video dari server (provider + model + durasi + resolusi).
     fetch('/api/ai/video/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
