@@ -299,6 +299,146 @@ export async function generateImageWithCustom(cfg, prompt, aspect) {
   throw Object.assign(new Error('Provider kustom tidak mengembalikan gambar.'), { status: 502 });
 }
 
+// ===== D-198: Engine video via Kie (Veo 3.1 & model Market lain) =====
+
+/** Tier Veo 3.1 yang didukung Kie. */
+export const KIE_VIDEO_TIERS = ['veo3_fast', 'veo3_lite', 'veo3'];
+/** Durasi (detik) yang didukung Veo 3.1. */
+export const KIE_VIDEO_DURATIONS = [4, 6, 8];
+/** Resolusi yang didukung Veo 3.1. */
+export const KIE_VIDEO_RESOLUTIONS = ['720p', '1080p', '4k'];
+
+/** Normalisasi tierVeo (default fast). */
+export function sanitizeVideoTier(value) {
+  const v = String(value || '').toLowerCase();
+  return KIE_VIDEO_TIERS.includes(v) ? v : 'veo3_fast';
+}
+
+/** Normalisasi durasi video (detik) — hanya 4/6/8. */
+export function sanitizeVideoDuration(value) {
+  const n = Number(value);
+  return KIE_VIDEO_DURATIONS.includes(n) ? n : 8;
+}
+
+/** Normalisasi resolusi video. */
+export function sanitizeVideoResolution(value) {
+  const v = String(value || '').toLowerCase();
+  return KIE_VIDEO_RESOLUTIONS.includes(v) ? v : '720p';
+}
+
+/** Rasio aspek video — Veo 3.1 hanya 16:9 & 9:16 (Auto dipetakan ke 16:9). */
+export function sanitizeVideoAspect(value) {
+  const v = String(value || '').trim();
+  return v === '9:16' ? '9:16' : '16:9';
+}
+
+/**
+ * Buat task video di Kie (Veo 3.1) — TIDAK poll di sini.
+ * Batas maxDuration server (60 dtk) lebih pendek dari durasi generate video,
+ * jadi pembuatan task dipisah dari pengecekan status (lihat pollKieVideoTask).
+ *
+ * opts: { tier, aspect, duration, resolution, images: [{ mime, data }] }
+ * Return { taskId, model, provider }.
+ */
+export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
+  }
+  const { base } = kieConfig();
+  const tier = sanitizeVideoTier(opts.tier);
+  const aspect = sanitizeVideoAspect(opts.aspect);
+  const duration = sanitizeVideoDuration(opts.duration);
+  const resolution = sanitizeVideoResolution(opts.resolution);
+  const images = Array.isArray(opts.images)
+    ? opts.images.filter((r) => r && typeof r.data === 'string' && r.data.length > 8)
+    : [];
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      // Upload gambar referensi (potret/sheet karakter + frame adegan) -> URL publik Kie.
+      const imageUrls = [];
+      for (const img of images.slice(0, 3)) {
+        const url = await kieUploadReference(attempt.apiKey, img.mime, img.data);
+        imageUrls.push(url);
+      }
+      const input = {
+        prompt: String(prompt || '').slice(0, 4000),
+        model: tier,
+        aspect_ratio: aspect,
+        duration,
+        resolution,
+        enable_translation: true,
+      };
+      if (imageUrls.length) {
+        input.image_urls = imageUrls;
+        // 1 gambar = frame pertama; 2 gambar = first & last frame (transisi adegan).
+        input.generation_type = 'FIRST_AND_LAST_FRAMES_2_VIDEO';
+      } else {
+        input.generation_type = 'TEXT_2_VIDEO';
+      }
+      const res = await fetch(base + '/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
+        body: JSON.stringify({ model: 'veo-3-1', input }),
+        signal: AbortSignal.timeout(30000),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const t = res ? String(await res.text()).slice(0, 200) : 'tidak terjangkau';
+        throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
+      }
+      const data = await res.json().catch(() => ({}));
+      // Kode 200 = sukses; selain itu msg menjelaskan (401 key, 402 kredit, 429 rate limit).
+      if (Number(data?.code) && Number(data.code) !== 200) {
+        throw new Error('Kie menolak task video: ' + String(data?.msg || ('kode ' + data.code)));
+      }
+      const taskId = data?.data?.taskId || data?.taskId;
+      if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task video.');
+      return { taskId: String(taskId), model: tier, provider: 'kie', imageCount: imageUrls.length };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Generator video gagal membuat task.'), { status: 502 });
+}
+
+/**
+ * Cek status satu task video Kie (dipakai route status — dipanggil client berkali-kali).
+ * Return { state, progress, resultUrls, error }.
+ */
+export async function pollKieVideoTask(auth = {}, taskId) {
+  if (!taskId) throw Object.assign(new Error('Task video tidak ditemukan.'), { status: 400 });
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia.'), { status: 503 });
+  }
+  const { base } = kieConfig();
+  const id = encodeURIComponent(String(taskId));
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + id, {
+        headers: { Authorization: 'Bearer ' + attempt.apiKey },
+        signal: AbortSignal.timeout(20000),
+      }).catch(() => null);
+      if (!qr || !qr.ok) { lastError = new Error('Gagal mengecek status task video.'); continue; }
+      const qd = await qr.json().catch(() => ({}));
+      const d = qd?.data || {};
+      const state = String(d.state || d.status || '').toLowerCase();
+      let rj = d.resultJson || d.result;
+      if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch {} }
+      const urls = rj?.resultUrls || rj?.data?.result_urls || rj?.data?.resultUrls || d.resultUrls
+        || (Array.isArray(rj?.data?.origin_urls) ? rj.data.origin_urls : null);
+      const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+      return {
+        state: state || 'running',
+        progress: Number(d.progress) || 0,
+        resultUrls: list,
+        error: d.failMsg || d.failCode || null,
+      };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Gagal mengecek status task video.'), { status: 502 });
+}
+
 /** Generate gambar via Kie AI. CATATAN: endpoint dibuat best-effort (docs tidak bisa diakses dari sandbox) —
  *  kalau respons Kie berbeda, kirim contoh responsnya ke chat untuk dikalibrasi. Env: KIE_API_KEY, KIE_API_BASE, KIE_IMAGE_MODEL. */
 export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {}) {
