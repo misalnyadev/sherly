@@ -21,6 +21,7 @@ import {
 } from './studio-assets.js';
 import { generateVideoWithKie, pollKieVideoTask } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
+import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -443,10 +444,17 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
   }
 });
 
+// D-203: katalog model gambar (provider + model + resolusi + rasio) untuk UI.
+app.get('/api/ai/image/models', requireUser, requireAdmin, (req, res) => {
+  try { res.json({ ok: true, ...imageCatalog() }); }
+  catch (error) { res.status(500).json({ ok: false, error: error.message || 'Gagal memuat katalog model gambar.' }); }
+});
+
 app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   try {
     const { prompt: rawPrompt, provider: rawProvider, aspect: rawAspect, reference: rawReference, referenceCharacterId: rawRefCharId,
-      sceneRef: rawSceneRef, sceneNumber: rawSceneNumber, sceneTotal: rawSceneTotal } = req.body || {};
+      sceneRef: rawSceneRef, sceneNumber: rawSceneNumber, sceneTotal: rawSceneTotal,
+      model: rawModel, resolution: rawResolution } = req.body || {};
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
     if (!prompt || prompt.length < 3 || prompt.length > 1500) return res.status(400).json({ error: 'Deskripsi gambar wajib diisi (3-1500 karakter).' });
     const customId = typeof rawProvider === 'string' && rawProvider.startsWith('custom:') ? rawProvider.slice(7) : null;
@@ -498,6 +506,15 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
         reference = { mime, data: buf.toString('base64') };
       }
     }
+    // D-203: model gambar terpilih (Kie: Nano Banana / GPT Image / Seedream / FLUX).
+    // Kalau mesin bukan Kie atau model tidak dikenal -> pakai default Kie.
+    const wantsKie = provider === 'kie' || provider === 'auto';
+    let imageSpec = null;
+    if (wantsKie) {
+      const spec = normalizeImageParams({ model: rawModel, resolution: rawResolution, aspect });
+      if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
+      imageSpec = spec;
+    }
     let image, usedProvider = 'gemini', fallbackUsed = false;
     if (references.length) {
       // D-196: multi-referensi (potret + sheet karakter + frame adegan) hanya didukung Gemini.
@@ -515,11 +532,17 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
       if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
       image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name;
     }
-    else if (provider === 'kie') { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
+    else if (provider === 'kie') {
+      image = await generateImageWithKie(prompt, aspect, auth, { model: imageSpec.model.id, resolution: imageSpec.resolution });
+      usedProvider = 'kie';
+    }
     else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; }
     else {
       // Otomatis: Kie dulu (mesin produksi) -> provider kustom -> Gemini.
-      try { image = await generateImageWithKie(prompt, aspect, auth); usedProvider = 'kie'; }
+      try {
+        image = await generateImageWithKie(prompt, aspect, auth, { model: imageSpec.model.id, resolution: imageSpec.resolution });
+        usedProvider = 'kie';
+      }
       catch {
         let done = false;
         try {
@@ -533,6 +556,9 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     }
     res.json({
       ok: true, provider: usedProvider, fallback_used: fallbackUsed, image,
+      model: imageSpec ? imageSpec.model.id : (image?.model || null),
+      model_label: imageSpec ? imageSpec.model.label : null,
+      resolution: imageSpec ? imageSpec.resolution : null,
       // D-196: info penanda aset untuk UI (header aset di komposer).
       characters: mentions.map((m) => ({ name: m.name, token: m.token })),
       assets: charLabels.map((l) => ({ name: l.name, kind: l.kind })),

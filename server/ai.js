@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
+import { findImageModel, buildImageInput, DEFAULT_IMAGE_MODEL } from './image-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -190,14 +191,12 @@ export function geminiImageModel() {
 export function kieConfig() {
   return {
     base: process.env.KIE_API_BASE || 'https://api.kie.ai',
-    imageModel: process.env.KIE_IMAGE_MODEL || 'flux/dev',
   };
 }
 
 // D-106: img2img via Kie — alur yang sama dengan AK Talent (upload referensi ->
 // jobs/createTask -> poll recordInfo -> unduh hasil). Model khusus board AK: gpt-image-2-5-flare-image-to-image.
 export const KIE_BOARD_MODEL = process.env.KIE_BOARD_MODEL || 'gpt-image-2-5-flare-image-to-image';
-const KIE_EDIT_MODEL = process.env.KIE_EDIT_MODEL || 'google/nano-banana-edit';
 
 // D-200: sanitisator lama (Veo-only) dipertahankan sebagai pembungkus katalog,
 // supaya pemanggil lawas tetap aman. Katalog model video jadi sumber kebenaran.
@@ -241,15 +240,22 @@ async function kieUploadReference(apiKey, mime, data) {
   return u;
 }
 
-/** Satu job img2img Kie (createTask + poll sampai selesai, maks ±55 dtk). */
-async function kieImageToImage(apiKey, base, prompt, reference, aspect, model) {
+/**
+ * Satu job img2img Kie (createTask + poll sampai selesai, maks ±55 dtk).
+ * D-203: input dibangun lewat buildImageInput() sesuai skema model terpilih,
+ * dan referensi dikirim sebagai `image_input` (nano-banana/seedream/flux)
+ * atau `input_urls` (gpt-image).
+ */
+async function kieImageToImage(apiKey, base, prompt, reference, aspect, model, opts = {}) {
   const refUrl = await kieUploadReference(apiKey, reference.mime, reference.data);
-  const ar = aspect || '16:9';
-  const input = { prompt, output_format: 'png', image_size: ar, aspect_ratio: ar, image_urls: [refUrl], input_urls: [refUrl] };
+  const spec = findImageModel(model) || findImageModel(DEFAULT_IMAGE_MODEL);
+  const input = buildImageInput(spec.schema, {
+    prompt, aspect: aspect || '1:1', resolution: opts.resolution || spec.defaultResolution,
+  }, [refUrl]);
   const res = await fetch(base + '/api/v1/jobs/createTask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
-    body: JSON.stringify({ model, input }),
+    body: JSON.stringify({ model: spec.id, input }),
     signal: AbortSignal.timeout(30000),
   }).catch(() => null);
   if (!res || !res.ok) {
@@ -277,7 +283,7 @@ async function kieImageToImage(apiKey, base, prompt, reference, aspect, model) {
       const imgRes = await fetch(u, { signal: AbortSignal.timeout(30000) });
       if (!imgRes.ok) throw new Error('Gagal mengunduh hasil Kie (' + imgRes.status + ').');
       const buf = Buffer.from(await imgRes.arrayBuffer());
-      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model, source: 'kie' };
+      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model: spec.id, source: 'kie' };
     }
     if (st === 'fail' || st === 'failed' || st === 'error') throw new Error('Kie img2img gagal: ' + (d.failMsg || d.failCode || '?'));
   }
@@ -292,15 +298,6 @@ async function kieAttempts(auth = {}) {
   }
   if (process.env.KIE_API_KEY) attempts.push({ apiKey: process.env.KIE_API_KEY, source: 'env' });
   return attempts;
-}
-
-function pickKieImage(data) {
-  const b64 = data?.data?.b64_json || data?.data?.[0]?.b64_json || data?.b64_json || data?.images?.[0]?.b64_json || null;
-  if (b64) return { b64 };
-  const url = data?.data?.url || data?.data?.[0]?.url || data?.url || data?.image_url || data?.images?.[0]?.url
-    || (typeof data?.data?.[0] === 'string' ? data.data[0] : null)
-    || (typeof data?.images?.[0] === 'string' ? data.images[0] : null);
-  return url ? { url } : null;
 }
 
 /** Generate gambar via provider kustom kompatibel OpenAI (POST {base}/images/generations). */
@@ -426,39 +423,86 @@ export async function pollKieVideoTask(auth = {}, taskId) {
   throw Object.assign(lastError || new Error('Gagal mengecek status task video.'), { status: 502 });
 }
 
-/** Generate gambar via Kie AI. CATATAN: endpoint dibuat best-effort (docs tidak bisa diakses dari sandbox) —
- *  kalau respons Kie berbeda, kirim contoh responsnya ke chat untuk dikalibrasi. Env: KIE_API_KEY, KIE_API_BASE, KIE_IMAGE_MODEL. */
+/**
+ * Generate gambar via Kie AI.
+ * D-203: `opts.model` menentukan model Kie yang dipakai (Nano Banana / GPT Image /
+ * Seedream / FLUX) — lihat `server/image-models.js`. Semua model memakai jobs API
+ * (createTask + poll) supaya konsisten dengan video.
+ * Env: KIE_API_KEY, KIE_API_BASE.
+ */
 export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {}) {
   const attempts = await kieAttempts(auth);
   if (!attempts.length) {
     throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
   }
-  const { base, imageModel } = kieConfig();
-  // D-106: img2img (foto referensi) via jobs API; txt2img tetap lewat /api/v1/generate.
+  const { base } = kieConfig();
+  const spec = findImageModel(opts.model) || findImageModel(DEFAULT_IMAGE_MODEL);
   const reference = opts.reference && typeof opts.reference.data === 'string' && opts.reference.data.length > 8 ? opts.reference : null;
-  const refModel = opts.model || KIE_EDIT_MODEL;
   let lastError = null;
   for (const attempt of attempts) {
     try {
-      if (reference) return await kieImageToImage(attempt.apiKey, base, prompt, reference, aspect, refModel);
-      const response = await fetch(base + '/api/v1/generate', {
+      if (reference) {
+        return await kieImageToImage(attempt.apiKey, base, prompt, reference, aspect, spec.id, { resolution: opts.resolution });
+      }
+      // Text-to-image: jobs API createTask + poll (sama seperti video).
+      const input = buildImageInput(spec.schema, {
+        prompt, aspect: aspect || '1:1', resolution: opts.resolution || spec.defaultResolution,
+      }, []);
+      const res = await fetch(base + '/api/v1/jobs/createTask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + attempt.apiKey },
-        body: JSON.stringify({ model: imageModel, prompt, aspect_ratio: aspect || '1:1' }),
-        signal: AbortSignal.timeout(120000),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { lastError = new Error(data?.error || data?.message || `Kie API error (${response.status})`); continue; }
-      const picked = pickKieImage(data);
-      if (!picked) { lastError = new Error('Kie tidak mengembalikan gambar — format respons belum dikenali. Kirim contoh respons dari dashboard Kie untuk dikalibrasi.'); continue; }
-      if (picked.b64) return { mime: 'image/png', data: picked.b64, model: imageModel, source: attempt.source };
-      const imgRes = await fetch(picked.url, { signal: AbortSignal.timeout(60000) });
-      if (!imgRes.ok) { lastError = new Error('Gagal mengunduh hasil dari Kie (' + imgRes.status + ').'); continue; }
-      const buf = Buffer.from(await imgRes.arrayBuffer());
-      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64'), model: imageModel, source: attempt.source };
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
+        body: JSON.stringify({ model: spec.id, input }),
+        signal: AbortSignal.timeout(30000),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const t = res ? String(await res.text()).slice(0, 200) : 'tidak terjangkau';
+        throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (Number(data?.code) && Number(data.code) !== 200) {
+        throw new Error('Kie menolak task gambar: ' + String(data?.msg || ('kode ' + data.code)));
+      }
+      const taskId = data?.data?.taskId || data?.taskId;
+      if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task gambar.');
+      const result = await kiePollImageTask(attempt.apiKey, base, taskId);
+      return { mime: result.mime, data: result.data, model: spec.id, source: attempt.source };
     } catch (error) { lastError = error; }
   }
   throw Object.assign(lastError || new Error('Generator Kie gagal.'), { status: 502 });
+}
+
+/**
+ * Poll task gambar Kie sampai selesai (maks ±55 dtk, di bawah maxDuration 60 dtk).
+ * Return { mime, data } (base64).
+ */
+async function kiePollImageTask(apiKey, base, taskId) {
+  const deadline = Date.now() + 55000;
+  let delay = 3000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay + 1000, 6000);
+    const qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + encodeURIComponent(taskId), {
+      headers: { Authorization: 'Bearer ' + apiKey }, signal: AbortSignal.timeout(20000),
+    }).catch(() => null);
+    if (!qr || !qr.ok) continue;
+    const qd = await qr.json().catch(() => ({}));
+    const d = qd?.data || {};
+    const st = String(d.state || d.status || '').toLowerCase();
+    if (st === 'success' || st === 'completed') {
+      let rj = d.resultJson || d.result;
+      if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch {} }
+      const u = rj?.resultUrls?.[0] || d.resultUrls?.[0] || rj?.data?.result_urls?.[0];
+      if (!u) throw new Error('Kie sukses tapi URL hasil kosong.');
+      const imgRes = await fetch(u, { signal: AbortSignal.timeout(30000) });
+      if (!imgRes.ok) throw new Error('Gagal mengunduh hasil dari Kie (' + imgRes.status + ').');
+      const buf = Buffer.from(await imgRes.arrayBuffer());
+      return { mime: imgRes.headers.get('content-type') || 'image/png', data: buf.toString('base64') };
+    }
+    if (st === 'fail' || st === 'failed' || st === 'error') {
+      throw new Error('Kie gagal membuat gambar: ' + (d.failMsg || d.failCode || '?'));
+    }
+  }
+  throw new Error('Kie timeout (±55 dtk) — coba lagi.');
 }
 
 /** Generate satu gambar dari teks via Gemini (kunci vault dulu, env sebagai fallback).

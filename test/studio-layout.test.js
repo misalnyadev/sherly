@@ -36,7 +36,28 @@ const CATALOG = {
       defaultTier: 'std', defaultDuration: 5, defaultResolution: '720p', defaultAspect: '9:16' },
   ],
 };
-const okFetch = async () => ({ ok: true, json: async () => JSON.parse(JSON.stringify(CATALOG)) });
+const IMAGE_CATALOG = {
+  ok: true, defaultModel: 'nano-banana-2',
+  models: [
+    { id: 'nano-banana-2', provider: 'kie', label: 'Nano Banana 2', maker: 'Google', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'n',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'nano-banana-pro', provider: 'kie', label: 'Nano Banana Pro', maker: 'Google', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 8, note: 'n',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'gpt-image-2-text-to-image', provider: 'kie', label: 'GPT Image 2', maker: 'OpenAI', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 16, note: 'n',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    { id: 'bytedance/seedream-5.0-lite', provider: 'kie', label: 'Seedream 5.0 Lite', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'n',
+      defaultResolution: '1K', defaultAspect: '4:5' },
+  ],
+};
+// Routing fetch berdasarkan URL: katalog video vs katalog gambar.
+const okFetch = async (url) => {
+  const body = String(url || '').includes('/api/ai/image/models') ? IMAGE_CATALOG : CATALOG;
+  return { ok: true, json: async () => JSON.parse(JSON.stringify(body)) };
+};
 
 // --- D-202: judul & deskripsi halaman Studio dihapus ---
 
@@ -48,10 +69,10 @@ test('D-202: section studioView tidak punya page-heading (judul & deskripsi diha
   assert.ok(!m[0].includes('Generator konten'), 'deskripsi Studio masih ada');
 });
 
-test('D-202: halaman Studio punya tinggi penuh & composer turun lebih rendah', () => {
-  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 107px\)/.test(html),
-    'tinggi view Studio tidak调整为 calc(100vh - 107px)');
-  assert.ok(/#studioView\.active\{[^}]*margin-bottom:-16px/.test(html),
+test('D-202/D-203: halaman Studio punya tinggi penuh & composer turun lebih rendah', () => {
+  assert.ok(/#studioView\.active\{[^}]*height:calc\(100vh - 96px\)/.test(html),
+    'tinggi view Studio bukan calc(100vh - 96px)');
+  assert.ok(/#studioView\.active\{[^}]*margin-bottom:-28px/.test(html),
     'view Studio tidak turun (margin-bottom)');
 });
 
@@ -63,21 +84,26 @@ test('D-202: tombol Unggah diposisikan di sudut kanan area Studio', () => {
   assert.ok(!studio.includes('st-topbar'), 'wrapper .st-topbar masih dipakai');
 });
 
-test('D-202: tab Foto/Video berada di bawah komposer pada baris kontrol', () => {
+test('D-203: jenis konten jadi SATU kotak pilihan (pill), bukan dua tab', () => {
   const controlsIdx = studio.indexOf('class="st-controls"');
-  const tabsIdx = studio.indexOf('st-tabs-inline');
+  const controls = studio.slice(controlsIdx, controlsIdx + 2200);
   assert.ok(controlsIdx > -1, 'baris kontrol tidak ditemukan');
-  assert.ok(tabsIdx > controlsIdx, 'tab Foto/Video bukan di baris kontrol komposer');
-  assert.ok(studio.includes('class="st-tabs st-tabs-inline"'), 'kelas st-tabs-inline hilang');
+  assert.ok(controls.includes('id="stTypePill"'), 'pill jenis konten bukan di baris kontrol komposer');
+  assert.ok(studio.includes('id="stPop-type"'), 'popover jenis konten hilang');
+  // Tidak ada lagi dua tab Foto/Video terpisah.
+  assert.ok(!studio.includes('st-tabs-inline'), 'masih ada tab Foto/Video terpisah');
+  assert.ok(!studio.includes('data-mode="photo"'), 'masih ada tab data-mode');
 });
 
-test('D-202: urutan baris kontrol — jenis konten, vertikal/horizontal, lalu mesin/gaya', () => {
-  const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 1800);
-  const iTabs = controls.indexOf('st-tabs-inline');
+test('D-203: urutan baris kontrol — jenis konten, model gambar, vertikal/horizontal, mesin/gaya', () => {
+  const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2200);
+  const iType = controls.indexOf('stTypePill');
+  const iImgModel = controls.indexOf('stImgModelPill');
   const iAspect = controls.indexOf('stAspectPill');
   const iEngine = controls.indexOf('stEnginePill');
-  assert.ok(iTabs > -1 && iAspect > -1 && iEngine > -1, 'elemen kontrol tidak lengkap');
-  assert.ok(iTabs < iAspect, 'tab harus sebelum pilihan rasio');
+  assert.ok(iType > -1 && iImgModel > -1 && iAspect > -1 && iEngine > -1, 'elemen kontrol tidak lengkap');
+  assert.ok(iType < iImgModel, 'jenis konten harus sebelum model gambar');
+  assert.ok(iImgModel < iAspect, 'model gambar harus sebelum rasio');
   assert.ok(iAspect < iEngine, 'rasio harus sebelum mesin');
 });
 
@@ -88,7 +114,7 @@ test('D-202: pilihan vertikal/horizontal tersedia di popover rasio', () => {
 
 // --- D-202 + D-201: DOM nyata ---
 
-test('D-202: hasil render — Unggah di sudut, tab di bawah komposer', async () => {
+test('D-203: hasil render — Unggah di sudut, pill jenis konten di bawah komposer', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   const upload = doc.getElementById('stUploadBtn');
@@ -96,23 +122,36 @@ test('D-202: hasil render — Unggah di sudut, tab di bawah komposer', async () 
   assert.ok(upload.classList.contains('st-upload-corner'), 'kelas corner tidak ada di tombol Unggah');
   // Tombol Unggah berada di luar stage galeri (di pojok halaman).
   assert.ok(!upload.closest('.st-stage'), 'tombol Unggah masih di dalam stage');
-  // Tab Foto/Video ada di dalam baris kontrol composer.
-  const tabs = doc.querySelector('.st-tabs-inline');
-  assert.ok(tabs, 'tab inline tidak dirender');
-  assert.ok(tabs.closest('.st-controls'), 'tab tidak di baris kontrol');
-  assert.ok(tabs.querySelector('.st-tab[data-mode="photo"]'), 'tab Foto hilang');
-  assert.ok(tabs.querySelector('.st-tab[data-mode="video"]'), 'tab Video hilang');
+  // Pill jenis konten ada di dalam baris kontrol composer.
+  const typePill = doc.getElementById('stTypePill');
+  assert.ok(typePill, 'pill jenis konten tidak dirender');
+  assert.ok(typePill.closest('.st-controls'), 'pill jenis konten tidak di baris kontrol');
+  // Tidak ada tab Foto/Video terpisah lagi.
+  assert.equal(doc.querySelectorAll('.st-tab').length, 0, 'masih ada tab Foto/Video');
+  // Popover jenis konten memuat dua pilihan: Foto & Video.
+  typePill.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const pop = doc.getElementById('stPop-type');
+  assert.ok(pop.classList.contains('open'), 'popover jenis konten tidak terbuka');
+  const opts = [...pop.querySelectorAll('button')].map((b) => b.dataset.v);
+  assert.deepEqual(opts, ['photo', 'video'], 'pilihan jenis konten: ' + opts.join(','));
 });
 
-test('D-202: mode video tetap menampilkan tab Video aktif & pill model', async () => {
+test('D-203: pilih jenis konten Video lewat satu kotak -> mode video aktif', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
-  const videoTab = doc.querySelector('.st-tab[data-mode="video"]');
-  videoTab.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  assert.ok(videoTab.classList.contains('active'), 'tab Video tidak jadi aktif');
+  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const pop = doc.getElementById('stPop-type');
+  const video = [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video');
+  assert.ok(video, 'pilihan Video tidak ada');
+  video.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // Label pill jenis konten = Video.
+  assert.equal(doc.querySelector('#stTypePill b').textContent.trim(), 'Video', 'label jenis konten');
   const wrap = doc.getElementById('stModelPillWrap');
-  assert.ok(!wrap.classList.contains('st-hidden'), 'pill model harus tampil di mode video');
+  assert.ok(!wrap.classList.contains('st-hidden'), 'pill model video harus tampil');
+  // Pill model gambar disembunyikan di mode video.
+  const imgWrap = doc.getElementById('stImgModelPillWrap');
+  assert.ok(imgWrap.classList.contains('st-hidden'), 'pill model gambar harus hidden di mode video');
 });
 
 test('D-201 (regresi): popover pilihan tetap membuka ke atas', async () => {
@@ -135,11 +174,44 @@ test('D-201 (regresi): popover pilihan tetap membuka ke atas', async () => {
   assert.ok(!pop.classList.contains('pop-down'), 'popover jatuh ke bawah');
 });
 
+test('D-203: pill model gambar menampilkan model Kie & bisa diganti', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const wrap = doc.getElementById('stImgModelPillWrap');
+  assert.ok(wrap, 'pill model gambar tidak dirender');
+  // Mode foto + mesin auto -> pill model gambar tampil.
+  assert.ok(!wrap.classList.contains('st-hidden'), 'pill model gambar harus tampil di mode foto');
+  const label = () => doc.querySelector('#stImgModelPill b').textContent.trim();
+  assert.equal(label(), 'Nano Banana 2', 'label model gambar awal');
+  // Buka popover -> berisi model Kie.
+  doc.getElementById('stImgModelPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const pop = doc.getElementById('stPop-imgmodel');
+  assert.ok(pop.classList.contains('open'), 'popover model gambar tidak terbuka');
+  const models = [...pop.querySelectorAll('button')].map((b) => b.dataset.v);
+  assert.ok(models.length >= 4, 'jumlah model gambar: ' + models.length);
+  assert.ok(models.some((m) => m.includes('nano-banana')), 'model Banana tidak ada');
+  assert.ok(models.some((m) => m.includes('gpt-image')), 'model GPT Image tidak ada');
+  // Ganti ke GPT Image 2 -> label ikut berubah.
+  const gpt = [...pop.querySelectorAll('button')].find((b) => b.dataset.v.includes('gpt-image'));
+  gpt.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.equal(label(), 'GPT Image 2', 'label setelah ganti model');
+});
+
+test('D-203: request gambar mengirim model & resolusi', () => {
+  assert.ok(/model: state\.imageModel/.test(studio), 'model gambar tidak dikirim');
+  assert.ok(/resolution: state\.imageResolution/.test(studio), 'resolusi gambar tidak dikirim');
+  assert.ok(studio.includes('/api/ai/image/models'), 'endpoint katalog model gambar tidak dipakai');
+});
+
 test('D-200 (regresi): pilihan durasi tetap dinamis mengikuti model', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
-  doc.querySelector('.st-tab[data-mode="video"]').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const typePop = doc.getElementById('stPop-type');
+  [...typePop.querySelectorAll('button')].find((b) => b.dataset.v === 'video')
+    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   const durText = () => doc.querySelector('#stDurPill .st-pill b').textContent.trim();
   assert.equal(durText(), '8 detik', 'durasi awal Veo');
   doc.getElementById('stModelPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));

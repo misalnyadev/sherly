@@ -568,8 +568,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-202: judul & deskripsi halaman dihapus -> grid lebih luas.
    Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28).
    Composer turun lebih rendah (tempel di dasar area), jadi grid dapat ruang lebih. */
-#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 107px);min-height:420px;padding:0;margin-bottom:-16px}
-#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:16px}
+/* D-203: komposer turun lebih rendah lagi -> area grid lebih luas.
+   Tinggi view = 100vh - (padding atas main 18 + topbar ~61 + padding bawah main 28). */
+#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 96px);min-height:420px;padding:0;margin-bottom:-28px}
+#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:28px}
 .st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
 .st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
@@ -635,6 +637,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pill:hover{border-color:#49334e;box-shadow:0 0 0 3px #f044a814}
 .st-pill svg{width:14px;height:14px;stroke:#ff72c5}
 .st-pill b{color:#ffd0ec;font-weight:600}
+/* D-203: pill jenis konten — kotak pilihan utama (Foto/Video) */
+#stTypePill{border-color:#49334e;background:#111a2e}
+#stTypePill:hover{border-color:#f044a8}
+#stImgModelPill b{color:#ff9bdc}
 /* D-201: komposer menempel di bawah -> daftar pilihan popover membuka ke ATAS,
    supaya pilihan tidak tertutup area bawah / terpotong layar. */
 .st-pop{display:none;position:absolute;bottom:calc(100% + 8px);left:0;z-index:40;min-width:200px;max-height:min(56vh,420px);overflow-y:auto;overscroll-behavior:contain;background:#0c1422f7;border:1px solid #24344e;border-radius:12px;padding:6px;box-shadow:0 -18px 50px #000c}
