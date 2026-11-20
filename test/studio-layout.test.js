@@ -95,16 +95,27 @@ test('D-203: jenis konten jadi SATU kotak pilihan (pill), bukan dua tab', () => 
   assert.ok(!studio.includes('data-mode="photo"'), 'masih ada tab data-mode');
 });
 
-test('D-203: urutan baris kontrol — jenis konten, model gambar, vertikal/horizontal, mesin/gaya', () => {
-  const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2200);
+test('D-204: urutan baris kontrol FOTO — jenis konten, rasio, provider, model, style', () => {
+  const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2400);
   const iType = controls.indexOf('stTypePill');
-  const iImgModel = controls.indexOf('stImgModelPill');
   const iAspect = controls.indexOf('stAspectPill');
   const iEngine = controls.indexOf('stEnginePill');
-  assert.ok(iType > -1 && iImgModel > -1 && iAspect > -1 && iEngine > -1, 'elemen kontrol tidak lengkap');
-  assert.ok(iType < iImgModel, 'jenis konten harus sebelum model gambar');
-  assert.ok(iImgModel < iAspect, 'model gambar harus sebelum rasio');
-  assert.ok(iAspect < iEngine, 'rasio harus sebelum mesin');
+  const iImgModel = controls.indexOf('stImgModelPill');
+  const iStyle = controls.indexOf('stStylePill');
+  assert.ok(
+    iType > -1 && iAspect > -1 && iEngine > -1 && iImgModel > -1 && iStyle > -1,
+    'elemen kontrol tidak lengkap');
+  assert.ok(iType < iAspect, '1. jenis konten harus sebelum rasio');
+  assert.ok(iAspect < iEngine, '2. rasio harus sebelum provider');
+  assert.ok(iEngine < iImgModel, '3. provider harus sebelum model');
+  assert.ok(iImgModel < iStyle, '4. model harus sebelum style');
+});
+
+test('D-204: label provider "Otomatis" ringkas (tanpa keterangan dalam kurung)', () => {
+  assert.ok(!studio.includes('Otomatis (Kie'), 'label Otomatis masih panjang');
+  assert.ok(studio.includes("['auto', 'Otomatis']"), 'label Otomatis tidak ringkas');
+  // Penjelasan lengkap tetap tersedia di popover sebagai sub-label.
+  assert.ok(studio.includes('Kie → Kustom → Gemini'), 'penjelasan auto hilang dari popover');
 });
 
 test('D-202: pilihan vertikal/horizontal tersedia di popover rasio', () => {
@@ -172,6 +183,25 @@ test('D-201 (regresi): popover pilihan tetap membuka ke atas', async () => {
   assert.ok(pop.classList.contains('open'), 'popover rasio tidak terbuka');
   assert.ok(pop.classList.contains('pop-up'), 'popover bukan membuka ke atas');
   assert.ok(!pop.classList.contains('pop-down'), 'popover jatuh ke bawah');
+});
+
+test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model, style', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const ctrl = doc.querySelector('.st-controls');
+  // Cari indeks tiap kontrol di dalam baris kontrol (id bisa di button atau wrapper).
+  const idxOf = (id) => [...ctrl.children].findIndex((c) => c.id === id || c.querySelector('#' + id));
+  const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill', 'stStylePill'];
+  let prev = -1;
+  for (const id of order) {
+    const idx = idxOf(id);
+    assert.ok(idx > -1, 'kontrol ' + id + ' tidak ada di baris kontrol');
+    assert.ok(idx > prev, 'urutan salah: ' + id + ' tidak setelah elemen sebelumnya');
+    prev = idx;
+  }
+  // Provider menampilkan label ringkas "Otomatis".
+  assert.equal(doc.querySelector('#stEnginePill b').textContent.trim(), 'Otomatis', 'label provider');
 });
 
 test('D-203: pill model gambar menampilkan model Kie & bisa diganti', async () => {

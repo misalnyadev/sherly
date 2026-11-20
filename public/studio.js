@@ -117,7 +117,7 @@
       state.aspect = m.aspects.includes('9:16') ? '9:16' : m.aspects[0];
     }
   }
-  let engines = [['auto', 'Otomatis (Kie → Kustom → Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']];
+  let engines = [['auto', 'Otomatis'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']];
   let characters = []; // karakter user (potret + master sheet + suara)
   const SUGGESTIONS = [
     'Flatlay skincare pagi di meja kayu, cahaya jendela lembut, nuansa cream',
@@ -619,7 +619,16 @@
     }
     else if (which === 'style') items = Object.keys(STYLES).map((k) => '<button type="button" data-v="' + k + '" class="' + (state.style === k ? 'on' : '') + '">' + STYLES[k].label + '</button>').join('');
     else if (which === 'dur') items = durationOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.duration === v ? 'on' : '') + '">' + l + '</button>').join('');
-    else if (which === 'engine') items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">' + l + '</button>').join('');
+    else if (which === 'engine') {
+      // D-204: label pill ringkas ("Otomatis") — penjelasan lengkap tetap di popover.
+      const ENGINE_NOTES = {
+        auto: 'Kie → Kustom → Gemini',
+        gemini: 'Google Gemini',
+        kie: 'Kie AI',
+      };
+      items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">'
+        + '<span class="st-pop-model">' + esc(l) + (ENGINE_NOTES[v] ? '<small>' + esc(ENGINE_NOTES[v]) + '</small>' : '') + '</span></button>').join('');
+    }
     else if (which === 'type') {
       // D-203: satu kotak pilihan jenis konten (Foto / Video).
       items = CONTENT_TYPES.map(([v, l, ico]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.mode === v ? 'on' : '') + '">'
@@ -822,13 +831,16 @@
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       + '<div class="st-controls">'
+      // D-204: urutan untuk konten FOTO — jenis konten -> rasio -> provider -> model -> style.
       // D-203: jenis konten jadi SATU kotak pilihan (Foto / Video), bukan dua tab terpisah.
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stTypePill">' + icon('image-plus') + ' <b>Foto</b></button><div class="st-pop" id="stPop-type"></div></div>'
-      // D-203: kotak model gambar — muncul saat jenis konten Foto & mesin Kie.
-      + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
-      // D-202: urutan — jenis konten -> vertikal/horizontal -> durasi -> dll.
+      // Rasio (vertikal/horizontal) — urutan kedua.
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' <b>1:1</b></button><div class="st-pop" id="stPop-aspect"></div></div>'
+      // Provider / mesin — urutan ketiga.
       + '<div class="st-pill-wrap" id="stEnginePillWrap"><button type="button" class="st-pill" id="stEnginePill">' + icon('cpu') + ' <b>Mesin</b></button><div class="st-pop" id="stPop-engine"></div></div>'
+      // D-203: kotak model gambar — muncul saat jenis konten Foto & mesin Kie (urutan keempat).
+      + '<div class="st-pill-wrap st-hidden" id="stImgModelPillWrap"><button type="button" class="st-pill" id="stImgModelPill">' + icon('sparkles') + ' <b>Model</b></button><div class="st-pop" id="stPop-imgmodel"></div></div>'
+      // Gaya — urutan kelima.
       + '<div class="st-pill-wrap" id="stStylePillWrap"><button type="button" class="st-pill" id="stStylePill">' + icon('sparkles') + ' <b>Lifestyle</b></button><div class="st-pop" id="stPop-style"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stModelPillWrap"><button type="button" class="st-pill" id="stModelPill">' + icon('video') + ' <b>Model</b></button><div class="st-pop" id="stPop-model"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
@@ -850,7 +862,7 @@
     // Provider kustom dari Pengaturan otomatis jadi pilihan Mesin.
     fetch('/api/custom-providers', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
       const list = Array.isArray(d?.providers) ? d.providers : [];
-      engines = [['auto', 'Otomatis (Kie → Kustom → Gemini)'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']]
+      engines = [['auto', 'Otomatis'], ['gemini', 'Google Gemini'], ['kie', 'Kie AI']]
         .concat(list.map((p) => ['custom:' + p.id, p.name]));
       updatePillLabels();
     }).catch(() => {});
