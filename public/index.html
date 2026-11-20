@@ -657,6 +657,35 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pop button:hover{background:#24142a;color:#fff}
 .st-pop button.on{background:#24142a;color:#ffd0ec}
 .st-pop-model{display:flex;flex-direction:column;gap:2px;line-height:1.35}
+/* D-207: popover Bank Prompt — tab Template/Blok + daftar entri. */
+.st-pop-wide{min-width:320px;max-width:min(92vw,420px)}
+.st-pb-tabs{display:flex;gap:6px;padding:4px 4px 8px;margin-bottom:6px;border-bottom:1px solid #24344e}
+.st-pb-tab{flex:1;justify-content:center;background:#0f1828!important;border:1px solid #24344e!important;border-radius:8px!important;padding:7px 10px!important;font-size:12px!important;color:#91a2b9!important;cursor:pointer}
+.st-pb-tab.on{border-color:#f044a8!important;color:#f4f5fb!important;background:#24142a!important}
+.st-pb-body{display:flex;flex-direction:column;gap:4px}
+.st-pb-group{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.st-pb-group>b{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#5d6f88;padding:6px 11px 2px}
+.st-pb-item small{color:#5d6f88;font-size:10.5px;line-height:1.4;display:block}
+.st-pb-item.on{background:#f044a81f!important;color:#f4f5fb!important}
+.st-pb-item.on .st-pop-model>small{color:#ff9bdc}
+.st-pb-empty{color:#5d6f88;font-size:11.5px;padding:12px 11px;margin:0;line-height:1.5}
+.st-pill.st-on{border-color:#f044a8;color:#f4f5fb}
+/* D-207: panel CRUD Bank Prompt di Pengaturan. */
+.pb-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.pb-filter{border:1px solid #24344e;background:#0f1828;color:#91a2b9;border-radius:30px;padding:6px 14px;font-size:11.5px;cursor:pointer;transition:border-color .18s,background .18s,color .18s}
+.pb-filter.active{border-color:#f044a8;background:#d82d9126;color:#ffd0ec}
+.pb-filter:not(.active):hover{border-color:#74436c;background:#160f20;color:#ffd0ec}
+.pb-row{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:12px 14px;border:1px solid #24344e;border-radius:10px;margin-bottom:8px;background:#0a1220;flex-wrap:wrap}
+.pb-row-main{flex:1 1 320px;min-width:0}
+.pb-row-main>b{font-size:13px;color:#f4f5fb}
+.pb-row-main>p{margin:6px 0 0;font-size:11.5px;line-height:1.55;color:#91a2b9;word-break:break-word}
+.pb-tag{display:inline-block;margin-left:7px;padding:2px 8px;border-radius:30px;border:1px solid #49334e;background:#160f20;color:#cfd6e4;font-size:9.5px;letter-spacing:.04em;vertical-align:middle}
+.pb-tag-off{border-color:#74436c;color:#91a2b9}
+.pb-row-actions{display:flex;gap:10px;align-items:center;flex-shrink:0}
+.pb-del{color:#ff9bdc}
+#pbFormPanel textarea{width:100%;min-height:96px;background:#0f1828;border:1px solid #24344e;border-radius:10px;padding:10px 12px;color:#f4f5fb;font:inherit;font-size:12.5px;line-height:1.6;resize:vertical}
+#pbFormPanel select{width:100%;background:#0f1828;border:1px solid #24344e;border-radius:10px;padding:9px 12px;color:#f4f5fb;font:inherit;font-size:12.5px}
+#pbFormPanel input{width:100%;background:#0f1828;border:1px solid #24344e;border-radius:10px;padding:9px 12px;color:#f4f5fb;font:inherit;font-size:12.5px}
 .st-pop-model small{font-size:10px;color:var(--muted);letter-spacing:.02em}
 .st-pop button.on .st-pop-model small{color:#ff9bdc}
 .st-count{margin-left:auto;color:var(--muted);font-size:11px}
@@ -1027,7 +1056,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
  </section>
  <section id="aiProvidersView" class="page-view">
   <div class="page-heading"><div><h1>Pengaturan</h1><p>Kelola provider &amp; API key AI dan identitas akun Anda.</p></div></div>
-  <div class="settings-tabs"><button type="button" class="settings-tab active" data-settings-tab="providers"><span data-icon="sliders"></span> Provider &amp; API Key</button><button type="button" class="settings-tab" data-page="Profil"><span data-icon="user-round"></span> Profil Pengguna</button><button type="button" class="settings-tab" data-settings-tab="persona"><span data-icon="sherlyheart"></span> Persona Sherly</button></div>
+  <div class="settings-tabs"><button type="button" class="settings-tab active" data-settings-tab="providers"><span data-icon="sliders"></span> Provider &amp; API Key</button><button type="button" class="settings-tab" data-page="Profil"><span data-icon="user-round"></span> Profil Pengguna</button><button type="button" class="settings-tab" data-settings-tab="persona"><span data-icon="sherlyheart"></span> Persona Sherly</button><button type="button" class="settings-tab" data-settings-tab="promptbank"><span data-icon="message"></span> Bank Prompt</button></div>
   <div id="settingsProvidersPane">
   <div class="page-heading sub"><div><h1 style="font-size:19px">AI Provider Manager</h1><p>API key provider disimpan terenkripsi (AES-256-GCM) di Supabase. Satu label dapat berisi banyak key. Nilai key tidak pernah tampil — rotasi &amp; fallback otomatis saat gagal. Key dikelompokkan per kategori: Teks &amp; Logika, Vision, TTS, dan (segera) Studio — gambar &amp; video (mis. kie.ai).</p></div><button class="pink-btn" id="addProviderKeyBtn"><span data-icon="plus"></span> Tambah API Key</button></div>
   <div id="vaultBanner" class="warn-banner" style="display:none"></div>
@@ -1102,6 +1131,31 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     </div>
    </div>
   </div>
+  <div id="settingsPromptBankPane" hidden>
+   <div class="page-heading sub"><div><h1 style="font-size:19px">Bank Prompt</h1><p>Koleksi prompt siap pakai &amp; blok susunan prompt. Di Studio, pilih <b>Template</b> untuk mengisi komposer utuh, atau pilih beberapa <b>Blok</b> (kamera, cahaya, tekstur, color, negative) lalu ditumpuk otomatis jadi prompt maksimal.</p></div><button class="pink-btn" id="pbAddBtn"><span data-icon="plus"></span> Tambah Entri</button></div>
+   <div class="panel">
+    <div class="section-head"><h2><span data-icon="message"></span> Prompt Saya</h2><button class="link" id="pbRefreshBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
+    <p style="color:var(--muted);font-size:12px;margin:0 0 12px;line-height:1.6">Tersimpan di server (Supabase) — jadi bisa dipakai lintas perangkat. Prompt hasil riset sudah dipakai sebagai <b>isi awal</b> bank prompt-mu.</p>
+    <div class="pb-toolbar">
+     <button type="button" class="pb-filter active" data-pb-filter="all">Semua</button>
+     <button type="button" class="pb-filter" data-pb-filter="template">Template</button>
+     <button type="button" class="pb-filter" data-pb-filter="block">Blok</button>
+    </div>
+    <div id="pbList"><p style="color:var(--muted);font-size:12px">Memuat bank prompt...</p></div>
+   </div>
+   <div class="panel" id="pbFormPanel" hidden>
+    <div class="section-head"><h2><span data-icon="pencil"></span> <span id="pbFormTitle">Tambah Entri</span></h2><button class="link" id="pbCancelBtn">Batal</button></div>
+    <div class="form-grid">
+     <div class="form-field"><label for="pbKind">Jenis *</label><select id="pbKind"><option value="template">Template (prompt utuh)</option><option value="block">Blok (bagian prompt)</option></select></div>
+     <div class="form-field"><label for="pbCategory">Kategori</label><select id="pbCategory"></select></div>
+     <div class="form-field"><label for="pbLabel">Label *</label><input id="pbLabel" maxlength="80" placeholder="mis. Try Outfit / Golden Hour"></div>
+     <div class="form-field"><label for="pbSlots">Placeholder (pisahkan koma)</label><input id="pbSlots" maxlength="200" placeholder="mis. outfit"></div>
+     <div class="form-field full"><label for="pbContent">Isi prompt *</label><textarea id="pbContent" rows="4" maxlength="2000" placeholder="cth: drone view, camera high above looking straight down..."></textarea><span id="pbSlotHint" style="font-size:11px;color:var(--muted)"></span></div>
+     <div class="form-field full" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="pink-btn" id="pbSaveBtn"><span data-icon="check"></span> Simpan</button><span id="pbMsg" style="font-size:11.5px;color:var(--muted)"></span></div>
+    </div>
+   </div>
+  </div>
+
 </section>
 <section id="portfolioView" class="page-view">
   <div class="page-heading"><div><h1>Portfolio</h1><p>Karya SherlyStudio — foto, reels, dan artikel, tayang langsung dari Cloud Publish.</p></div></div>
@@ -1544,7 +1598,7 @@ document.querySelectorAll('[data-icon]').forEach(el=>{const key=el.dataset.icon;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
 let currentPage='Beranda';
 const ADMIN_ONLY_PAGES=['Dashboard','Karakter','Studio','Editor','Editor Video','Aset','Planner','Kalender','Cloud Publish','Pengaturan'];
-function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const edv=document.getElementById('editorView');const pbv=document.getElementById('publishView');const vev=document.getElementById('videoView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(edv)edv.classList.toggle('active',page==='Editor');if(pbv)pbv.classList.toggle('active',page==='Cloud Publish');if(vev)vev.classList.toggle('active',page==='Editor Video');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Beranda')setTimeout(()=>{try{window.sherlyAlignHomeNews()}catch{}},80);if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Editor')window.sherlyEdGo?.(window.__edTab||'foto');if(page==='Cloud Publish')window.loadPublish?.();if(page==='Editor Video')window.renderVideoEditor?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Editor','Editor Video','Cloud Publish','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
+function go(page){window.sherlyCloseChat?.();const _admin=sessionToken&&(window.sherlyUser?.role||'guest')==='admin';if(!sessionToken&&(ADMIN_ONLY_PAGES.includes(page)||page==='Profil'||page==='Pengaturan Saya')){window.__sherlyGoAfterLogin=page;window.sherlyOpenLogin?.();return;}if(ADMIN_ONLY_PAGES.includes(page)&&!_admin){toast('Halaman "'+page+'" khusus admin/pemilik SherlyStudio ya.');return;}currentPage=page;document.querySelectorAll('.nav button,.side-nav-btn,.mobile-tabbar button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='Chat Sherly'){window.openSherlyChat?.();return;}const dashboard=document.querySelector('.layout');const auth=document.getElementById('authView');const chars=document.getElementById('charactersView');const vault=document.getElementById('aiProvidersView');const prof=document.getElementById('profileView');const dav=document.getElementById('dashboardView');const assets=document.getElementById('assetsView');const pfv=document.getElementById('portfolioView');const plv=document.getElementById('plannerView');const edv=document.getElementById('editorView');const pbv=document.getElementById('publishView');const vev=document.getElementById('videoView');const pev=document.getElementById('personaView');const cov=document.getElementById('collabView');const cav=document.getElementById('calendarView');const sv=document.getElementById('studioView');const pcv=document.getElementById('publicCharsView');const msv=document.getElementById('memberSettingsView');dashboard.style.display=page==='Beranda'?'grid':'none';auth.classList.remove('active');chars.classList.toggle('active',page==='Karakter'&&!!sessionToken);if(vault)vault.classList.toggle('active',page==='Pengaturan'&&!!sessionToken);if(prof)prof.classList.toggle('active',page==='Profil');if(dav)dav.classList.toggle('active',page==='Dashboard');if(assets)assets.classList.toggle('active',page==='Aset');if(pfv)pfv.classList.toggle('active',page==='Portfolio');if(plv)plv.classList.toggle('active',page==='Planner');if(edv)edv.classList.toggle('active',page==='Editor');if(pbv)pbv.classList.toggle('active',page==='Cloud Publish');if(vev)vev.classList.toggle('active',page==='Editor Video');if(pev)pev.classList.toggle('active',page==='Persona');if(cov)cov.classList.toggle('active',page==='Kolaborasi');if(cav)cav.classList.toggle('active',page==='Kalender');if(sv)sv.classList.toggle('active',page==='Studio');if(pcv)pcv.classList.toggle('active',page==='Karakter Publik');if(msv)msv.classList.toggle('active',page==='Pengaturan Saya'&&!!sessionToken);if(page==='Karakter'&&sessionToken)loadCharacters();if(page==='Dashboard')window.refreshDashboard?.();if(page==='Pengaturan'&&sessionToken){window.loadAIProviders?.();window.loadBankSuara?.();window.loadCustomProviders?.();window.loadPromptBankAdmin?.()}if(page==='Profil'){if(_admin)window.loadProfile?.();else window.sherlyApplyTierProfile?.();}if(page==='Beranda')setTimeout(()=>{try{window.sherlyAlignHomeNews()}catch{}},80);if(page==='Portfolio')window.renderPortfolio?.();if(page==='Planner')window.renderPlanner?.();if(page==='Editor')window.sherlyEdGo?.(window.__edTab||'foto');if(page==='Cloud Publish')window.loadPublish?.();if(page==='Editor Video')window.renderVideoEditor?.();if(page==='Persona')window.renderPersona?.();if(page==='Kolaborasi')window.renderCollab?.();if(page==='Kalender')window.renderCalendar?.();if(page==='Studio')window.renderStudio?.();if(page==='Karakter Publik')window.loadPublicCharacters?.();if(page==='Pengaturan Saya')window.sherlyLoadPersonalKeys?.();if(!['Dashboard','Karakter','Karakter Publik','Pengaturan','Pengaturan Saya','Profil','Beranda','Aset','Portfolio','Planner','Editor','Editor Video','Cloud Publish','Persona','Kolaborasi','Kalender','Studio'].includes(page))toast('Modul '+page+' akan dikembangkan setelah modul ini.')}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.edtab)window.__edTab=b.dataset.edtab;go(b.dataset.page);}));
 window.__edTab='foto';
 window.sherlyEdGo=function sherlyEdGo(tab){window.__edTab=tab||'foto';const edv=document.getElementById('editorView'),vev=document.getElementById('videoView');if(!edv||!vev)return;edv.classList.toggle('active',window.__edTab==='foto');vev.classList.toggle('active',window.__edTab==='video');document.querySelectorAll('.ed-subtab').forEach(b=>b.classList.toggle('active',b.dataset.edtab===window.__edTab));if(window.__edTab==='video')window.renderVideoEditor?.();else window.renderEditor?.();};
@@ -1657,6 +1711,7 @@ document.getElementById('characterForm').addEventListener('submit',async e=>{e.p
 <script src="/publish.js"></script>
 <script src="/calendar.js"></script>
 <script src="/studio.js"></script>
+<script src="/prompt-bank.js"></script>
 <script src="/persona-data.js"></script>
 <script src="/persona.js"></script>
 <script src="/collab-data.js"></script>

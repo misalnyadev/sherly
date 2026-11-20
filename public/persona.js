@@ -190,9 +190,13 @@
       document.querySelectorAll('.settings-tab[data-settings-tab]').forEach((b) => b.classList.toggle('active', b === btn));
       const providers = document.getElementById('settingsProvidersPane');
       const persona = document.getElementById('settingsPersonaPane');
+      // D-207: pane Bank Prompt di Pengaturan.
+      const promptBank = document.getElementById('settingsPromptBankPane');
       if (providers) providers.hidden = tab !== 'providers';
       if (persona) persona.hidden = tab !== 'persona';
+      if (promptBank) promptBank.hidden = tab !== 'promptbank';
       if (tab === 'persona') personaEditorInit();
+      if (tab === 'promptbank') window.loadPromptBankAdmin?.();
     });
   });
 })();

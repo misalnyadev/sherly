@@ -22,6 +22,11 @@ import {
 import { generateVideoWithKie, pollKieVideoTask } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
+// D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
+import {
+  PROMPT_KINDS, PROMPT_CATEGORIES, SEED_PROMPT_BANK,
+  listPromptEntries, createPromptEntry, updatePromptEntry, deletePromptEntry, seedPromptBank,
+} from './prompt-bank.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -622,6 +627,52 @@ app.delete('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res)
     res.json(result);
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menghapus aset.' });
+  }
+});
+
+// ===== D-207: Bank Prompt (template utuh + blok modular) =====
+//
+// Dua jenis entri:
+//   kind 'template' -> satu prompt lengkap siap pakai (mis. "Try Outfit", "Drone View")
+//   kind 'block'    -> satu blok susunan prompt (kamera/cahaya/gaya/...) yang ditumpuk user.
+//
+// Semua entri milik user yang login (owner-only, RLS di DB).
+
+app.get('/api/prompt-bank', requireUser, requireAdmin, async (req, res) => {
+  try {
+    // Seed otomatis saat bank user masih kosong.
+    await seedPromptBank(req.supabase, req.user.id);
+    const entries = await listPromptEntries(req.supabase, req.user.id);
+    res.json({ ok: true, entries, kinds: PROMPT_KINDS, categories: PROMPT_CATEGORIES });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat bank prompt.' });
+  }
+});
+
+app.post('/api/prompt-bank', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const entry = await createPromptEntry(req.supabase, req.user.id, req.body || {});
+    res.status(201).json({ ok: true, entry });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menyimpan entri prompt.' });
+  }
+});
+
+app.put('/api/prompt-bank/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const entry = await updatePromptEntry(req.supabase, req.user.id, req.params.id, req.body || {});
+    res.json({ ok: true, entry });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memperbarui entri prompt.' });
+  }
+});
+
+app.delete('/api/prompt-bank/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const result = await deletePromptEntry(req.supabase, req.user.id, req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menghapus entri prompt.' });
   }
 });
 
