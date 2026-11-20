@@ -398,26 +398,40 @@
     const box = $('stAssetHeader'); if (!box) return;
     const mentioned = mentionedCharacters();
     const parts = [];
+    // D-215: referensi hanya ICON foto (tanpa nama, tanpa kapsul) supaya 3 karakter
+    // + 1 gambar muat 1 baris. Info aset muncul saat kursor di-hover (tooltip).
     for (const c of mentioned) {
       const badges = [];
       const v = c.voice || {};
-      if (v.name || v.style) badges.push('<span class="st-asset-badge" title="Punya profil suara">' + icon('mic') + '</span>');
-      if (c.board_image_url) badges.push('<span class="st-asset-badge" title="Punya master sheet">' + icon('layers') + '</span>');
+      const notes = [];
+      notes.push(c.name);
+      if (v.name || v.style) {
+        badges.push('<span class="st-asset-badge">' + icon('mic') + '</span>');
+        notes.push('Suara: ' + (v.name || v.style));
+      }
+      if (c.board_image_url) {
+        badges.push('<span class="st-asset-badge">' + icon('layers') + '</span>');
+        notes.push('Punya master sheet');
+      }
+      if (c.role) notes.push(c.role);
       parts.push(
-        '<span class="st-asset st-asset-char" title="' + esc(c.name + (v.name ? ' — suara ' + v.name : '')) + '">'
+        '<span class="st-asset st-asset-char" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
         + '<span class="st-asset-face">' + characterThumb(c) + '</span>'
-        + '<span class="st-asset-name">' + esc(c.name) + '</span>'
         + badges.join('')
         + '<button type="button" class="st-asset-x" data-mention-remove="' + esc(slugify(c.name)) + '" aria-label="Hapus ' + esc(c.name) + '">'
-        + icon('x') + '</button></span>'
+        + icon('x') + '</button>'
+        + '<span class="st-asset-tip" role="tooltip">' + esc(notes.join(' \u00b7 ')) + '</span>'
+        + '</span>'
       );
     }
     if (sceneRef) {
+      const label = sceneRef.label || 'Referensi gambar';
       parts.push(
-        '<span class="st-asset st-asset-scene" title="' + esc(sceneRef.label || 'Referensi gambar') + '">'
+        '<span class="st-asset st-asset-scene" tabindex="0" aria-label="' + esc(label) + '" data-asset-tip="' + esc(label) + '">'
         + '<span class="st-asset-scene-img"><img src="data:' + esc(sceneRef.mime || 'image/png') + ';base64,' + esc(sceneRef.data) + '" alt=""></span>'
-        + '<span class="st-asset-name">' + esc(sceneRef.label || 'Referensi gambar') + '</span>'
-        + '<button type="button" class="st-asset-x" data-scene-remove="1" aria-label="Hapus referensi gambar">' + icon('x') + '</button></span>'
+        + '<button type="button" class="st-asset-x" data-scene-remove="1" aria-label="Hapus referensi gambar">' + icon('x') + '</button>'
+        + '<span class="st-asset-tip" role="tooltip">' + esc(label) + '</span>'
+        + '</span>'
       );
     }
     // D-197: tanpa aset aktif -> header disembunyikan (bukan kotak kosong) supaya tampilan simpel.
