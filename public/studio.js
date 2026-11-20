@@ -153,9 +153,9 @@
         + '<button type="button" class="st-asset-x" data-scene-remove="1" aria-label="Hapus referensi gambar">' + icon('x') + '</button></span>'
       );
     }
-    const empty = '<span class="st-asset-empty">' + icon('user-round') + ' Ketik <b>@</b> untuk menyematkan karakter</span>';
-    box.innerHTML = parts.length ? parts.join('') : empty;
-    box.classList.toggle('st-empty', !parts.length);
+    // D-197: tanpa aset aktif -> header disembunyikan (bukan kotak kosong) supaya tampilan simpel.
+    box.innerHTML = parts.join('');
+    box.classList.toggle('st-hidden', !parts.length);
     box.querySelectorAll('[data-mention-remove]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       removeMentionFromPrompt(b.dataset.mentionRemove);
@@ -448,8 +448,10 @@
       + '<button type="button" class="st-tab active" data-mode="photo">' + icon('image-plus') + ' Foto</button>'
       + '<button type="button" class="st-tab" data-mode="video">' + icon('video') + ' Video</button>'
       + '</div>'
+      // D-197: hasil generate tampil DI ATAS komposer — hasil baru langsung terlihat tanpa scroll.
+      + '<div class="st-grid" id="stGrid"></div>'
       + '<div class="st-composer">'
-      + '<div class="st-asset-header" id="stAssetHeader"></div>'
+      + '<div class="st-asset-header st-hidden" id="stAssetHeader"></div>'
       + '<div class="st-mention-box">'
       + '<label for="stPrompt">Deskripsi konten yang kamu mau</label>'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
@@ -465,8 +467,7 @@
       + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
       + '</div>'
       + '<div class="st-note st-hidden" id="stRefNote"></div>'
-      + '<div class="st-note st-hidden" id="stVideoNote">' + icon('film') + '<div><b>Generator video menyusul.</b> Sementara pakai Studio Foto untuk menyiapkan frame adegan, lalu bring ke sini lewat <b>Lanjut Adegan</b>.</div></div>'
-      + '<div class="st-grid" id="stGrid"></div>';
+      + '<div class="st-note st-hidden" id="stVideoNote">' + icon('film') + '<div><b>Generator video menyusul.</b> Sementara pakai Studio Foto untuk menyiapkan frame adegan, lalu bring ke sini lewat <b>Lanjut Adegan</b>.</div></div>';
 
     // Karakter user — dipakai untuk mention picker & header aset.
     fetch('/api/characters', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
