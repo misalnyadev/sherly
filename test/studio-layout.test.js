@@ -449,8 +449,17 @@ test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model', a
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
   const ctrl = doc.querySelector('.st-controls');
-  // Cari indeks tiap kontrol di dalam baris kontrol (id bisa di button atau wrapper).
-  const idxOf = (id) => [...ctrl.children].findIndex((c) => c.id === id || c.querySelector('#' + id));
+  // D-221: pill pengaturan kini berada di dalam container .st-settings-pills
+  // (display:contents di desktop -> urutan visual tetap sama).
+  // D-221: pill pengaturan kini di dalam container .st-settings-pills
+  // (display:contents di desktop -> urutan visual tetap sama). Bandingkan
+  // urutan dengan compareDocumentPosition (document order), bukan index children.
+  const nodeOf = (id) => doc.getElementById(id);
+  const idxOf = (id) => {
+    const n = nodeOf(id);
+    if (!n || !ctrl.contains(n)) return -1;
+    return [...ctrl.querySelectorAll('*')].indexOf(n);
+  };
   const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill'];
   let prev = -1;
   for (const id of order) {
@@ -1112,4 +1121,72 @@ test('D-220: caret dipulihkan setelah DOM header berubah', () => {
   const la = studio.slice(studio.indexOf('async function loadAssets()'));
   const lbody = la.slice(0, la.indexOf('\n  }'));
   assert.ok(lbody.includes('await syncMentionedAssetRefs()'), 'loadAssets harus sinkronkan mention aset');
+});
+
+// ===== D-221: pengaturan konten jadi dropdown/modal di HP =====
+
+test('D-221: markup — pill pengaturan dikelompokkan + panel pengaturan ada', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Container pill pengaturan.
+  assert.ok(studio.includes('id="stSettingsPills"'), 'container stSettingsPills harus ada');
+  // Panel pengaturan.
+  assert.ok(studio.includes('id="stPop-settings"'), 'panel stPop-settings harus ada');
+  // Tombol jenis konten jadi pemicu (dengan chevron).
+  assert.ok(studio.includes('class="st-pill st-type-btn" id="stTypePill"'), 'tombol jenis konten harus punya kelas st-type-btn');
+  // Panel harus DI DALAM .st-controls (bukan popover global).
+  const ctl = studio.slice(studio.indexOf('class="st-controls"'));
+  const block = ctl.slice(0, ctl.indexOf("'<div class=\"st-video-progress"));
+  assert.ok(block.includes('stPop-settings'), 'panel harus di dalam st-controls');
+});
+
+test('D-221: panel pengaturan berisi jenis konten + semua setelan relevan', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Fungsi inti.
+  assert.ok(studio.includes('function buildSettingsPanel()'), 'buildSettingsPanel harus ada');
+  assert.ok(studio.includes('function openSettingsPanel()'), 'openSettingsPanel harus ada');
+  assert.ok(studio.includes('function activeSettings()'), 'activeSettings harus ada');
+  assert.ok(studio.includes('function settingChoices('), 'settingChoices harus ada');
+  assert.ok(studio.includes('function applySetting('), 'applySetting harus ada');
+  // Panel memuat section Jenis Konten.
+  const fn = studio.slice(studio.indexOf('function buildSettingsPanel()'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('data-set-key="type"'), 'panel harus punya pilihan jenis konten');
+  assert.ok(body.includes('Jenis Konten'), 'panel harus punya label Jenis Konten');
+  // Baris pengaturan lain.
+  assert.ok(body.includes('data-set-key="'), 'chip pengaturan harus pakai data-set-key');
+  // Mode video punya setting tambahan.
+  const act = studio.slice(studio.indexOf('function activeSettings()'));
+  const abody = act.slice(0, act.indexOf('\n  }'));
+  assert.ok(abody.includes("'dur'"), 'mode video punya durasi');
+  assert.ok(abody.includes("'tier'"), 'mode video punya tier');
+  assert.ok(abody.includes("'res'"), 'mode video punya resolusi');
+  assert.ok(abody.includes("'imgmodel'"), 'mode foto punya model gambar');
+  assert.ok(abody.includes("'aspect'"), 'selalu ada rasio');
+  assert.ok(abody.includes("'engine'"), 'selalu ada provider');
+});
+
+test('D-221: HP -> panel pengaturan, desktop -> dropdown jenis konten biasa', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const handler = studio.slice(studio.indexOf("$('stTypePill')?.addEventListener"));
+  const hbody = handler.slice(0, handler.indexOf('\n    });'));
+  assert.ok(hbody.includes('isMobileLayout()'), 'harus memeriksa layout HP');
+  assert.ok(hbody.includes('openSettingsPanel()'), 'di HP harus membuka panel pengaturan');
+  assert.ok(hbody.includes("buildPop('type'); togglePop('type')"), 'di desktop tetap dropdown biasa');
+  // togglePop harus bisa menutup panel settings.
+  assert.ok(studio.includes("'actions', 'settings'"), 'togglePop harus menutup panel settings');
+});
+
+test('D-221: CSS — pill pengaturan disembunyikan di HP, panel tampil tengah', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Di HP: container pill disembunyikan.
+  const mob = css.match(/@media\(max-width:560px\)\{\s*\.st-settings-pills\{display:none!important\}/);
+  assert.ok(mob, 'di HP .st-settings-pills harus display:none');
+  // Di desktop: container = contents (pill tetap sebaris).
+  assert.ok(css.includes('.st-settings-pills{display:contents}'), 'di desktop container harus display:contents');
+  // Panel pengaturan styling.
+  assert.ok(css.includes('.st-pop-settings{'), 'aturan .st-pop-settings harus ada');
+  assert.ok(css.includes('.st-set-chip.on{'), 'chip aktif harus punya styling');
+  assert.ok(css.includes('.st-set-row{'), 'baris pengaturan harus punya styling');
+  // Panel di HP diposisikan di tengah layar (modal).
+  assert.ok(/\.st-pop-settings\{position:fixed;left:50%;top:50%/.test(css), 'panel di HP harus di tengah layar');
 });

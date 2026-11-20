@@ -857,7 +857,7 @@
   function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'settings'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -968,6 +968,140 @@
       updatePillLabels();
       el.classList.remove('open'); popOpen = null;
     }));
+  }
+
+  // ===== D-221: Panel pengaturan konten (dropdown di HP) =====
+
+  /** Daftar pilihan untuk satu jenis pengaturan (dipakai panel & popover). */
+  function settingChoices(which) {
+    if (which === 'aspect') {
+      const list = state.mode === 'video' ? aspectOptions() : ASPECTS;
+      return list.map(([v, l]) => ({ v, l }));
+    }
+    if (which === 'dur') return durationOptions().map(([v, l]) => ({ v, l }));
+    if (which === 'engine') {
+      const ENGINE_NOTES = {
+        auto: 'Kie → Kustom → Gemini',
+        gemini: 'Google Gemini',
+        kie: 'Kie AI',
+      };
+      return engines.map(([v, l]) => ({ v, l, note: ENGINE_NOTES[v] || '' }));
+    }
+    if (which === 'imgmodel') return imageCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
+    if (which === 'model') return videoCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
+    if (which === 'tier') return tierOptions().map(([v, l]) => ({ v, l }));
+    if (which === 'res') return resolutionOptions().map(([v, l]) => ({ v, l }));
+    return [];
+  }
+  /** Nilai terpilih untuk satu jenis pengaturan. */
+  function settingValue(which) {
+    if (which === 'aspect') return state.aspect;
+    if (which === 'dur') return state.duration;
+    if (which === 'engine') return state.engine;
+    if (which === 'imgmodel') return state.imageModel;
+    if (which === 'model') return state.videoModel;
+    if (which === 'tier') return state.tier;
+    if (which === 'res') return state.resolution;
+    return '';
+  }
+  /** Pengaturan mana yang relevan untuk mode konten saat ini. */
+  function activeSettings() {
+    const isVideo = state.mode === 'video';
+    const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+    const list = [
+      { key: 'aspect', label: 'Rasio', icon: 'smartphone' },
+      { key: 'engine', label: 'Provider', icon: 'cpu' },
+    ];
+    if (isVideo) {
+      list.push({ key: 'model', label: 'Model', icon: 'video' });
+      list.push({ key: 'dur', label: 'Durasi', icon: 'clock' });
+      list.push({ key: 'tier', label: 'Tier', icon: 'sliders' });
+      list.push({ key: 'res', label: 'Resolusi', icon: 'sparkles' });
+    } else if (kieEngine) {
+      list.push({ key: 'imgmodel', label: 'Model', icon: 'sparkles' });
+    }
+    return list;
+  }
+  /** Terapkan pilihan pengaturan (sama seperti handler popover biasa). */
+  function applySetting(which, v) {
+    if (which === 'aspect') state.aspect = v;
+    if (which === 'dur') state.duration = v;
+    if (which === 'engine') {
+      state.engine = v;
+      const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+      $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+    }
+    if (which === 'tier') state.tier = v;
+    if (which === 'res') state.resolution = v;
+    if (which === 'imgmodel') {
+      state.imageModel = v;
+      const im = imageModel();
+      if (im) {
+        if (!im.resolutions.includes(state.imageResolution)) state.imageResolution = im.defaultResolution || im.resolutions[0];
+        if (!im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
+      }
+    }
+    if (which === 'model') {
+      state.videoModel = v;
+      const m = videoModel();
+      if (m) applyModelCaps(m, true);
+    }
+    updatePillLabels();
+  }
+  /**
+   * D-221: bangun panel pengaturan konten (dipakai di HP).
+   * Panel berisi baris: nama pengaturan -> daftar pilihan (inline chip).
+   */
+  function buildSettingsPanel() {
+    const el = $('stPop-settings'); if (!el) return;
+    // D-221: panel juga memuat pilihan jenis konten (Foto / Video) supaya
+    // di HP semua pengaturan konten ada di satu panel.
+    const typeChips = CONTENT_TYPES.map(([v, l, ico]) => {
+      const on = state.mode === v;
+      return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="type" data-set-v="' + esc(v) + '">'
+        + icon(ico) + esc(l) + '</button>';
+    }).join('');
+    const groups = activeSettings().map((g) => {
+      const cur = settingValue(g.key);
+      const opts = settingChoices(g.key);
+      const chips = opts.map((o) => {
+        const on = String(o.v) === String(cur);
+        return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="' + esc(g.key) + '" data-set-v="' + esc(o.v) + '">'
+          + esc(o.l) + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</button>';
+      }).join('');
+      return '<div class="st-set-row"><div class="st-set-label">' + icon(g.icon) + '<b>' + esc(g.label) + '</b></div>'
+        + '<div class="st-set-chips">' + chips + '</div></div>';
+    }).join('');
+    el.innerHTML = '<div class="st-set-head">' + icon('sliders') + '<b>Pengaturan Konten</b>'
+      + '<button type="button" class="st-set-close" id="stSetClose" aria-label="Tutup">' + icon('x') + '</button></div>'
+      + '<div class="st-set-body">'
+      + '<div class="st-set-row"><div class="st-set-label">' + icon('image-plus') + '<b>Jenis Konten</b></div>'
+      + '<div class="st-set-chips">' + typeChips + '</div></div>'
+      + groups
+      + '</div>';
+    el.querySelectorAll('[data-set-key]').forEach((b) => b.addEventListener('click', () => {
+      const key = b.dataset.setKey;
+      if (key === 'type') {
+        const next = b.dataset.setV;
+        if (next !== state.mode) { setMode(next); buildSettingsPanel(); }
+        return;
+      }
+      applySetting(key, b.dataset.setV);
+      buildSettingsPanel();
+    }));
+    $('stSetClose')?.addEventListener('click', () => { el.classList.remove('open'); popOpen = null; syncBackdrop(); });
+  }
+  /** D-221: buka panel pengaturan (HP). */
+  function openSettingsPanel() {
+    buildSettingsPanel();
+    const el = $('stPop-settings');
+    if (!el) return;
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions']
+      .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
+    el.classList.add('open');
+    el.classList.add('st-pop-center');
+    popOpen = 'settings';
+    syncBackdrop();
   }
 
   // ===== D-207: Bank Prompt (template utuh + blok modular) =====
@@ -1447,9 +1581,13 @@
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       + '<div class="st-controls">'
-      // D-204: urutan untuk konten FOTO — jenis konten -> rasio -> provider -> model -> style.
-      // D-203: jenis konten jadi SATU kotak pilihan (Foto / Video), bukan dua tab terpisah.
-      + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stTypePill">' + icon('image-plus') + ' <b>Foto</b></button><div class="st-pop" id="stPop-type"></div></div>'
+      // D-221: di HP semua pengaturan konten jadi SATU panel dropdown.
+      // Kolom kiri = tombol jenis konten (Foto/Video) + chevron;
+      // klik -> panel berisi Rasio, Provider, Model, Durasi, Tier, Resolusi.
+      // Di desktop pill tetap tampil baris seperti biasa.
+      + '<div class="st-pill-wrap st-type-wrap"><button type="button" class="st-pill st-type-btn" id="stTypePill">' + icon('image-plus') + ' <b>Foto</b>' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-type"></div></div>'
+      // D-221: container pill pengaturan (disembunyikan di HP, dipakai panel).
+      + '<div class="st-settings-pills" id="stSettingsPills">'
       // Rasio (vertikal/horizontal) — urutan kedua.
       + '<div class="st-pill-wrap"><button type="button" class="st-pill" id="stAspectPill">' + icon('smartphone') + ' <b>1:1</b></button><div class="st-pop" id="stPop-aspect"></div></div>'
       // Provider / mesin — urutan ketiga.
@@ -1460,6 +1598,9 @@
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stResPillWrap"><button type="button" class="st-pill" id="stResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-res"></div></div>'
+      + '</div>'
+      // D-221: panel pengaturan konten (dropdown/modal di HP).
+      + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
       + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn">' + icon('film') + ' Buat Video</button>'
@@ -1506,7 +1647,12 @@
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
     // D-203: pill jenis konten (satu kotak) & pill model gambar.
-    $('stTypePill')?.addEventListener('click', () => { buildPop('type'); togglePop('type'); });
+    // D-221: di HP tombol jenis konten membuka PANEL PENGATURAN (semua setelan
+    // konten di satu tempat); di PC tetap dropdown Foto/Video biasa.
+    $('stTypePill')?.addEventListener('click', () => {
+      if (isMobileLayout()) { openSettingsPanel(); return; }
+      buildPop('type'); togglePop('type');
+    });
     $('stImgModelPill')?.addEventListener('click', () => { buildPop('imgmodel'); togglePop('imgmodel'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });

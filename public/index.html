@@ -718,6 +718,39 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   box-shadow:0 24px 70px #000d;z-index:120;overscroll-behavior:contain}
 .st-pop.st-pop-center .st-pb-body{max-height:min(64vh,460px);overflow-y:auto;-webkit-overflow-scrolling:touch}
 @media(max-width:560px){.st-pop.st-pop-center{width:92vw;max-height:min(80vh,540px)}}
+/* ===== D-221: Panel pengaturan konten (dropdown di HP) ===== */
+/* Tombol jenis konten jadi pemicu panel pengaturan di HP. */
+.st-type-btn{gap:6px}
+.st-type-btn [data-icon]:last-child{opacity:.75}
+.st-settings-pills{display:contents}
+/* Panel pengaturan (dipakai di HP, tersembunyi di desktop). */
+.st-pop-settings{display:none}
+.st-pop-settings.open{display:block}
+.st-set-head{display:flex;align-items:center;gap:8px;padding:6px 6px 10px;border-bottom:1px solid #24344e;margin-bottom:8px}
+.st-set-head b{flex:1;font-size:13px;color:#f4f5fb}
+.st-set-head svg{width:15px;height:15px;stroke:#ff9bdc;fill:none}
+.st-set-close{width:26px;height:26px;border-radius:8px;border:1px solid #24344e;background:#0f1828;color:#91a2b9;cursor:pointer;display:grid;place-items:center;padding:0}
+.st-set-close svg{width:13px;height:13px;stroke:#91a2b9}
+.st-set-body{display:flex;flex-direction:column;gap:12px;max-height:min(58vh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.st-set-row{display:flex;flex-direction:column;gap:6px}
+.st-set-label{display:flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.st-set-label svg{width:13px;height:13px;stroke:#ff9bdc;fill:none}
+.st-set-chips{display:flex;flex-wrap:wrap;gap:6px}
+.st-set-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:9px;
+  border:1px solid #24344e;background:#0f1828;color:#cfd6e4;font-size:12px;font-family:inherit;cursor:pointer;transition:border-color .18s,background .18s}
+.st-set-chip small{font-size:10px;color:var(--muted)}
+.st-set-chip.on{border-color:#f044a8;background:#24142a;color:#ffd0ec}
+.st-set-chip.on small{color:#ffd0ec}
+/* ===== D-221 mobile: hanya tombol jenis konten + tombol buat ===== */
+@media(max-width:560px){
+  .st-settings-pills{display:none!important}
+  .st-type-wrap{flex:none}
+  .st-controls{gap:8px}
+  .st-count{margin-left:auto}
+  .st-pop-settings{position:fixed;left:50%;top:50%;bottom:auto;right:auto;transform:translate(-50%,-50%);
+    width:92vw;max-width:92vw;max-height:min(80vh,540px);background:#0c1422f7;border:1px solid #24344e;
+    border-radius:14px;padding:8px;box-shadow:0 24px 70px #000d;z-index:120;overflow:hidden}
+}
 .st-pb-tabs{display:flex;gap:6px;padding:4px 4px 8px;margin-bottom:6px;border-bottom:1px solid #24344e}
 .st-pb-tab{flex:1;justify-content:center;background:#0f1828!important;border:1px solid #24344e!important;border-radius:8px!important;padding:7px 10px!important;font-size:12px!important;color:#91a2b9!important;cursor:pointer}
 .st-pb-tab.on{border-color:#f044a8!important;color:#f4f5fb!important;background:#24142a!important}
