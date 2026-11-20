@@ -203,8 +203,8 @@ test('D-207: blok terpilih menambah label pill', async () => {
   pop = doc.getElementById('stPop-prompt');
   const btn = [...pop.querySelectorAll('[data-pb-block]')].find((b) => b.dataset.pbBlock === 'b1');
   btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  // D-213: item menu "Prompt" menampilkan jumlah blok (span), tombol menu juga (b).
-  const label = doc.querySelector('#stPromptPill span').textContent.trim();
+  // D-213/D-214: item menu "Prompt" menampilkan jumlah blok (span judul), tombol menu (b).
+  const label = doc.querySelector('#stPromptPill span:not([data-icon])').textContent.trim();
   assert.equal(label, '1 blok', 'label item menu blok tidak sesuai: ' + label);
   const menuLabel = doc.querySelector('#stPromptMenuBtn b').textContent.trim();
   assert.equal(menuLabel, '1 blok', 'label tombol menu blok tidak sesuai: ' + menuLabel);
@@ -218,10 +218,14 @@ test('D-213: aksi prompt jadi menu dropdown di dalam kotak composer (1 baris)', 
   assert.ok(box, 'kotak prompt tidak ditemukan');
   // D-213: baris judul LAMA (.st-prompt-head) dihapus supaya header composer pendek.
   assert.equal(doc.querySelector('.st-prompt-head'), null, 'baris judul lama harus dihapus (D-213)');
-  // Baris menu aksi ada DI DALAM kotak composer, 1 baris.
+  // D-214: baris menu aksi ada di baris ATAS composer (st-composer-top), 1 baris.
   const row = doc.querySelector('.st-tools-menu-row');
   assert.ok(row, 'baris menu aksi tidak ada');
-  assert.ok(box.contains(row), 'baris menu harus di dalam kotak prompt');
+  const top = doc.querySelector('.st-composer-top');
+  assert.ok(top, 'baris atas composer tidak ada');
+  assert.ok(top.contains(row), 'baris menu harus di baris atas composer');
+  // Referensi (karakter/gambar) SEBARIS dengan menu, bukan baris terpisah.
+  assert.ok(top.contains(doc.getElementById('stAssetHeader')), 'header aset harus sebaris dengan menu');
   assert.equal(row.children.length, 1, 'baris menu harus 1 elemen (1 baris)');
   // Tombol menu utama (compact, bukan 4 tombol lebar).
   const btn = doc.getElementById('stPromptMenuBtn');
@@ -242,9 +246,9 @@ test('D-213: aksi prompt jadi menu dropdown di dalam kotak composer (1 baris)', 
   }
   // Textarea tetap di bawah baris menu.
   const ta = doc.getElementById('stPrompt');
-  // Baris menu di DALAM kotak prompt & mendahului textarea (FOLLOWING = 4).
-  const boxEl = ta.closest('.st-mention-box');
-  assert.ok(boxEl.contains(row), 'baris menu harus di dalam kotak prompt');
+  // D-214: baris menu di baris ATAS composer, mendahului textarea (FOLLOWING = 4).
+  const topEl = doc.querySelector('.st-composer-top');
+  assert.ok(topEl.contains(row), 'baris menu harus di baris atas composer');
   assert.ok(
     row.compareDocumentPosition(ta) & 4,
     'baris menu harus mendahului textarea'
@@ -590,12 +594,16 @@ test('D-213: baris menu aksi 1 baris & rata kanan (desktop & HP)', async () => {
   // Satu elemen saja -> tidak mungkin jadi 2 baris.
   assert.equal(row.children.length, 1, 'baris menu harus 1 elemen (1 baris)');
   assert.ok(row.classList.contains('st-tools-menu-row'), 'harus kelas .st-tools-menu-row');
-  // CSS: rata kanan & tidak column.
+  // CSS: baris atas composer = referensi + menu sebaris (tidak vertikal).
   const css = readFileSync('public/index.html', 'utf8');
-  const rule = css.match(/\.st-tools-menu-row\{[^}]*\}/);
-  assert.ok(rule, 'aturan .st-tools-menu-row tidak ada');
-  assert.ok(rule[0].includes('justify-content:flex-end'), 'baris menu harus rata kanan');
-  assert.ok(!rule[0].includes('flex-direction:column'), 'baris menu jangan jadi vertikal');
+  const topRule = css.match(/\.st-composer-top\{[^}]*\}/);
+  assert.ok(topRule, 'aturan .st-composer-top tidak ada');
+  assert.ok(topRule[0].includes('display:flex'), 'baris atas composer harus flex');
+  assert.ok(!topRule[0].includes('flex-direction:column'), 'baris atas composer jangan vertikal');
+  assert.ok(topRule[0].includes('align-items:center'), 'isi baris atas composer harus rata tengah');
+  const rowRule = css.match(/\.st-tools-menu-row\{[^}]*\}/);
+  assert.ok(rowRule, 'aturan .st-tools-menu-row tidak ada');
+  assert.ok(!rowRule[0].includes('flex-direction:column'), 'baris menu jangan jadi vertikal');
   // Menu utama tidak boleh jadi lebar penuh (bentuk compact).
   const btnRule = css.match(/\.st-menu-btn\{[^}]*\}/);
   assert.ok(btnRule, 'aturan .st-menu-btn tidak ada');
@@ -643,7 +651,7 @@ test('D-212: tombol Reset membersihkan komposer dari prompt', async () => {
   btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   assert.equal(ta.value, '', 'Reset harus mengosongkan isi prompt');
   // Label kembali ke "Prompt" (blok terpilih dilepas) — di item menu & tombol menu.
-  assert.equal(doc.querySelector('#stPromptPill span').textContent.trim(), 'Prompt',
+  assert.equal(doc.querySelector('#stPromptPill span:not([data-icon])').textContent.trim(), 'Prompt',
     'label item menu harus kembali ke Prompt setelah Reset');
   assert.equal(doc.querySelector('#stPromptMenuBtn b').textContent.trim(), 'Prompt',
     'label tombol menu harus kembali ke Prompt setelah Reset');
@@ -700,4 +708,71 @@ test('D-213: item Reset & Copy dari menu tetap menjalankan aksinya', async () =>
   doc.getElementById('stCopyPromptBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 60));
   assert.ok(copied && copied.includes('promo kopi susu'), 'Copy dari menu harus menyalin isi prompt');
+});
+
+// ===== D-214: ikon tampil, menu tanpa keterangan, referensi sebaris dengan menu =====
+
+test('D-214: ICONS diexpose ke window supaya ikon studio.js tampil', () => {
+  const html = readFileSync('public/index.html', 'utf8');
+  assert.ok(html.includes('window.ICONS = ICONS'),
+    'ICONS harus di-expose ke window (const di script lain tidak terjangkau)');
+  // Helper icon() di studio.js memakai window.ICONS sebagai fallback.
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('window.ICONS'), 'icon() harus fallback ke window.ICONS');
+});
+
+test('D-214: item menu prompt tidak punya keterangan (hanya ikon + judul)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const items = [...doc.querySelectorAll('#stPop-actions .st-menu-item')];
+  assert.equal(items.length, 4, 'harus ada 4 item menu');
+  const expected = ['Reset', 'Prompt', 'Optimalkan', 'Copy'];
+  items.forEach((it, i) => {
+    assert.equal(it.querySelectorAll('small').length, 0, 'item ' + it.id + ' tidak boleh punya keterangan');
+    assert.ok(it.querySelector('[data-icon]'), 'item ' + it.id + ' harus punya ikon');
+    // Teks item = judulnya saja (tanpa keterangan).
+    const title = it.querySelector('span:not([data-icon])');
+    assert.ok(title, 'item ' + it.id + ' harus punya judul');
+    assert.equal(title.textContent.trim(), expected[i], 'judul item ' + it.id + ' tidak sesuai');
+  });
+});
+
+test('D-214: judul item menu tidak kembar (span ikon vs span judul terpisah)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const pp = doc.getElementById('stPromptPill');
+  const title = pp.querySelector('span:not([data-icon])');
+  assert.equal(title.textContent.trim(), 'Prompt', 'judul item Prompt tidak boleh kembar');
+  // Setelah updatePillLabels pun tetap satu kata.
+  const { win: w2, doc: d2 } = buildStudio(okFetch);
+  await w2.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const pp2 = d2.getElementById('stPromptPill');
+  assert.equal(pp2.querySelector('span:not([data-icon])').textContent.trim(), 'Prompt');
+});
+
+test('D-214: referensi karakter/gambar SEBARIS dengan menu dropdown prompt', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const top = doc.querySelector('.st-composer-top');
+  assert.ok(top, 'baris atas composer tidak ada');
+  // Header aset & baris menu adalah dua anak sebaris di baris yang sama.
+  const kids = [...top.children];
+  assert.equal(kids.length, 2, 'baris atas composer harus 2 anak (referensi + menu)');
+  assert.ok(kids[0].classList.contains('st-asset-header'), 'anak pertama = header aset');
+  assert.ok(kids[1].classList.contains('st-tools-menu-row'), 'anak kedua = baris menu');
+  // Header aset TIDAK lagi anak langsung composer (bukan baris terpisah).
+  const composer = doc.querySelector('.st-composer');
+  assert.notEqual(doc.getElementById('stAssetHeader').parentElement, composer,
+    'header aset tidak boleh baris terpisah di atas composer');
+  // CSS: baris atas composer flex, rata tengah, tidak vertikal.
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-composer-top\{[^}]*\}/);
+  assert.ok(rule, 'aturan .st-composer-top tidak ada');
+  assert.ok(rule[0].includes('display:flex'), 'harus flex (sebaris)');
+  assert.ok(rule[0].includes('align-items:center'), 'harus rata tengah');
+  assert.ok(!rule[0].includes('flex-direction:column'), 'jangan vertikal (naik 2 baris)');
 });
