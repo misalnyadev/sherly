@@ -1149,10 +1149,10 @@
       + '<div class="st-stage-empty" id="stStageEmpty">' + icon('image-plus') + '<b>Hasil generate & asetmu muncul di sini</b>'
       + '<p>Ketik <b>@</b> untuk menyematkan karakter, atau unggah aset untuk dipakai ulang.</p></div>'
       + '</div>'
-      // D-210: baris judul prompt DI ATAS kotak composer (label kiri, tombol kanan).
-      // Tombol Prompt pindah ke sini supaya di HP posisinya rata kanan & tidak terpotong.
+      // D-210: baris judul prompt DI ATAS kotak composer.
+      // D-211: label "Deskripsi konten yang kamu mau" dihapus — bikin teks turun
+      // 5 baris di HP. Sisanya tombol Prompt / Optimalkan / Copy rata kanan.
       + '<div class="st-prompt-head">'
-      + '<label for="stPrompt">Deskripsi konten yang kamu mau</label>'
       + '<div class="st-prompt-tools">'
       + '<div class="st-pill-wrap" id="stPromptPillWrap"><button type="button" class="st-pill st-tool-pill" id="stPromptPill">' + icon('message') + ' <b>Prompt</b></button><div class="st-pop st-pop-wide" id="stPop-prompt"></div></div>'
       + '<button type="button" class="st-tool-btn" id="stOptimizeBtn" title="Optimalkan susunan prompt (kategori & alur fokus)">' + icon('sparkles') + ' Optimalkan</button>'
