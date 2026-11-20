@@ -34,6 +34,7 @@
     { key: 'style', label: 'Gaya / Style' },
     { key: 'fotovideo', label: 'Kode Foto ke Video' },
     { key: 'produk', label: 'Kode Video Produk' },
+    { key: 'flow', label: 'Cheat Codes Google Flow' },
   ];
   const GROUP_LABEL = Object.fromEntries(GROUPS.map((g) => [g.key, g.label]));
 
@@ -73,6 +74,34 @@
     const sel = $('pbCategory');
     if (!sel) return;
     sel.innerHTML = categories.map((c) => '<option value="' + esc(c.key) + '">' + esc(c.label) + '</option>').join('');
+  }
+
+  /**
+   * D-210: kategori bebas untuk group 'flow' (cheat code Google Flow).
+   * Group flow memakai kategori bebas (mis. "UGC & Creator Style"), jadi
+   * kolom kategori jadi input teks bebas, bukan dropdown.
+   */
+  function syncCategoryField() {
+    const sel = $('pbCategory');
+    const gsel = $('pbGroup');
+    if (!sel || !gsel) return;
+    const isFlow = gsel.value === 'flow';
+    if (isFlow && sel.tagName !== 'INPUT') {
+      const cur = sel.value || 'umum';
+      const input = document.createElement('input');
+      input.id = 'pbCategory';
+      input.type = 'text';
+      input.maxLength = 60;
+      input.placeholder = 'mis. UGC & Creator Style';
+      input.value = cur === 'umum' ? '' : cur;
+      sel.replaceWith(input);
+    } else if (!isFlow && sel.tagName === 'INPUT') {
+      const cur = sel.value.trim();
+      const s = document.createElement('select');
+      s.id = 'pbCategory';
+      s.innerHTML = categories.map((c) => '<option value="' + esc(c.key) + '"' + (c.key === cur ? ' selected' : '') + '>' + esc(c.label) + '</option>').join('');
+      sel.replaceWith(s);
+    }
   }
 
   /** Daftar entri (difilter) sebagai kartu. */
@@ -124,6 +153,13 @@
     if ($('pbCategory')) $('pbCategory').value = e ? e.category : 'umum';
     if ($('pbMode')) $('pbMode').value = e ? (e.mode || 'foto') : 'foto';
     if ($('pbGroup')) $('pbGroup').value = e ? (e.group || 'umum') : 'umum';
+    syncCategoryField();
+    // D-210: setel ulang isi kategori sesuai group aktif.
+    if ($('pbCategory') && $('pbCategory').tagName === 'INPUT') {
+      $('pbCategory').value = e ? (e.category || '') : '';
+    } else if ($('pbCategory')) {
+      $('pbCategory').value = e ? (e.category || 'umum') : 'umum';
+    }
     if ($('pbLabel')) $('pbLabel').value = e ? e.label : '';
     if ($('pbSlots')) $('pbSlots').value = e && Array.isArray(e.slots) ? e.slots.join(', ') : '';
     if ($('pbContent')) $('pbContent').value = e ? e.content : '';
@@ -218,6 +254,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     fillCategorySelect();
     fillGroupSelect();
+    // D-210: kolom kategori berubah bentuk saat kelompok = 'flow'.
+    $('pbGroup')?.addEventListener('change', syncCategoryField);
     $('pbAddBtn')?.addEventListener('click', () => openForm(null));
     $('pbCancelBtn')?.addEventListener('click', closeForm);
     $('pbSaveBtn')?.addEventListener('click', save);

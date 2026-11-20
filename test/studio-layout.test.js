@@ -124,12 +124,13 @@ test('D-203: jenis konten jadi SATU kotak pilihan (pill), bukan dua tab', () => 
 
 // --- D-207: Bank Prompt di Studio ---
 
-test('D-207/D-208: pill Bank Prompt ada di baris kontrol, menggantikan Style', () => {
+test('D-207/D-208: pill Bank Prompt ada di baris judul prompt (bukan baris kontrol)', () => {
   const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2600);
-  const iImgModel = controls.indexOf('stImgModelPill');
-  const iPrompt = controls.indexOf('stPromptPill');
-  assert.ok(iPrompt > -1, 'pill Bank Prompt tidak ada');
-  assert.ok(iImgModel > -1 && iImgModel < iPrompt, 'pill Bank Prompt harus setelah Model');
+  // D-210: pill Prompt pindah ke baris judul prompt, di ATAS kotak komposer.
+  assert.ok(studio.includes('stPromptPill'), 'pill Bank Prompt tidak ada');
+  assert.ok(!controls.includes('stPromptPill'), 'pill Bank Prompt masih di baris kontrol');
+  const controls2 = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2600);
+  assert.ok(controls2.includes('stImgModelPill'), 'pill Model gambar hilang dari baris kontrol');
 });
 
 test('D-207: popover Bank Prompt punya tab Template & Blok', async () => {
@@ -206,26 +207,46 @@ test('D-207: blok terpilih menambah label pill', async () => {
   assert.equal(label, '1 blok', 'label pill blok tidak sesuai: ' + label);
 });
 
-test('D-209: tombol Optimalkan & Copy sebaris dengan label prompt', async () => {
+test('D-210: baris judul prompt di atas kotak composer, tombol urut Prompt - Optimalkan - Copy', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
   const box = doc.getElementById('stPrompt').closest('.st-mention-box');
   assert.ok(box, 'kotak prompt tidak ditemukan');
-  // Label & tombol harus berada di baris yang sama (.st-prompt-head).
-  const head = box.querySelector('.st-prompt-head');
+  // D-210: baris judul (.st-prompt-head) DI LUAR kotak composer, di atasnya.
+  const head = doc.querySelector('.st-prompt-head');
   assert.ok(head, 'baris judul prompt (.st-prompt-head) tidak ada');
+  assert.ok(!box.contains(head), 'baris judul harus di luar kotak composer');
+  const composer = doc.querySelector('.st-composer');
+  assert.ok(composer, 'kotak composer tidak ada');
+  assert.ok(
+    head.compareDocumentPosition(composer) & win.Node.DOCUMENT_POSITION_FOLLOWING,
+    'baris judul harus di ATAS kotak composer'
+  );
   const label = head.querySelector('label[for="stPrompt"]');
   assert.ok(label, 'label "Deskripsi konten yang kamu mau" tidak di baris judul');
   assert.ok(label.textContent.includes('Deskripsi konten yang kamu mau'), 'teks label berubah');
   const tools = head.querySelector('.st-prompt-tools');
   assert.ok(tools, 'grup tombol tidak di baris judul');
-  // Kedua tombol harus di dalam baris yang sama dengan label.
-  assert.ok(tools.querySelector('#stOptimizeBtn'), 'tombol Optimalkan bukan di baris judul');
-  assert.ok(tools.querySelector('#stCopyPromptBtn'), 'tombol Copy bukan di baris judul');
-  // Textarea tetap di bawah baris judul.
+  // Urutan tombol: Prompt -> Optimalkan -> Copy.
+  const ids = Array.from(tools.children).map((c) => {
+    const b = c.querySelector('button') || c;
+    return b.id || '';
+  });
+  const iPrompt = ids.indexOf('stPromptPill');
+  const iOpt = ids.indexOf('stOptimizeBtn');
+  const iCopy = ids.indexOf('stCopyPromptBtn');
+  assert.ok(iPrompt > -1, 'tombol Prompt bukan di baris judul');
+  assert.ok(iOpt > -1, 'tombol Optimalkan bukan di baris judul');
+  assert.ok(iCopy > -1, 'tombol Copy bukan di baris judul');
+  assert.ok(iPrompt < iOpt && iOpt < iCopy, 'urutan tombol harus Prompt - Optimalkan - Copy');
+  // Textarea tetap di bawah baris judul (baris judul mendahului kotak composer).
   const ta = doc.getElementById('stPrompt');
-  assert.equal(ta.previousElementSibling, head, 'textarea harus sesudah baris judul');
+  const boxEl = ta.closest('.st-mention-box');
+  assert.ok(
+    head.compareDocumentPosition(boxEl) & win.Node.DOCUMENT_POSITION_FOLLOWING,
+    'baris judul harus mendahului kotak prompt'
+  );
 });
 
 test('D-207: prompt yang dikirim ke server memuat blok urut kategori', async () => {
@@ -279,20 +300,20 @@ test('D-207: prompt akhir merakit blok urut kategori (kamera -> cahaya -> negati
   assert.ok(body.includes('rasio aspek'), 'keterangan rasio hilang');
 });
 
-test('D-204/D-208: urutan baris kontrol FOTO — jenis konten, rasio, provider, model, prompt', () => {
+test('D-204/D-208: urutan baris kontrol FOTO — jenis konten, rasio, provider, model', () => {
   const controls = studio.slice(studio.indexOf('class="st-controls"'), studio.indexOf('class="st-controls"') + 2400);
   const iType = controls.indexOf('stTypePill');
   const iAspect = controls.indexOf('stAspectPill');
   const iEngine = controls.indexOf('stEnginePill');
   const iImgModel = controls.indexOf('stImgModelPill');
-  const iPrompt = controls.indexOf('stPromptPill');
   assert.ok(
-    iType > -1 && iAspect > -1 && iEngine > -1 && iImgModel > -1 && iPrompt > -1,
+    iType > -1 && iAspect > -1 && iEngine > -1 && iImgModel > -1,
     'elemen kontrol tidak lengkap');
   assert.ok(iType < iAspect, '1. jenis konten harus sebelum rasio');
   assert.ok(iAspect < iEngine, '2. rasio harus sebelum provider');
   assert.ok(iEngine < iImgModel, '3. provider harus sebelum model');
-  assert.ok(iImgModel < iPrompt, '4. model harus sebelum prompt');
+  // D-210: pill Prompt pindah ke baris judul prompt (di atas kotak composer).
+  assert.ok(controls.indexOf('stPromptPill') === -1, 'pill Prompt harus keluar dari baris kontrol (D-210)');
   // D-208: pill Style dihapus (gaya jadi template transparan di Bank Prompt).
   assert.ok(controls.indexOf('stStylePill') === -1, 'pill Style harus dihapus (D-208)');
 });
@@ -417,14 +438,14 @@ test('D-205: ikon rasio ikut orientasi (vertikal = smartphone, horizontal = moni
   assert.equal(iconOf(), 'monitor', 'rasio persegi harus ikon monitor (bukan vertikal)');
 });
 
-test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model, style', async () => {
+test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model', async () => {
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
   const ctrl = doc.querySelector('.st-controls');
   // Cari indeks tiap kontrol di dalam baris kontrol (id bisa di button atau wrapper).
   const idxOf = (id) => [...ctrl.children].findIndex((c) => c.id === id || c.querySelector('#' + id));
-  const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill', 'stPromptPill'];
+  const order = ['stTypePill', 'stAspectPill', 'stEnginePill', 'stImgModelPill'];
   let prev = -1;
   for (const id of order) {
     const idx = idxOf(id);
@@ -432,6 +453,12 @@ test('D-204: urutan Controls di DOM — jenis konten, rasio, provider, model, st
     assert.ok(idx > prev, 'urutan salah: ' + id + ' tidak setelah elemen sebelumnya');
     prev = idx;
   }
+  // D-210: tombol Prompt/Optimalkan/Copy ada di baris judul prompt, bukan di baris kontrol.
+  assert.equal(idxOf('stPromptPill'), -1, 'pill Prompt harus di baris judul (D-210)');
+  const head = doc.querySelector('.st-prompt-head');
+  assert.ok(head.querySelector('#stPromptPill'), 'pill Prompt tidak di baris judul');
+  assert.ok(head.querySelector('#stOptimizeBtn'), 'tombol Optimalkan tidak di baris judul');
+  assert.ok(head.querySelector('#stCopyPromptBtn'), 'tombol Copy tidak di baris judul');
   // Provider menampilkan label ringkas "Otomatis".
   assert.equal(doc.querySelector('#stEnginePill b').textContent.trim(), 'Otomatis', 'label provider');
 });
@@ -483,4 +510,67 @@ test('D-200 (regresi): pilihan durasi tetap dinamis mengikuti model', async () =
   kling.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   assert.equal(durText(), '5 detik', 'durasi setelah pilih Kling');
   assert.equal(doc.querySelector('#stModelPill b').textContent.trim(), 'Kling 3.0', 'label model');
+});
+
+// ===== D-210: jendela pilih prompt di tengah layar HP =====
+
+test('D-210: di HP jendela pilih prompt jadi panel tengah layar', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  // Simulasi lebar layar HP.
+  Object.defineProperty(win, 'innerWidth', { value: 390, configurable: true });
+  Object.defineProperty(win, 'innerHeight', { value: 844, configurable: true });
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+  const pop = doc.getElementById('stPop-prompt');
+  assert.ok(pop.classList.contains('open'), 'jendela prompt tidak terbuka');
+  assert.ok(pop.classList.contains('st-pop-center'), 'jendela prompt tidak diposisikan di tengah layar');
+  // Backdrop tampil, tap untuk tutup.
+  const bd = doc.getElementById('stPopBackdrop');
+  assert.ok(bd && !bd.classList.contains('st-hidden'), 'backdrop tidak tampil');
+  bd.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.ok(!pop.classList.contains('open'), 'jendela prompt tidak tertutup');
+  assert.ok(bd.classList.contains('st-hidden'), 'backdrop tidak disembunyikan');
+});
+
+test('D-210: di desktop jendela prompt tetap popover (bukan panel tengah)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  Object.defineProperty(win, 'innerWidth', { value: 1280, configurable: true });
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  doc.getElementById('stPromptPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+  const pop = doc.getElementById('stPop-prompt');
+  assert.ok(!pop.classList.contains('st-pop-center'), 'desktop tidak boleh panel tengah');
+});
+
+test('D-210: markup baris judul di atas kotak composer & ada backdrop', () => {
+  const iHead = studio.indexOf('class="st-prompt-head"');
+  const iComposer = studio.indexOf('class="st-composer"');
+  assert.ok(iHead > -1, 'baris judul prompt tidak ada');
+  assert.ok(iComposer > -1, 'kotak composer tidak ada');
+  assert.ok(iHead < iComposer, 'baris judul prompt harus di atas kotak composer');
+  assert.ok(studio.includes('stPopBackdrop'), 'backdrop jendela prompt tidak ada');
+});
+
+test('D-210: baris judul & composer adalah saudara di root (bukan composer di dalam head)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  const root = doc.getElementById('studioRoot');
+  const head = doc.querySelector('.st-prompt-head');
+  const composer = doc.querySelector('.st-composer');
+  // Keduanya anak langsung dari root (composer sticky, head di atasnya).
+  assert.equal(head.parentElement, root, 'baris judul harus anak langsung studioRoot');
+  assert.equal(composer.parentElement, root, 'composer harus anak langsung studioRoot');
+  // Baris judul sebelum composer di urutan DOM.
+  const kids = [...root.children].map((c) => c.className);
+  const iHead = kids.findIndex((c) => c.includes('st-prompt-head'));
+  const iComposer = kids.findIndex((c) => c.includes('st-composer'));
+  assert.ok(iHead > -1 && iComposer > -1, 'elemen composer/judul tidak ada di root');
+  assert.ok(iHead < iComposer, 'baris judul harus sebelum composer');
+  // Kotak prompt (textarea) tetap di dalam composer.
+  const ta = doc.getElementById('stPrompt');
+  assert.ok(composer.contains(ta), 'textarea harus di dalam composer');
 });

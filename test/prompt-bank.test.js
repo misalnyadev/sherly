@@ -1,12 +1,13 @@
 // D-207: Bank Prompt — validasi entri, susun prompt, isi placeholder, seed bawaan.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   PROMPT_KINDS, PROMPT_CATEGORIES, PROMPT_MODES, PROMPT_GROUPS, SEED_PROMPT_BANK,
   normalizePromptEntry, composePrompt, fillTemplate, extractSlots,
   optimizePrompt, detectCategory, splitPhrases,
 } from '../server/prompt-bank.js';
-import { SEED_FOTO_STYLES, SEED_CODES_FOTOVIDEO, SEED_CODES_PRODUK } from '../server/prompt-seed.js';
+import { SEED_FOTO_STYLES, SEED_CODES_FOTOVIDEO, SEED_CODES_PRODUK, SEED_CODES_FLOW } from '../server/prompt-seed.js';
 
 test('D-207: jenis entri hanya template & block', () => {
   assert.deepEqual(PROMPT_KINDS, ['template', 'block']);
@@ -260,4 +261,81 @@ test('D-208: optimizePrompt menggabungkan blok terpilih', () => {
 test('D-208: optimizePrompt tidak merusak isi komposer yang kosong', () => {
   const r = optimizePrompt('', [{ category: 'cahaya', content: 'soft window light' }]);
   assert.equal(r.prompt, 'soft window light');
+});
+
+// ===== D-210: 200 Cheat Codes Google Flow (Product Photo to Video) =====
+
+test("D-210: group 'flow' terdaftar di PROMPT_GROUPS", () => {
+  assert.ok(PROMPT_GROUPS.includes('flow'), 'group flow belum terdaftar');
+});
+
+test('D-210: seed berisi tepat 200 cheat code Google Flow', () => {
+  assert.equal(SEED_CODES_FLOW.length, 200, 'jumlah cheat code flow bukan 200');
+});
+
+test('D-210: cheat code flow punya label, kode, dan deskripsi Indonesia', () => {
+  for (const item of SEED_CODES_FLOW) {
+    assert.ok(item.label && item.label.trim().length > 0, 'label kosong');
+    assert.ok(item.code && item.code.startsWith('/'), 'kode harus diawali "/": ' + item.code);
+    assert.ok(item.content.startsWith(item.code + ' — '), 'isi harus diawali kode + pemisah: ' + item.content);
+    // Deskripsi singkat (bukan hanya nama kode) — D-208: kode video isi deskripsi lengkap.
+    const desc = item.content.slice(item.code.length + 3);
+    assert.ok(desc.length >= 8, 'deskripsi terlalu pendek: ' + item.label);
+    assert.ok(/[a-z]/i.test(desc), 'deskripsi bukan teks: ' + item.label);
+  }
+});
+
+test('D-210: label cheat code flow unik (anti-duplikat)', () => {
+  const labels = SEED_CODES_FLOW.map((x) => x.label.toLowerCase());
+  assert.equal(new Set(labels).size, 200, 'ada label cheat code flow yang duplikat');
+  const codes = SEED_CODES_FLOW.map((x) => x.code.toLowerCase());
+  assert.equal(new Set(codes).size, 200, 'ada kode cheat code flow yang duplikat');
+});
+
+test('D-210: 20 kategori x 10 kode cheat code flow', () => {
+  const cats = new Map();
+  for (const item of SEED_CODES_FLOW) {
+    if (!cats.has(item.category)) cats.set(item.category, 0);
+    cats.set(item.category, cats.get(item.category) + 1);
+  }
+  assert.equal(cats.size, 20, 'jumlah kategori flow bukan 20: ' + [...cats.keys()].join(' | '));
+  for (const [cat, n] of cats) {
+    assert.equal(n, 10, 'kategori "' + cat + '" punya ' + n + ' kode, harus 10');
+  }
+});
+
+test("D-210: 20 kategori flow sesuai PDF (daftar lengkap & benar)", () => {
+  const expected = [
+    'UGC & Creator Style', 'Unboxing', 'Product Reveal', 'Camera Movement', 'Cinematic',
+    'Luxury & Premium', 'Fast Ads', 'Beauty & Skincare', 'Food & Beverage', 'Tech & Gadget',
+    'Fashion', 'Perfume', 'Dynamic VFX', 'Floating & Levitation', 'Transformation',
+    'Lifestyle', 'Minimalist', 'Macro & Detail', 'E-Commerce Ads', 'Experimental / Viral',
+  ];
+  const got = [...new Set(SEED_CODES_FLOW.map((x) => x.category))].sort();
+  assert.deepEqual(got, [...expected].sort(), 'daftar kategori flow tidak sesuai PDF');
+});
+
+test('D-210: entri flow dinormalisasi tanpa kehilangan kategori bebas', () => {
+  const item = SEED_CODES_FLOW[0];
+  const norm = normalizePromptEntry({ ...item, kind: 'template', mode: 'video', group: 'flow' });
+  assert.ok(norm.ok, 'normalisasi gagal: ' + norm.error);
+  assert.equal(norm.value.mode, 'video', 'mode flow harus video');
+  assert.equal(norm.value.group, 'flow', 'group harus flow');
+  assert.equal(norm.value.category, item.category, 'kategori flow harus dipertahankan');
+  assert.equal(norm.value.kind, 'template', 'flow code harus template');
+});
+
+test('D-210: kategori blok tetap terkunci untuk group non-flow', () => {
+  const norm = normalizePromptEntry({
+    label: 'X', content: 'y', kind: 'block', mode: 'foto', group: 'umum', category: 'UGC & Creator Style',
+  });
+  assert.equal(norm.value.category, 'umum', 'kategori bebas tidak boleh untuk group non-flow');
+});
+
+test('D-210: frontend punya group flow & sub-kategori cheat code', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes("{ key: 'flow', label: 'Cheat Codes Google Flow'"), 'group flow belum ada di Studio');
+  assert.ok(studio.includes('byCategory'), 'sub-kategori flow belum ditangani');
+  const pb = readFileSync('public/prompt-bank.js', 'utf8');
+  assert.ok(pb.includes("{ key: 'flow', label: 'Cheat Codes Google Flow' }"), 'group flow belum ada di admin Bank Prompt');
 });
