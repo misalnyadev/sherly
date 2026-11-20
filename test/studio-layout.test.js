@@ -776,3 +776,64 @@ test('D-214: referensi karakter/gambar SEBARIS dengan menu dropdown prompt', asy
   assert.ok(rule[0].includes('align-items:center'), 'harus rata tengah');
   assert.ok(!rule[0].includes('flex-direction:column'), 'jangan vertikal (naik 2 baris)');
 });
+
+// ===== D-215: referensi = icon foto saja, info muncul saat hover =====
+
+test('D-215: item referensi karakter hanya avatar + badge (tanpa nama, tanpa kapsul)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Tidak ada nama karakter yang ditampilkan.
+  assert.ok(!body.includes('st-asset-name'), 'nama karakter tidak boleh dirender (D-215)');
+  // Ada avatar (foto) + badge penanda + tooltip.
+  assert.ok(body.includes('st-asset-face'), 'avatar karakter harus ada');
+  assert.ok(body.includes('st-asset-badge'), 'badge penanda harus ada');
+  assert.ok(body.includes('st-asset-tip'), 'tooltip info harus ada');
+  // Badge & tombol hapus tetap ada.
+  assert.ok(body.includes('st-asset-x'), 'tombol hapus harus ada');
+  assert.ok(body.includes('data-asset-tip'), 'atribut tooltip harus ada');
+});
+
+test('D-215: CSS — header referensi tanpa kapsul & tooltip hanya saat hover', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Header: tanpa background/border kapsul, 1 baris (nowrap).
+  // Ambil aturan .st-asset-header yang UTAMA (bukan .st-composer-top .st-asset-header).
+  const headRules = [...css.matchAll(/\.st-asset-header\{[^}]*\}/gs)].map((m) => m[0]);
+  // Aturan utama = yang mengatur layout header (bukan hanya flex dalam .st-composer-top).
+  const head = headRules.find((r) => r.includes('flex-wrap:nowrap')) || headRules[0];
+  assert.ok(head, 'aturan .st-asset-header tidak ada');
+  assert.ok(head.includes('background:transparent'), 'header tidak boleh punya background kapsul');
+  assert.ok(head.includes('flex-wrap:nowrap'), 'header harus 1 baris (nowrap)');
+  // Tooltip: hidden by default, tampil saat hover.
+  const tip = css.match(/\.st-asset-tip\{[^}]*\}/s);
+  assert.ok(tip, 'aturan .st-asset-tip tidak ada');
+  assert.ok(tip[0].includes('opacity:0'), 'tooltip harus tersembunyi awal');
+  assert.ok(tip[0].includes('pointer-events:none'), 'tooltip tidak bolehhalang klik');
+  const hover = css.match(/\.st-asset:hover \.st-asset-tip[^\{]*\{[^}]*opacity:1/);
+  assert.ok(hover, 'tooltip harus muncul saat hover');
+  // Tombol hapus: muncul saat hover saja.
+  const x = css.match(/\.st-asset-x\{[^}]*\}/s);
+  assert.ok(x, 'aturan .st-asset-x tidak ada');
+  assert.ok(x[0].includes('opacity:0'), 'tombol hapus harus tersembunyi awal');
+  const xHover = css.match(/\.st-asset:hover \.st-asset-x[^\{]*\{[^}]*opacity:1/);
+  assert.ok(xHover, 'tombol hapus harus muncul saat hover');
+  // Aturan nama lama dibuang.
+  assert.ok(!css.includes('.st-asset-name{'), 'aturan .st-asset-name harus dihapus');
+});
+
+test('D-215: badge penanda & tombol hapus tidak menambah lebar baris', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Badge & tombol hapus absolute -> tidak menambah lebar item.
+  const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
+  assert.ok(badge, 'aturan .st-asset-badge tidak ada');
+  assert.ok(badge[0].includes('position:absolute'), 'badge harus absolute (hemat tempat)');
+  const x = css.match(/\.st-asset-x\{[^}]*\}/s);
+  assert.ok(x, 'aturan .st-asset-x tidak ada');
+  assert.ok(x[0].includes('position:absolute'), 'tombol hapus harus absolute (hemat tempat)');
+  // Aturan .st-asset UTAMA (bukan turunan .st-asset-char / .st-asset-scene).
+  const itemRules = [...css.matchAll(/\.st-asset\{[^}]*\}/gs)].map((m) => m[0]);
+  const item = itemRules.find((r) => r.includes('position:relative')) || itemRules[0];
+  assert.ok(item, 'aturan .st-asset tidak ada');
+  assert.ok(!item.includes('background:#24142a'), 'item tidak boleh pakai kapsul lama');
+  assert.ok(!item.includes('border-radius:22px'), 'item tidak boleh bulat seperti kapsul');
+});
