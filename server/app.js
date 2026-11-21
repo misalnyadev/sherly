@@ -19,8 +19,9 @@ import {
   saveAsset, saveGeneratedAsset, listAssets, signedAsset, deleteAsset, getAsset,
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
 } from './studio-assets.js';
-import { generateVideoWithKie, pollKieVideoTask } from './ai.js';
+import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUploadBase64 } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
+import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 // D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
 import {
@@ -801,8 +802,155 @@ app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {
+// ===== D-242: LIPSYNC — potret karakter + audio -> video karakter bicara =====
+
+app.get('/api/ai/lipsync/models', requireUser, requireAdmin, (req, res) => {
+  try { res.json({ ok: true, ...lipsyncCatalog() }); }
+  catch (error) { res.status(500).json({ ok: false, error: error.message || 'Gagal memuat katalog lipsync.' }); }
+});
+
+/**
+ * Buat task lipsync.
+ * body: { characterId, script, prompt, model, resolution, aspect, voice, style }
+ *  - characterId : karakter yang jadi "\u00e1dam video (potret + profil suara)
+ *  - script      : teks yang dibacakan (TTS) ATAU audioUrl (rekaman user)
+ * Alur: potret karakter -> upload Kie; audio (TTS/rekaman) -> upload Kie;
+ * lalu createTask InfiniteTalk.
+ */
+app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
   try {
+    const {
+      characterId: rawCharId, script: rawScript, prompt: rawPrompt,
+      model: rawModel, resolution: rawResolution, aspect: rawAspect,
+      voice: rawVoice, style: rawStyle, audioUrl: rawAudioUrl,
+    } = req.body || {};
+    const script = typeof rawScript === 'string' ? rawScript.trim() : '';
+    const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
+
+    // --- 1) Validasi parameter model ---
+    const spec = normalizeLipsyncParams({
+      model: rawModel, resolution: rawResolution, aspect: rawAspect,
+    });
+    if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
+    const { model: lipsyncModel, resolution, aspect } = spec;
+
+    // --- 2) Karakter (potret + profil suara) ---
+    if (!validUuid(rawCharId)) return res.status(400).json({ ok: false, error: 'Pilih karakter yang akan dibuat bicara.' });
+    const { data: character } = await req.supabase
+      .from('characters').select('id,name,voice,reference_image_path,board_path,user_id')
+      .eq('id', rawCharId).maybeSingle();
+    if (!character || character.user_id !== req.user.id) {
+      return res.status(404).json({ ok: false, error: 'Karakter tidak ditemukan.' });
+    }
+    if (!character.reference_image_path) {
+      return res.status(400).json({ ok: false, error: 'Karakter belum punya foto potret. Upload potret dulu di menu Karakter.' });
+    }
+
+    // --- 3) Audio: rekaman user (audioUrl) ATAU TTS dari script ---
+    let audioBase64 = null;
+    let audioMime = null;
+    let audioSource = 'tts';
+    if (typeof rawAudioUrl === 'string' && rawAudioUrl.startsWith('data:audio/')) {
+      // Audio inline dari client (rekaman/rekaman user).
+      const m = /^data:([^;]+);base64,(.+)$/s.exec(rawAudioUrl);
+      if (!m) return res.status(400).json({ ok: false, error: 'Format audio tidak valid.' });
+      audioMime = m[1];
+      audioBase64 = m[2];
+      audioSource = 'upload';
+    } else {
+      if (!script) return res.status(400).json({ ok: false, error: 'Tulis naskah yang akan dibacakan karakter.' });
+      if (script.length > 1500) return res.status(400).json({ ok: false, error: 'Naskah terlalu panjang (maks 1.500 karakter).' });
+      const voiceCfg = character.voice && typeof character.voice === 'object' ? character.voice : {};
+      const voiceName = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice
+        : (GEMINI_TTS_VOICE_IDS.has(voiceCfg.name) ? voiceCfg.name : DEFAULT_VOICE);
+      const styleHint = sanitizeStyleHint(rawStyle || voiceCfg.style || '');
+      // Kumpulkan key Gemini (vault -> env).
+      const attempts = [];
+      if (vaultConfigured()) {
+        const usable = await getUsableKeys(req.supabase, 'gemini').catch(() => []);
+        for (const vk of usable) attempts.push({ apiKey: vk.apiKey });
+      }
+      if (!attempts.length && process.env.GEMINI_API_KEY) attempts.push({ apiKey: process.env.GEMINI_API_KEY });
+      if (!attempts.length) {
+        throw Object.assign(new Error('Kunci Gemini belum tersedia untuk membuat suara. Simpan kunci Gemini di vault (Pengaturan).'), { status: 503 });
+      }
+      let speech = null; let lastErr = null;
+      for (const a of attempts) {
+        try { speech = await synthesizeSpeech({ apiKey: a.apiKey, text: script, voiceName, style: styleHint }); break; }
+        catch (e) { lastErr = e; }
+      }
+      if (!speech) throw Object.assign(lastErr || new Error('Gagal membuat suara karakter.'), { status: 502 });
+      audioBase64 = speech.wav.toString('base64');
+      audioMime = 'audio/wav';
+      audioSource = 'tts:' + speech.model;
+    }
+    if (!audioBase64) return res.status(400).json({ ok: false, error: 'Audio tidak tersedia.' });
+    // Batas durasi audio InfiniteTalk = 15 detik.
+    const approxSeconds = Math.max(1, Math.round((audioBase64.length * 0.75) / 16000));
+    if (approxSeconds > LIPSYNC_MAX_SECONDS + 3) {
+      return res.status(400).json({ ok: false, error: 'Audio terlalu panjang (maks ' + LIPSYNC_MAX_SECONDS + ' detik).' });
+    }
+
+    // --- 4) Upload potret + audio ke Kie -> URL publik ---
+    const kieKeys = [];
+    if (vaultConfigured()) {
+      const usable = await getUsableKeys(req.supabase, 'kie').catch(() => []);
+      for (const vk of usable) kieKeys.push(vk.apiKey);
+    }
+    if (process.env.KIE_API_KEY) kieKeys.push(process.env.KIE_API_KEY);
+    if (!kieKeys.length) {
+      throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY.'), { status: 503 });
+    }
+    const kieKey = kieKeys[0];
+    const { data: potretBlob, error: potretErr } = await req.supabase.storage.from(bucket).download(character.reference_image_path);
+    if (potretErr || !potretBlob) {
+      return res.status(400).json({ ok: false, error: 'Gagal membaca foto potret karakter: ' + (potretErr?.message || 'file tidak ditemukan.') });
+    }
+    const potretBuf = Buffer.from(await potretBlob.arrayBuffer());
+    const potretMime = /\.jpe?g$/i.test(character.reference_image_path) ? 'image/jpeg'
+      : /\.webp$/i.test(character.reference_image_path) ? 'image/webp' : 'image/png';
+    const imageUrl = await kieUploadBase64(kieKey, potretMime, potretBuf.toString('base64'), {
+      uploadPath: 'images/base64',
+      fileName: 'lipsync-' + Date.now() + '.jpg',
+      label: 'potret karakter',
+    });
+    const audioUrl = await kieUploadBase64(kieKey, audioMime, audioBase64, {
+      uploadPath: 'audio/base64',
+      fileName: 'lipsync-' + Date.now() + '.wav',
+      label: 'audio karakter',
+    });
+
+    // --- 5) Prompt: default friendly + arahan user ---
+    const lipPrompt = prompt || (
+      character.name + ' berbicara natural ke kamera, ekspresi wajah dan gerak kepala mengikuti nada suara, '
+      + 'bibir ter-sync dengan audio, pencahayaan studio lembut, kualitas tinggi.'
+    );
+
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    const created = await generateLipsyncWithKie(auth, {
+      model: lipsyncModel.id, prompt: lipPrompt, resolution, aspect,
+      imageUrl, audioUrl,
+    });
+    const task = await createVideoTask(req.supabase, req.user.id, {
+      provider: created.provider, model: created.model, taskId: created.taskId, prompt: lipPrompt,
+      meta: {
+        kind: 'lipsync', aspect, resolution, modelLabel: lipsyncModel.label,
+        characterId: character.id, characterName: character.name, audioSource,
+        duration: Math.min(approxSeconds, LIPSYNC_MAX_SECONDS),
+      },
+    });
+    res.status(202).json({
+      ok: true, id: task.id, task_id: created.taskId, model: created.model,
+      resolution, aspect, character: { id: character.id, name: character.name },
+      audioSource,
+    });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 502;
+    res.status(status).json({ ok: false, error: error.message || 'Generator lipsync gagal.' });
+  }
+});
+
+app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  try {
     const task = await getVideoTask(req.supabase, req.user.id, req.params.id);
     if (!task) return res.status(404).json({ ok: false, error: 'Task video tidak ditemukan.' });
     // Sukses: pastikan aset video tersimpan & kembalikan URL-nya.

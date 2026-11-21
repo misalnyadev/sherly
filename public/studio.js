@@ -147,6 +147,15 @@
   const imageResolutionOptions = () => (imageModel()?.resolutions || ['1K', '2K', '4K']).map((r) => [r, r]);
   let videoCatalog = { defaultModel: 'veo-3-1', models: FALLBACK_VIDEO_MODELS };
   const videoModel = () => videoCatalog.models.find((m) => m.id === state.videoModel) || videoCatalog.models[0] || null;
+  // D-242: katalog model lipsync (potret + audio -> video karakter bicara).
+  const FALLBACK_LIPSYNC_MODELS = [
+    { id: 'infinitalk/from-audio', provider: 'kie', label: 'InfiniteTalk', maker: 'MeiGen-AI',
+      resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
+      note: 'MeiGen-AI InfiniteTalk — potret + audio jadi karakter bicara (lip-sync akurat).',
+      defaultResolution: '720p', defaultAspect: '9:16' },
+  ];
+  let lipsyncCatalog = { defaultModel: 'infinitalk/from-audio', maxSeconds: 15, models: FALLBACK_LIPSYNC_MODELS };
+  const lipsyncModel = () => lipsyncCatalog.models.find((m) => m.id === state.lipsyncModel) || lipsyncCatalog.models[0] || null;
   // D-231: ctx opsional -> pakai draft pengaturan (panel) bila diberikan.
   const videoModelOf = (ctx) => videoCatalog.models.find((m) => m.id === (ctx || state).videoModel) || videoCatalog.models[0] || null;
   const durationOptions = (ctx) => (videoModelOf(ctx)?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
@@ -202,6 +211,8 @@
     resolution: '720p', engine: 'auto',
     // D-200: provider + model video (dipilih lewat pill "Model").
     videoModel: 'veo-3-1', audio: true,
+    // D-242: mode "Karakter Bicara" (lipsync) — model, karakter, resolusi.
+    lipsyncModel: 'infinitalk/from-audio', lipsyncCharacterId: '', lipsyncResolution: '720p',
     // D-203: model gambar (Kie) + jenis konten (satu kotak pilihan).
     imageModel: 'nano-banana-2', imageResolution: '2K', contentType: 'photo',
   };
@@ -836,27 +847,40 @@
   const CONTENT_TYPES = [
     ['photo', 'Foto', 'image-plus'],
     ['video', 'Video', 'video'],
+    // D-242: mode lipsync — karakter bicara (potret + naskah -> video).
+    ['lipsync', 'Karakter Bicara', 'mic'],
   ];
   function setMode(m) {
-    const mode = m === 'video' ? 'video' : 'photo';
+    // D-242: tiga mode konten — foto, video, dan karakter bicara (lipsync).
+    const mode = m === 'video' ? 'video' : m === 'lipsync' ? 'lipsync' : 'photo';
     state.mode = mode;
     state.contentType = mode;
     const isVideo = mode === 'video';
+    const isLip = mode === 'lipsync';
     // Rasio aspek video mengikuti kapabilitas model terpilih.
     if (isVideo) {
       const aspects = videoModel()?.aspects || ['16:9', '9:16'];
       if (!aspects.includes(state.aspect)) state.aspect = aspects.includes('9:16') ? '9:16' : aspects[0];
+    } else if (isLip) {
+      // Lipsync: rasio mengikuti model lipsync (16:9 / 9:16 / 1:1).
+      const asp = lipsyncModel()?.aspects || ['9:16'];
+      if (!asp.includes(state.aspect)) state.aspect = asp.includes('9:16') ? '9:16' : asp[0];
     } else if (!ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '4:5';
     // D-222: placeholder ringkas (tidak ada contoh panjang).
-    const ta = $('stPrompt'); if (ta) ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.' : 'Prompt… mention @ karakter/aset dll.';
+    const ta = $('stPrompt');
+    if (ta) {
+      ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.'
+        : isLip ? 'Naskah yang dibacakan karakter…'
+        : 'Prompt… mention @ karakter/aset dll.';
+    }
     $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
-    $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
+    $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo || isLip);
     // D-208: pill Style dihapus — semua gaya jadi template transparan di Bank Prompt.
     // Bank prompt mengikuti jenis konten (foto <-> video) supaya tidak salah pilih.
-    // mode konten di Studio: 'photo' | 'video'  ->  mode prompt: 'foto' | 'video'
+    // mode konten di Studio: 'photo' | 'video' | 'lipsync'  ->  mode prompt: 'foto' | 'video'
     const pbMode = mode === 'video' ? 'video' : 'foto';
     if (promptBankMode !== pbMode) {
       promptBankMode = pbMode;
@@ -865,9 +889,14 @@
     }
     // D-203: pill model gambar hanya saat foto & mesin memakai Kie.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || !kieEngine);
-    $('stGenBtn')?.classList.toggle('st-hidden', isVideo);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || isLip || !kieEngine);
+    $('stGenBtn')?.classList.toggle('st-hidden', isVideo || isLip);
     $('stVideoBtn')?.classList.toggle('st-hidden', !isVideo);
+    // D-242: tombol khusus lipsync.
+    $('stLipsyncBtn')?.classList.toggle('st-hidden', !isLip);
+    // D-242: Bank Prompt (template foto/video) tidak relevan untuk naskah lipsync.
+    document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip);
+    renderLipsyncBar();
     updatePillLabels();
   }
 
@@ -931,7 +960,7 @@
   function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'settings'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -1329,7 +1358,7 @@
     buildSettingsPanel();
     const el = $('stPop-settings');
     if (!el) return;
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions']
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'lipsyncchar']
       .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
     el.classList.add('open');
     el.classList.add('st-pop-center');
@@ -1811,6 +1840,89 @@
       btn.disabled = false; btn.innerHTML = icon('film') + ' Buat Video';
     }
   }
+
+  // ===== D-242: mode "Karakter Bicara" (lipsync) =====
+  // Alur: pilih karakter -> tulis naskah -> server (TTS + upload Kie) ->
+  // task InfiniteTalk -> polling -> video tersimpan di galeri aset.
+  function lipsyncCharacters() {
+    return (characters || []).filter((c) => c && (c.reference_image_path || c.referenceImagePath));
+  }
+  function lipsyncCharacterById(id) {
+    return lipsyncCharacters().find((c) => c.id === id) || null;
+  }
+  function renderLipsyncBar() {
+    const bar = $('stLipsyncBar'); if (!bar) return;
+    const isLip = state.mode === 'lipsync';
+    bar.classList.toggle('st-hidden', !isLip);
+    if (!isLip) return;
+    const ch = lipsyncCharacterById(state.lipsyncCharacterId);
+    const nameEl = $('stLipsyncCharName');
+    if (nameEl) nameEl.textContent = ch ? ch.name : 'Pilih karakter';
+    const meta = $('stLipsyncMeta');
+    if (meta) {
+      const model = lipsyncModel();
+      meta.textContent = (model ? model.label + ' · ' : '')
+        + 'maks ' + (model?.maxSeconds || lipsyncCatalog.maxSeconds || 15) + ' detik';
+    }
+  }
+  function buildLipsyncCharPop() {
+    const pop = $('stPop-lipsyncchar'); if (!pop) return;
+    const list = lipsyncCharacters();
+    if (!list.length) {
+      pop.innerHTML = '<div class="st-pop-empty">Belum ada karakter dengan potret. Buat karakter dulu di menu Karakter.</div>';
+      return;
+    }
+    pop.innerHTML = list.map((c) => '<button type="button" data-lip-char="' + esc(c.id) + '" class="'
+      + (state.lipsyncCharacterId === c.id ? 'on' : '') + '">'
+      + icon('user') + ' ' + esc(c.name) + '</button>').join('');
+    pop.querySelectorAll('[data-lip-char]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.lipsyncCharacterId = b.dataset.lipChar;
+      renderLipsyncBar();
+      buildLipsyncCharPop();
+      pop.classList.remove('open');
+      popOpen = null;
+      syncBackdrop();
+    }));
+  }
+  async function generateLipsync() {
+    const ta = $('stPrompt'); const script = (ta?.value || '').trim();
+    if (!state.lipsyncCharacterId) {
+      window.toast?.('Pilih karakter yang mau bicara dulu ya.');
+      $('stLipsyncCharBtn')?.focus();
+      return;
+    }
+    if (script.length < 3) {
+      window.toast?.('Tulis naskah yang mau dibacakan karakter.');
+      ta?.focus();
+      return;
+    }
+    const btn = $('stLipsyncBtn');
+    btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Menyiapkan…';
+    try {
+      const model = lipsyncModel();
+      const r = await fetch('/api/ai/lipsync', {
+        method: 'POST', headers: await authHeaders(),
+        body: JSON.stringify({
+          characterId: state.lipsyncCharacterId,
+          script,
+          prompt: '',
+          model: model?.id || state.lipsyncModel,
+          resolution: model?.defaultResolution || '720p',
+          aspect: state.aspect,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Generator karakter bicara gagal.');
+      videoTask = { id: d.id, progress: 0, status: 'running' };
+      renderVideoProgress();
+      window.toast?.('Karakter sedang bicara… (±1-3 menit)');
+      pollVideo();
+    } catch (e) {
+      window.toast?.(e.message || 'Generator karakter bicara gagal.');
+      resetGenerateButtons();
+    }
+  }
   function renderVideoProgress() {
     const box = $('stVideoProgress');
     if (!videoTask) { box?.classList.add('st-hidden'); box?.setAttribute('data-progress', '0'); return; }
@@ -1825,9 +1937,18 @@
       if (videoTimer) clearTimeout(videoTimer);
       videoTimer = null; videoTask = null;
       renderVideoProgress();
-      const b = $('stVideoBtn'); if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+      resetGenerateButtons();
       window.toast?.('Pemantauan video dibatalkan.');
     });
+  }
+  // D-242: label tombol generate mengikuti mode aktif (foto / video / karakter bicara).
+  function resetGenerateButtons() {
+    const b = $('stVideoBtn');
+    if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+    const l = $('stLipsyncBtn');
+    if (l) { l.disabled = false; l.innerHTML = icon('mic') + ' Buat Video Bicara'; }
+    const g = $('stGenBtn');
+    if (g) { g.disabled = false; g.innerHTML = icon('image-plus') + ' Buat Gambar'; }
   }
   async function pollVideo() {
     if (!videoTask) return;
@@ -1841,7 +1962,7 @@
         if (d.asset) { assets.unshift(d.asset); renderGallery(); }
         videoTask = null;
         renderVideoProgress();
-        const b = $('stVideoBtn'); if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+        resetGenerateButtons();
         window.toast?.('Video jadi ✨');
         return;
       }
@@ -1849,7 +1970,7 @@
         videoTask.error = d.error || 'Generator video gagal.';
         videoTask = null;
         renderVideoProgress();
-        const b = $('stVideoBtn'); if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+        resetGenerateButtons();
         window.toast?.(d.error || 'Generator video gagal.');
         return;
       }
@@ -1858,7 +1979,7 @@
     } catch (e) {
       videoTask = null;
       renderVideoProgress();
-      const b = $('stVideoBtn'); if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+      resetGenerateButtons();
       window.toast?.(e.message || 'Gagal mengecek status video.');
     }
   }
@@ -1907,6 +2028,14 @@
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
+      // D-242: panel mode "Karakter Bicara" — pilih karakter yg akan bicara.
+      + '<div class="st-lipsync-bar st-hidden" id="stLipsyncBar">'
+      + '<button type="button" class="st-lipsync-char" id="stLipsyncCharBtn">'
+      + icon('user') + ' <b id="stLipsyncCharName">Pilih karakter</b>' + icon('chevron-down')
+      + '</button>'
+      + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
+      + '<div class="st-lipsync-meta"><span id="stLipsyncMeta">Maks 15 detik</span></div>'
+      + '</div>'
       + '<div class="st-controls">'
       // D-221: di HP semua pengaturan konten jadi SATU panel dropdown.
       // Kolom kiri = tombol jenis konten (Foto/Video) + chevron;
@@ -1931,6 +2060,8 @@
       + '<span class="st-count" id="stCount">0/1200</span>'
       + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn">' + icon('film') + ' Buat Video</button>'
+      // D-242: mode "Karakter Bicara" (lipsync) -> potret + audio -> video bicara.
+      + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn">' + icon('mic') + ' Buat Video Bicara</button>'
       + '</div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
@@ -1939,6 +2070,8 @@
     // Karakter user — dipakai untuk mention picker & header aset.
     fetch('/api/characters', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
       characters = Array.isArray(d?.characters) ? d.characters : [];
+      // D-242: bar karakter lipsync butuh daftar karakter.
+      renderLipsyncBar();
       renderAssetHeader(); updatePillLabels();
     }).catch(() => {});
     // Provider kustom dari Pengaturan otomatis jadi pilihan Mesin.
@@ -2004,6 +2137,18 @@
         applyModelCaps(m, false);
       }
       updatePillLabels();
+    }).catch(() => {});
+    // D-242: katalog model lipsync dari server (/api/ai/lipsync/models).
+    fetch('/api/ai/lipsync/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
+      lipsyncCatalog = {
+        defaultModel: d.defaultModel || lipsyncCatalog.defaultModel,
+        maxSeconds: d.maxSeconds || lipsyncCatalog.maxSeconds,
+        models: d.models,
+      };
+      const m = lipsyncModel();
+      if (m) state.lipsyncModel = m.id;
+      renderLipsyncBar();
     }).catch(() => {});
     const ta = $('stPrompt');
     // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
@@ -2112,6 +2257,13 @@
     ta?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
     $('stGenBtn')?.addEventListener('click', generate);
     $('stVideoBtn')?.addEventListener('click', generateVideo);
+    // D-242: mode "Karakter Bicara" (lipsync).
+    $('stLipsyncBtn')?.addEventListener('click', generateLipsync);
+    $('stLipsyncCharBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      buildLipsyncCharPop();
+      togglePop('lipsyncchar');
+    });
     $('stUploadBtn')?.addEventListener('click', () => $('stUploadInput')?.click());
     $('stUploadInput')?.addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];

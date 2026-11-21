@@ -671,6 +671,17 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-mention-empty{padding:11px;font-size:12px;color:var(--muted)}
 /* D-196: Rantai adegan (lokal) */
 .st-chain{margin-top:12px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:10px}
+/* D-242: bar mode "Karakter Bicara" (lipsync) — pilih karakter + info durasi. */
+.st-lipsync-bar{display:flex;align-items:center;gap:8px;margin-top:10px;
+  border-radius:12px;border:1px solid #24344e;background:#0c1422;padding:8px 9px;position:relative}
+.st-lipsync-char{display:flex;align-items:center;gap:7px;flex:1;min-width:0;
+  background:#0f1828;border:1px solid #24344e;border-radius:9px;padding:8px 10px;
+  color:#f4f5fb;font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
+.st-lipsync-char b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.st-lipsync-char svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
+.st-lipsync-char:hover{border-color:#f044a8;color:#ffd0ec}
+.st-lipsync-meta{font-size:10.5px;color:#5d6f88;white-space:nowrap;flex:none}
+.st-pop-lipsyncchar{max-height:220px;overflow:auto}
 .st-chain-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfd6e4;margin-bottom:9px}
 .st-chain-head svg{width:15px;height:15px;stroke:#ff72c5}
 .st-chain-head b{color:#fff;font-weight:600}
