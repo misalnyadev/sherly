@@ -739,11 +739,18 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pop-settings.open{display:block}
 /* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
 .st-pop-settings.open{display:flex;flex-direction:column}
-.st-set-head{display:flex;align-items:center;gap:9px;padding:4px 4px 12px;border-bottom:1px solid #24344e;margin-bottom:12px}
-.st-set-head-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.st-set-head b{font-size:14px;color:#f4f5fb;letter-spacing:.01em}
-.st-set-head-txt small{font-size:10.5px;color:#91a2b9;letter-spacing:.01em}
-.st-set-head svg{width:16px;height:16px;stroke:#ff9bdc;fill:none}
+/* D-233: header panel — judul + subjudul menyatu rapi, area header penuh
+   (tidak menyempit), tombol X di kanan. */
+.st-set-head{display:flex;align-items:center;gap:10px;padding:2px 2px 12px;
+  border-bottom:1px solid #24344e;margin-bottom:12px}
+.st-set-head-ico{width:34px;height:34px;border-radius:10px;background:#24142a;border:1px solid #5b1f4e;
+  display:grid;place-items:center;flex:none}
+.st-set-head-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:row;align-items:baseline;
+  gap:8px;flex-wrap:wrap}
+.st-set-head b{font-size:14.5px;color:#f4f5fb;letter-spacing:.01em;white-space:nowrap}
+.st-set-head-txt small{font-size:10.5px;color:#91a2b9;letter-spacing:.01em;min-width:0}
+.st-set-head svg{width:16px;height:16px;stroke:#ff9bdc;fill:none;flex:none}
+.st-set-head-ico svg{width:17px;height:17px}
 .st-set-close{width:28px;height:28px;border-radius:9px;border:1px solid #24344e;background:#0f1828;color:#91a2b9;cursor:pointer;display:grid;place-items:center;padding:0;transition:.18s}
 .st-set-close:hover{border-color:#74436c;color:#ffd0ec}
 .st-set-close svg{width:14px;height:14px;stroke:#91a2b9}
@@ -757,16 +764,22 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-set-label{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.12em;
   text-transform:uppercase;color:#a9b8cd;font-weight:800}
 .st-set-label svg{width:13px;height:13px;stroke:#ff9bdc;fill:none;stroke-width:2}
-.st-set-chips{display:flex;flex-wrap:wrap;gap:7px}
-.st-set-chip{display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  padding:9px 13px;border-radius:11px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;
+/* D-233: pilihan jadi GRID tombol (bukan daftar wrap ke bawah).
+   auto-fit + minmax -> kolom otomatis 2-3, kolom kosong dihapus. */
+.st-set-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:7px}
+.st-set-chip{display:flex;align-items:center;justify-content:flex-start;gap:8px;
+  padding:10px 12px;border-radius:11px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;
   font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;line-height:1.2;
+  text-align:left;width:100%;min-width:0;
   transition:border-color .18s,background .18s,color .18s,transform .12s}
 .st-set-chip:active{transform:scale(.97)}
-.st-set-chip svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
+.st-set-chip svg{width:15px;height:15px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
 .st-set-chip.on svg{stroke:#ff9bdc}
-.st-set-chip span{display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1.25}
-.st-set-chip small{font-size:10px;color:#91a2b9;font-weight:500}
+/* Label chip: ikon + teks; keterangan (small) jadi baris kedua di dalam chip. */
+.st-set-chip span{display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  min-width:0;line-height:1.2}
+.st-set-chip span>span,.st-set-chip b{font-weight:600}
+.st-set-chip small{font-size:10px;color:#91a2b9;font-weight:500;line-height:1.2}
 .st-set-chip.on{border-color:#f044a8;background:#24142a;color:#ffd0ec;box-shadow:0 0 0 1px #f044a855}
 .st-set-chip.on small{color:#ffd0ec}
 /* D-231: footer panel pengaturan — Batal + Simpan. Simpan yang menerapkan
