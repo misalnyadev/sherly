@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
 import { findImageModel, buildImageInput, DEFAULT_IMAGE_MODEL } from './image-models.js';
-import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
+import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL } from './lipsync-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -427,10 +427,12 @@ export async function generateLipsyncWithKie(auth = {}, opts = {}) {
   const { base } = kieConfig();
   const spec = findLipsyncModel(opts.model) || findLipsyncModel(DEFAULT_LIPSYNC_MODEL);
   if (!opts.imageUrl || !opts.audioUrl) {
-    throw Object.assign(new Error('Lipsync butuh potret karakter dan audio (durasi maksimal ' + LIPSYNC_MAX_SECONDS + ' detik).'), { status: 400 });
+    // D-246: batas durasi mengikuti model (InfiniteTalk 15 dtk, OmniHuman 2.0 300 dtk).
+    throw Object.assign(new Error('Lipsync butuh potret karakter dan audio (durasi maksimal ' + spec.maxSeconds + ' detik untuk ' + spec.label + ').'), { status: 400 });
   }
   const params = {
-    prompt: String(opts.prompt || '').slice(0, 5000),
+    // D-246: prompt dibatasi 300 karakter untuk OmniHuman (5000 untuk model lain).
+    prompt: String(opts.prompt || '').slice(0, spec.promptMax || 5000),
     resolution: opts.resolution || spec.defaultResolution,
     aspect: opts.aspect || spec.defaultAspect,
     seed: Number.isInteger(opts.seed) ? opts.seed : undefined,

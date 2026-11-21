@@ -184,6 +184,46 @@ Yang butuh kerja besar hanya **#3 lipsync** (mode konten baru + alur audio) —
 
 ---
 
+## 5b. D-246 — Model lipsync tambahan (OmniHuman 1.5 + 2.0)
+
+Katalog lipsync Kie sampai D-245 hanya **2 model** yang bisa dipakai lewat
+`/market/other`: InfiniteTalk & LTX 2.5 Fast A2V. **LTX 2.5 Pro A2V TIDAK ADA**
+di Kie (`docs.kie.ai/market/ltx/2-5-pro-audio-to-video` → 404; `kie.ai/ltx-2-5`
+mendaftarkan 5 endpoint, dan A2V hanya varian **Fast**).
+
+Alternatif yang ditemukan & disetujui user: **OmniHuman 1.5** & **OmniHuman 2.0**
+(ByteDance) — keduanya digital human yang bisa gerak penuh (full-body), bukan
+sekadar potret talk.
+
+| | InfiniteTalk | LTX 2.5 Fast A2V | **OmniHuman 1.5** | **OmniHuman 2.0** |
+|---|---|---|---|---|
+| model id | `infinitalk/from-audio` | `ltx/2-5-fast-audio-to-video` | `omnihuman-1-5` | `omnihuman-2-0` |
+| gambar | `image_url` | `image_url` | `image_url` | **`image_urls`** (array 1) |
+| resolusi | 480p/720p | 720p/1080p/1440p | **`720P`/`1080P`** | **720p** saja |
+| rasio | 16:9/9:16/1:1 | + 3:2, 2:3 | 16:9/9:16/1:1/4:5/3:4 | 16:9/9:16/1:1/4:5/3:4 |
+| maks audio | 15 dtk | 20 dtk | **< 60 dtk** (rekomendasi ≤15) | **4–300 dtk** |
+| prompt | 5.000 kar | 5.000 kar | **300 kar** | **300 kar** |
+| extras | `seed` | `fps`, `duration`, `seed` | `mask_url`, `pe_fast_mode`, `seed` | `enable_watermark` |
+| body | potret talk | potret talk | **full-body digital human**, emotion-aware | digital human + **multi-person** |
+
+Catatan penting:
+- **OmniHuman 1.5** memakai field **`output_resolution`** dengan **huruf besar**
+  (`720P`/`1080P`) — BUKAN `resolution` seperti model lain, dan **tidak** ada
+  `aspect_ratio` (rasio mengikuti gambar).
+- **OmniHuman 2.0** memakai **`image_urls`** (JSON array, 1 elemen) — BUKAN
+  `image_url`, dan **tidak** mengirim resolusi (fixed 720p).
+- Prompt kedua model = "Character Tendency" (maks 300 karakter) → arahan adegan
+  di UI dibatasi 300 karakter untuk model ini.
+- `enable_watermark` default `true` → tidak dikirim bila user tidak mengubahnya.
+
+### Sumber
+- https://kie.ai/omnihuman-1-5
+- https://kie.ai/omnihuman-2-0
+- https://kie.ai/ltx-2-5 (konfirmasi Pro A2V tidak ada)
+- https://docs.kie.ai/market/ltx/2-5-pro-audio-to-video (404)
+
+---
+
 ## 6. Sumber
 
 - Kie AI katalog: https://kie.ai/market · https://kie.ai/pricing

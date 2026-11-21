@@ -867,7 +867,9 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       audioSource = 'upload';
     } else {
       if (!script) return res.status(400).json({ ok: false, error: 'Tulis naskah yang akan dibacakan karakter.' });
-      if (script.length > 1500) return res.status(400).json({ ok: false, error: 'Naskah terlalu panjang (maks 1.500 karakter).' });
+      // D-246: batas naskah mengikuti model (TTS Gemini maksimal 1.500 karakter).
+      const scriptMax = 1500;
+      if (script.length > scriptMax) return res.status(400).json({ ok: false, error: 'Naskah terlalu panjang untuk ' + lipsyncModel.label + ' (maks ' + scriptMax.toLocaleString('id-ID') + ' karakter).' });
       const voiceCfg = character.voice && typeof character.voice === 'object' ? character.voice : {};
       const voiceName = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice
         : (GEMINI_TTS_VOICE_IDS.has(voiceCfg.name) ? voiceCfg.name : DEFAULT_VOICE);
@@ -899,6 +901,11 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     const maxSeconds = lipsyncModel.maxSeconds || LIPSYNC_MAX_SECONDS;
     if (approxSeconds > maxSeconds + 3) {
       return res.status(400).json({ ok: false, error: 'Audio terlalu panjang untuk ' + lipsyncModel.label + ' (maks ' + maxSeconds + ' detik).' });
+    }
+    // D-246: sebagian model butuh durasi minimum (OmniHuman 2.0 >= 4 detik).
+    const minSeconds = lipsyncModel.minSeconds || 1;
+    if (minSeconds > 1 && approxSeconds < minSeconds) {
+      return res.status(400).json({ ok: false, error: 'Audio terlalu pendek untuk ' + lipsyncModel.label + ' (minimal ' + minSeconds + ' detik).' });
     }
 
     // --- 4) Upload potret + audio ke Kie -> URL publik ---
@@ -959,12 +966,15 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     const sceneHint = prompt
       ? prompt.replace(/\s+/g, ' ').trim().slice(0, 2000)
       : '';
+    // D-246: OmniHuman membatasi prompt 300 karakter ("Character Tendency"),
+    // sedangkan InfiniteTalk/LTX menerima 5.000 karakter.
+    const promptMax = lipsyncModel.promptMax || 5000;
     const lipPrompt = [
       character.name + ' berbicara natural',
       sceneHint,
       'ekspresi wajah dan gerak kepala mengikuti nada suara, '
       + 'bibir ter-sync dengan audio, pencahayaan studio lembut, kualitas tinggi.',
-    ].filter(Boolean).join('. ').slice(0, 5000);
+    ].filter(Boolean).join('. ').slice(0, promptMax);
 
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
     const created = await generateLipsyncWithKie(auth, {

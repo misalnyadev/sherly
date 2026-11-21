@@ -157,6 +157,14 @@
       resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
       note: 'Lightricks LTX 2.5 Fast — durasi mengikuti audio (s/d 20 dtk), sampai 1440p.',
       defaultResolution: '1080p', defaultAspect: '9:16' },
+    { id: 'omnihuman-1-5', provider: 'kie', label: 'OmniHuman 1.5', maker: 'ByteDance',
+      resolutions: ['720P', '1080P'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 60,
+      note: 'ByteDance OmniHuman 1.5 — digital human full-body, ekspresi & gestur ikut emosi, sampai 1080p.',
+      defaultResolution: '1080P', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 1 },
+    { id: 'omnihuman-2-0', provider: 'kie', label: 'OmniHuman 2.0', maker: 'ByteDance',
+      resolutions: ['720p'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 300,
+      note: 'ByteDance OmniHuman 2.0 — digital human + multi-person, durasi s/d 5 menit.',
+      defaultResolution: '720p', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 4 },
   ];
   const FALLBACK_LIPSYNC_PROVIDERS = [
     { id: 'kie', label: 'Kie AI', note: 'Semua model lipsync via satu kunci Kie' },
@@ -1991,6 +1999,16 @@
     const isLip = state.mode === 'lipsync';
     bar.classList.toggle('st-hidden', !isLip);
     if (!isLip) return;
+    // D-246: OmniHuman membatasi prompt 300 karakter.
+    const model0 = lipsyncModel();
+    const pmax = model0?.promptMax || 1000;
+    const sh0 = $('stSceneHint');
+    if (sh0) {
+      sh0.maxLength = pmax;
+      sh0.placeholder = pmax <= 300
+        ? 'mis. di studio podcast, kamera close-up, dia tersenyum'
+        : 'mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan';
+    }
     const ch = lipsyncCharacterById(state.lipsyncCharacterId);
     const nameEl = $('stLipsyncCharName');
     if (nameEl) nameEl.textContent = ch ? ch.name : 'Pilih karakter';
@@ -2002,7 +2020,7 @@
       // D-244: sumber gambar utama = mention gambar (karakter di lokasi
       // tertentu) atau potret karakter sebagai cadangan.
       const src = sceneRefs.length ? 'gambar mention' : (lipsyncCharacterHasPortrait() ? 'potret karakter' : 'belum ada gambar');
-      // D-245: info provider + model ikut ditampilkan (ringkas, 2 baris).
+      // D-245/D-246: info provider + model ikut ditampilkan (ringkas, 2 baris).
       const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
       const provLabel = prov ? prov.label : 'Kie AI';
       const modelLabel = model ? model.label : '';
@@ -2045,6 +2063,13 @@
       ta?.focus();
       return;
     }
+    // D-246: sebagian model butuh durasi minimum (OmniHuman 2.0 >= 4 detik).
+    const minSec = lipsyncModel()?.minSeconds || 1;
+    if (minSec > 1 && estimateLipsyncSeconds(script) < minSec) {
+      window.toast?.('Naskah terlalu pendek — minimal ' + minSec + ' detik untuk model ini.');
+      ta?.focus();
+      return;
+    }
     // D-244: wajib ada gambar referensi (gambar karakter di lokasi tertentu).
     // Kalau karakter punya potret, potret itu dipakai sebagai cadangan.
     if (!sceneRefs.length && !lipsyncCharacterHasPortrait()) {
@@ -2066,7 +2091,7 @@
         script,
         prompt: sceneHint,
         model: model?.id || state.lipsyncModel,
-        // D-245: resolusi & provider mengikuti pilihan user.
+        // D-245/D-246: resolusi & provider mengikuti pilihan user.
         resolution: state.lipsyncResolution || model?.defaultResolution || '720p',
         provider: 'kie',
         aspect: state.aspect,
