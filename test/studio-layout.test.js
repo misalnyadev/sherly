@@ -1321,24 +1321,24 @@ test('D-227: badge user = kertas hitam tanpa border, nempel tepi kanan+bawah', (
   assert.ok(rule.includes('pointer-events:none'), 'badge tidak boleh menghalang klik');
 });
 
-test('D-228: sisi kiri badge melengkung (ujung daun), kanan tetap flush kotak', () => {
+test('D-229: hanya kiri ATAS badge yang melengkung, bawah tetap siku', () => {
   const css = readFileSync('public/index.html', 'utf8');
   const rule = css.match(/\.st-asset-badge\{[^}]*\}/s)[0];
-  // Radius hanya di sisi KIRI: kiri-atas + kiri-bawah bulat, kanan siku.
-  assert.ok(rule.includes('border-radius:8px 0 0 8px'), 'sisi kiri bulat, kanan siku (8px 0 0 8px)');
-  // Tidak boleh radius penuh (bulat) atau semua siku (tajam).
+  // Radius hanya di kiri-atas: 8px 0 0 0 (sisa sudut siku).
+  assert.ok(rule.includes('border-radius:8px 0 0 0'), 'hanya kiri-atas yang bulat (8px 0 0 0)');
+  // Tidak boleh radius penuh (bulat).
   assert.ok(!rule.includes('border-radius:50%'), 'badge tidak boleh bulat');
-  // Hanya 4 nilai radius: kiri-atas, kanan-atas, kanan-bawah, kiri-bawah.
+  // Kiri BAWAH harus siku -> badge tidak terlihat bulat.
   const radius = rule.match(/border-radius:([^;]+)/)[1].trim().split(/\s+/);
   assert.equal(radius.length, 4, 'radius harus 4 sudut');
-  assert.equal(radius[0], '8px', 'kiri-atas bulat');
-  assert.equal(radius[1], '0', 'kanan-atas siku (flush tepi kanan)');
-  assert.equal(radius[2], '0', 'kanan-bawah siku (flush tepi bawah)');
-  assert.equal(radius[3], '8px', 'kiri-bawah bulat');
+  assert.equal(radius[0], '8px', 'kiri-atas bulat (ujung daun)');
+  assert.equal(radius[1], '0', 'kanan-atas siku');
+  assert.equal(radius[2], '0', 'kanan-bawah siku');
+  assert.equal(radius[3], '0', 'kiri-bawah HARUS siku (jangan lengkung -> jangan bulat)');
   // Tetap nempel tepi kanan + bawah (flush, bukan mengambang).
   assert.ok(rule.includes('right:0'), 'badge flush tepi kanan');
   assert.ok(rule.includes('bottom:0'), 'badge flush tepi bawah');
-  // Avatar punya radius 8px -> sudut kanan bawah avatar ikut melengkung.
+  // Avatar tetap radius 8px.
   const face = css.match(/\.st-asset-face\{[^}]*\}/s)[0];
   assert.ok(face.includes('border-radius:8px'), 'avatar radius 8px');
 });
