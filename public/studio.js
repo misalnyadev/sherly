@@ -1148,6 +1148,31 @@
     if (!draftMode) updatePillLabels();
   }
   /**
+   * D-232: ikon per pilihan di panel Pengaturan Konten — biar tiap chip
+   * punya identitas visual, tidak sekadar daftar teks.
+   * Peta per nilai + ikon cadangan per kategori (dipakai kalau nilai baru
+   * dari server belum ada di peta).
+   */
+  const SET_CHIP_ICONS = {
+    aspect: { '16:9': 'monitor', '9:16': 'smartphone', '1:1': 'square', '4:5': 'smartphone', '4:3': 'monitor', '3:4': 'smartphone' },
+    engine: { auto: 'sparkles', kie: 'cpu', gemini: 'sparkles' },
+    dur: {},
+    tier: {},
+    res: {},
+  };
+  // Ikon cadangan per kategori.
+  const SET_CHIP_FALLBACK_ICON = {
+    aspect: 'square', engine: 'cpu', dur: 'clock', tier: 'gauge', res: 'sliders',
+    model: 'video', imgmodel: 'sparkles',
+  };
+  /** Ikon untuk satu pilihan pengaturan (null kalau tak ada). */
+  function setChipIcon(key, v) {
+    const map = SET_CHIP_ICONS[key];
+    if (map && map[String(v)]) return map[String(v)];
+    return SET_CHIP_FALLBACK_ICON[key] || '';
+  }
+
+  /**
    * D-221: bangun panel pengaturan konten (dipakai di HP).
    * Panel berisi baris: nama pengaturan -> daftar pilihan (inline chip).
    * D-231: panel TIDAK menutup saat memilih. Semua pilihan ditulis ke draft;
@@ -1164,20 +1189,25 @@
     const typeChips = CONTENT_TYPES.map(([v, l, ico]) => {
       const on = ctx.mode === v;
       return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="type" data-set-v="' + esc(v) + '">'
-        + icon(ico) + esc(l) + '</button>';
+        + icon(ico) + '<span>' + esc(l) + '</span></button>';
     }).join('');
     const groups = activeSettings().map((g) => {
       const cur = settingValue(g.key);
       const opts = settingChoices(g.key);
       const chips = opts.map((o) => {
         const on = String(o.v) === String(cur);
+        // D-232: tiap pilihan punya ikon sendiri -> tampilannya lebih "pro",
+        // bukan sekadar daftar teks.
+        const ico = setChipIcon(g.key, o.v);
         return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="' + esc(g.key) + '" data-set-v="' + esc(o.v) + '">'
-          + esc(o.l) + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</button>';
+          + (ico ? icon(ico) : '') + '<span>' + esc(o.l) + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</span></button>';
       }).join('');
       return '<div class="st-set-row"><div class="st-set-label">' + icon(g.icon) + '<b>' + esc(g.label) + '</b></div>'
         + '<div class="st-set-chips">' + chips + '</div></div>';
     }).join('');
-    el.innerHTML = '<div class="st-set-head">' + icon('sliders') + '<b>Pengaturan Konten</b>'
+    el.innerHTML = '<div class="st-set-head">' + icon('sliders')
+      + '<div class="st-set-head-txt"><b>Pengaturan Konten</b>'
+      + '<small>Atur semua dulu, lalu tekan Simpan</small></div>'
       + '<button type="button" class="st-set-close" id="stSetClose" aria-label="Tutup">' + icon('x') + '</button></div>'
       + '<div class="st-set-body">'
       + '<div class="st-set-row"><div class="st-set-label">' + icon('image-plus') + '<b>Jenis Konten</b></div>'

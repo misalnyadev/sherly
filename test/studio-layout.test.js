@@ -1082,6 +1082,90 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
     + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
 
+// ===== D-232: Panel Pengaturan Konten tampil "pro" (kartu + chip ikon + footer sticky) =====
+
+test('D-232: tiap pengaturan jadi kartu, bukan daftar teks polos', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const row = css.match(/\.st-set-row\{[^}]*\}/s);
+  assert.ok(row, 'aturan .st-set-row tidak ada');
+  // Baris pengaturan punya surface + border + radius -> terlihat sebagai kartu.
+  assert.ok(row[0].includes('background:#101b2c'), 'kartu setting harus punya surface');
+  assert.ok(row[0].includes('border:1px solid #1c2b40'), 'kartu setting harus punya border');
+  assert.ok(row[0].includes('border-radius:13px'), 'kartu setting harus rounded');
+  // Label uppercase + bold -> terlihat seperti header kartu.
+  const label = css.match(/\.st-set-label\{[^}]*\}/s);
+  assert.ok(label[0].includes('text-transform:uppercase'), 'label harus uppercase');
+  assert.ok(label[0].includes('letter-spacing:.12em'), 'label harus ada letter-spacing');
+});
+
+test('D-232: chip punya ikon + tidak terpotong (footer sticky, body scroll)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Chip punya ikon (svg) styling.
+  const chipSvg = css.match(/\.st-set-chip svg\{[^}]*\}/s);
+  assert.ok(chipSvg, 'aturan svg chip tidak ada');
+  assert.ok(chipSvg[0].includes('stroke:#91a2b9'), 'ikon chip default abu-abu');
+  // Chip aktif -> ikon pink.
+  assert.ok(css.includes('.st-set-chip.on svg{stroke:#ff9bdc}'), 'ikon chip aktif harus pink');
+  // Body = area scroll; footer = sticky (tidak pernah terpotong).
+  const body = css.match(/\.st-set-body\{[^}]*\}/s);
+  assert.ok(body[0].includes('overflow-y:auto'), 'body panel harus bisa scroll');
+  assert.ok(body[0].includes('flex:1 1 auto'), 'body panel harus flexible');
+  assert.ok(body[0].includes('min-height:0'), 'body panel butuh min-height:0 agar scroll benar');
+  const foot = css.match(/\.st-set-foot\{[^}]*\}/s);
+  assert.ok(foot[0].includes('flex:none'), 'footer harus flex:none (tidak ikut scroll)');
+  assert.ok(foot[0].includes('border-top:1px solid #24344e'), 'footer harus ada garis pemisah');
+  // Tombol footer lebih besar (tidak terpotong).
+  const footBtn = css.match(/\.st-set-foot button\{[^}]*\}/s);
+  assert.ok(/padding:1[12]px 1[34]px/.test(footBtn[0]), 'tombol footer harus bertinggi lega');
+  // Panel lebih lega (mobile).
+  const mobRules = [...css.matchAll(/\.st-pop-settings\{([^}]*)\}/g)].map((m) => m[1]);
+  const mobile = mobRules.find((r) => r.includes('position:fixed'));
+  assert.ok(mobile, 'aturan mobile panel tidak ada');
+  assert.ok(mobile.includes('max-height:min(86vh,620px)'), 'panel harus lebih tinggi');
+  assert.ok(mobile.includes('padding:14px'), 'panel harus ada padding lega');
+});
+
+test('D-232: panel punya subjudul + ikon per chip', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function buildSettingsPanel'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Header: judul + subjudul.
+  assert.ok(body.includes('st-set-head-txt'), 'header harus punya wrapper teks');
+  assert.ok(body.includes('Atur semua dulu'), 'header harus punya subjudul');
+  // Chip dirender lewat setChipIcon (ikon per pilihan).
+  assert.ok(body.includes('setChipIcon(g.key, o.v)'), 'chip harus pakai setChipIcon');
+  assert.ok(body.includes('<span>'), 'label chip dibungkus span');
+  // Helper ikon + fallback per kategori.
+  assert.ok(studio.includes('function setChipIcon('), 'harus ada helper setChipIcon');
+  assert.ok(studio.includes('SET_CHIP_FALLBACK_ICON'), 'harus ada ikon cadangan per kategori');
+});
+
+test('D-232 (runtime): semua chip punya ikon & panel tidak terpotong', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  const panel = h.panel();
+  assert.ok(panel?.classList.contains('open'), 'panel harus terbuka');
+  // Tiap chip punya ikon SVG.
+  const chips = [...panel.querySelectorAll('.st-set-chip')];
+  assert.ok(chips.length > 0, 'harus ada chip');
+  const withoutIcon = chips.filter((c) => !c.querySelector('svg'));
+  assert.equal(withoutIcon.length, 0, 'semua chip harus punya ikon; yang belum: '
+    + withoutIcon.map((c) => c.textContent.trim()).slice(0, 5).join(', '));
+  // Tiap baris pengaturan adalah kartu (ada label + chips).
+  const rows = [...panel.querySelectorAll('.st-set-row')];
+  assert.ok(rows.length >= 3, 'panel harus punya beberapa baris pengaturan');
+  for (const r of rows) {
+    assert.ok(r.querySelector('.st-set-label'), 'tiap baris harus punya label');
+    assert.ok(r.querySelector('.st-set-chips'), 'tiap baris harus punya deretan chip');
+  }
+  // Footer Simpan ada dan tidak berada di dalam area scroll (adalah sibling body).
+  const foot = panel.querySelector('.st-set-foot');
+  assert.ok(foot, 'panel harus punya footer');
+  assert.ok(foot.parentElement === panel, 'footer harus anak langsung panel (sticky)');
+  assert.ok(!panel.querySelector('.st-set-body .st-set-foot'), 'footer tidak boleh di dalam area scroll');
+});
+
 // ===== D-231: Pengaturan Konten = draft -> Simpan (panel tidak nutup sendiri) =====
 
 /**
