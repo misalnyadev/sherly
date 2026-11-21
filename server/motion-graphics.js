@@ -28,6 +28,7 @@
 
 import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
@@ -290,20 +291,96 @@ export async function renderMotionGraphic(req, opts = {}) {
 /**
  * Probe apakah Motion Graphics bisa dipakai di server ini.
  * Dipakai route /api/studio/motion-graphics/templates agar UI bisa
- * menyembunyikan mode kalau renderer tidak siap.
+ * menampilkan status (menyiapkan / siap / gagal).
  */
 export async function motionGraphicsAvailable() {
   try {
     await fs.access(MG_ENTRY);
   } catch {
-    return {ok: false, reason: 'Project motion-graphics tidak ditemukan.'};
+    return {ok: false, reason: 'Project motion-graphics tidak ditemukan.', status: 'missing'};
   }
   try {
     await loadRenderer();
   } catch (error) {
-    return {ok: false, reason: error?.message || 'Renderer tidak tersedia.'};
+    return {
+      ok: false,
+      reason: error?.message || 'Renderer tidak tersedia.',
+      status: installState.status === 'installing' ? 'installing' : 'missing',
+    };
   }
-  return {ok: true};
+  return {ok: true, status: 'ready'};
+}
+
+// ===== Auto-setup =====
+//
+// D-249: user shouldn't have to remember `npm run setup`. Kalau dependency
+// Remotion belum terpasang, server bisa memasangnya sendiri sekali di
+// background, lalu UI menampilkan "Sedang menyiapkan…" alih-alih
+// menyembunyikan mode.
+//
+// Catatan:
+//  - Install dijalankan HANYA kalau node_modules benar-benar belum ada.
+//  - Proses install dicatat di `installState` supaya route templates bisa
+//    melaporkan status (installing / ready / failed) ke UI.
+//  - Install hanya butuh akses npm registry. Kalau tidak ada jaringan,
+//    status jadi 'failed' dengan alasannya dan UI bisa tampilkan
+//    petunjuk manual (`npm run setup`).
+
+const installState = {
+  status: 'idle',   // idle | installing | ready | failed
+  reason: null,
+  promise: null,
+};
+
+/** Status install untuk dilaporkan ke UI. */
+export function motionGraphicsInstallState() {
+  return {status: installState.status, reason: installState.reason};
+}
+
+/**
+ * Pastikan dependency Remotion terpasang. Kalau belum, jalankan
+ * `npm install` di sub-project (satu kali, di background).
+ */
+export function ensureMotionGraphicsInstalled() {
+  if (installState.promise) return installState.promise;
+  // Sudah ada? tidak perlu install.
+  if (fsSync.existsSync(path.join(MG_PROJECT, 'node_modules', '@remotion', 'bundler'))) {
+    installState.status = 'ready';
+    return Promise.resolve({ok: true});
+  }
+  installState.status = 'installing';
+  installState.reason = null;
+  installState.promise = new Promise((resolve) => {
+    const child = spawn('npm', ['install', '--no-audit', '--no-fund'], {
+      cwd: MG_PROJECT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {...process.env},
+    });
+    let out = '';
+    child.stdout?.on('data', (d) => { out += String(d); });
+    child.stderr?.on('data', (d) => { out += String(d); });
+    child.on('error', (error) => {
+      installState.status = 'failed';
+      installState.reason = 'Gagal menjalankan npm install: ' + (error?.message || error);
+      installState.promise = null;
+      resolve({ok: false, reason: installState.reason});
+    });
+    child.on('close', (code) => {
+      installState.promise = null;
+      if (code === 0) {
+        installState.status = 'ready';
+        // Reset cache renderer supaya modul baru bisa di-import.
+        rendererPromise = null;
+        serveUrlPromise = null;
+        resolve({ok: true});
+        return;
+      }
+      installState.status = 'failed';
+      installState.reason = 'npm install gagal (kode ' + code + '). Jalankan manual: npm run setup';
+      resolve({ok: false, reason: installState.reason});
+    });
+  });
+  return installState.promise;
 }
 
 /**

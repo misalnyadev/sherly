@@ -26,6 +26,7 @@ import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL
 // D-249: Mode "Motion Graphics" — render video programatik (Remotion, lokal/server sendiri).
 import {
   MOTION_GRAPHICS_PROVIDER, MG_TEMPLATES, motionGraphicsAvailable,
+  motionGraphicsInstallState, ensureMotionGraphicsInstalled,
   normalizeRenderRequest, renderMotionGraphic,
 } from './motion-graphics.js';
 // D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
@@ -743,11 +744,20 @@ async function runMotionGraphicsRender(req, task, spec) {
 
 app.get('/api/studio/motion-graphics/templates', requireUser, requireAdmin, async (_req, res) => {
   try {
-    const availability = await motionGraphicsAvailable();
+    let availability = await motionGraphicsAvailable();
+    // D-249: kalau dependency Remotion belum terpasang, server pasang
+    // sendiri di background (user tidak perlu ingat `npm run setup`).
+    if (!availability.ok && availability.status === 'missing') {
+      ensureMotionGraphicsInstalled().catch(() => {});
+      availability = await motionGraphicsAvailable();
+    }
+    const install = motionGraphicsInstallState();
     res.json({
       ok: true,
       available: availability.ok,
-      reason: availability.ok ? null : availability.reason,
+      // Status: ready | installing | missing | failed
+      status: availability.ok ? 'ready' : install.status === 'installing' ? 'installing' : install.status === 'failed' ? 'failed' : 'missing',
+      reason: availability.ok ? null : (install.reason || availability.reason),
       templates: MG_TEMPLATES,
     });
   } catch (error) {

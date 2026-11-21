@@ -200,9 +200,17 @@ test('D-249: mode Motion Graphics ada di CONTENT_TYPES', () => {
   assert.match(studioJs, /\['motion',\s*'Motion Graphics',\s*'film'\]/);
 });
 
-test('D-249: mode Motion Graphics disembunyikan kalau renderer tidak siap', () => {
+test('D-249: mode Motion Graphics SELALU tampil (status, bukan hilang)', () => {
+  // D-249: user harus bisa lihat mode-nya walau renderer belum siap —
+  // bar isian menampilkan "Menyiapkan…". Mode yang hilang diam-diam bikin
+  // user bingung ("motion graphics dimana ya?").
   assert.match(studioJs, /function availableContentTypes\(\)/);
-  assert.match(studioJs, /CONTENT_TYPES\.filter\(\(\[v\]\) => v !== 'motion' \|\| motionAvailable\)/);
+  assert.match(studioJs, /return CONTENT_TYPES\.slice\(\);/);
+  assert.doesNotMatch(studioJs, /CONTENT_TYPES\.filter\(\(\[v\]\) => v !== 'motion'/);
+  // Status 'installing' -> polling ulang tiap 3 detik.
+  assert.match(studioJs, /motionStatus === 'installing'[\s\S]*?setTimeout\(\(\) => \{ loadMotionTemplates\(\); \}, 3000\)/);
+  // Bar isian menampilkan status saat renderer belum siap.
+  assert.match(studioJs, /if \(!motionAvailable\) \{[\s\S]*?st-motion-status/);
 });
 
 test('D-249: UI punya tombol Render + bar template + bar progres', () => {
@@ -227,10 +235,22 @@ test('D-249: template punya setting sendiri (template + durasi), tanpa provider'
 });
 
 test('D-249: health endpoint melaporkan status renderer Motion Graphics', () => {
-  // Kalau renderer belum terpasang, mode disembunyikan dari UI — health
-  // endpoint jadi cara cepet cek tanpa buka UI.
+  // Kalau renderer belum terpasang, health endpoint jadi cara cepet cek
+  // tanpa buka UI.
   assert.match(appJs, /app\.get\('\/api\/health', async/);
   assert.match(appJs, /motionGraphics: \{ available: motionGraphics\.ok/);
+});
+
+test('D-249: server auto-install dependency Remotion kalau belum ada', () => {
+  // User tidak perlu ingat `npm run setup` — server pasang sendiri sekali
+  // di background, UI nampilin "Menyiapkan…".
+  assert.match(appJs, /ensureMotionGraphicsInstalled\(\)\.catch\(\(\) => \{\}\)/);
+  assert.match(appJs, /status: availability\.ok \? 'ready' : install\.status === 'installing' \? 'installing'/);
+  const mg = readFileSync('server/motion-graphics.js', 'utf8');
+  assert.match(mg, /export function ensureMotionGraphicsInstalled\(\)/);
+  assert.match(mg, /spawn\('npm', \['install', '--no-audit', '--no-fund'\]/);
+  // Cache renderer harus di-reset setelah install supaya modul baru terbaca.
+  assert.match(mg, /rendererPromise = null;\s*\n\s*serveUrlPromise = null;/);
 });
 
 test('D-249: composer di mode Motion Graphics tidak mengulang placeholder kolom template', () => {
