@@ -328,6 +328,82 @@ bakal lihat ~1 loop penuh. Jangan lupa `loop` supaya ga ada "flicker" di akhir.
 
 ---
 
+## 6c. HASIL ANALISIS FILE GIF ASLI (dari user)
+
+File: `Membuat_efek_neon_logo_web_e1bb06cf.gif` — **efek neon logo "S" Sherly**
+(partikel neon pink berubah jadi logo, ada denyut listrik).
+
+### 6c.1 Spesifikasi asli
+| Properti | Nilai |
+|---|---|
+| Ukuran | **360 × 640** (portrait, rasio 9:16) |
+| Frames | 37 |
+| Delay | 10 cs/frame → **durasi 3,7 detik** |
+| Ukuran file | **1,53 MB** |
+| Colorspace | sRGB, **tanpa alpha** (`alpha=False`) |
+| Palette | 256 warna per frame |
+| Background | **hitam solid `#000000`** (bukan `#070b14`) |
+| Loop | ✅ seamless (frame 0 = partikel awal, frame 36 kembali ke partikel) |
+| Delay tiap frame | seragam 10 (tidak ada optimize delay) |
+
+### 6c.2 Hasil benchmark konversi (diuji nyata di sandbox)
+| Format | Ukuran | Rasio vs asli | Catatan |
+|---|---|---|---|
+| GIF asli | 1.525.165 B | 1× | baseline |
+| GIF re-compress (240px, 64 warna, optimize) | 676.465 B | 0,44× | kualitas turun jelas |
+| GIF re-compress (300px, 64 warna) | 1.013.274 B | 0,66× | masih besar |
+| GIF 128 warna | 1.384.186 B | 0,91× | hampir gak hemat |
+| **Animated WebP** (360px, q80) | **253.002 B** | **0,17×** | ✅ **6× lebih kecil, kualitas hampir identik** |
+| Animated WebP (300px, q70) | 157.170 B | 0,10× | ✅ 10× lebih kecil |
+| **MP4 H.264** (360×640, CRF 23, faststart) | **124.689 B** | 0,08× | ✅ **12× lebih kecil** |
+| **MP4 H.264** (speed 1,85× → 2,2 dtk, CRF 24) | **64.529 B** | 0,04× | ⭐ **paling ringan** |
+| **WebM VP9** (CRF 34) | **70.738 B** | 0,05× | ⭐ paling ringan, tapi **gak didukung Safari/iOS** |
+
+**Kesimpulan:** MP4 (atau WebP) **12–24× lebih kecil** dari GIF asli dengan
+kualitas yang nyaris identik. GIF **jangan dipakai** sebagai format utama.
+
+### 6c.3 File yang sudah disiapkan di `public/assets/brand/`
+| File | Ukuran | Fungsi |
+|---|---|---|
+| `sherly-logo.mp4` | 64.529 B | ⭐ **primary** — H.264, 2,2 dtk, faststart, no audio |
+| `sherly-logo.webm` | 47.249 B | ⭐ **alternatif** — VP9, lebih kecil, butuh `canPlayType` |
+| `sherly-logo-poster.png` | 66.499 B | `poster` attribute + fallback statis + system splash |
+| `sherly-logo.gif` | 676.465 B | fallback terakhir (browser sangat lawas) |
+
+### 6c.4 Catatan penting
+1. **Durasi 3,7 detik terlalu lama** untuk splashscreen. Versi 2,2 detik
+   (speed 1,85×) sudah jauh lebih pas — dan 64 KB.
+2. **Background GIF = `#000000`**, app = `#070b14`. → cotton
+   Akan ada **sedikit perbedaan warna** kalau poster dipakai system splash.
+   Solusi: samakan latar belakang jadi `#070b14` saat generate, atau biarkan (mata ga
+   terlalu ngecatch di layar gelap).
+3. **Tidak ada alpha** → background harus di-*bake* (udah happens).
+4. Rasio **9:16 portrait** → untuk splashscreen, logo sebaiknya **di-center
+   dan di-crop** (pakai `object-fit: contain` + area tengah), bukan full-frame.
+   Atau generate ulang di landscape/square.
+5. **Logo "S" occupy area tengah** → aman di-center.
+
+### 6c.5 Contoh pemakaian
+```html
+<video id="splashVid" poster="/assets/brand/sherly-logo-poster.png"
+       src="/assets/brand/sherly-logo.mp4"
+       autoplay muted loop playsinline preload="auto"></video>
+```
+```js
+const v = document.getElementById('splashVid');
+if (v && v.canPlayType('video/mp4')) {
+  v.src = '/assets/brand/sherly-logo.mp4';
+  v.style.display = 'block';
+} else if (v && v.canPlayType('video/webm')) {
+  v.src = '/assets/brand/sherly-logo.webm';
+  v.style.display = 'block';
+} else {
+  document.getElementById('splashGif').style.display = 'block';
+}
+```
+
+---
+
 ## 7. Estimasi kerja
 
 | Bagian | Waktu |
