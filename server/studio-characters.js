@@ -73,12 +73,20 @@ export function voiceDescriptor(char) {
  * Susun blok prompt untuk karakter yang disebut.
  * Menandai gambar mana yang potret dan mana yang master sheet supaya model
  * tahu peran tiap referensi (penting untuk konsistensi wajah & sheet).
+ *
+ * D-239: nomor gambar harus **mengikuti urutan global** daftar referensi
+ * (potret + master sheet per karakter, sesuai urutan di `resolveCharacterReferences`).
+ * Sebelumnya dipakai `idx + 1` (index karakter) sehingga:
+ *   - karakter 1 (potret + sheet) menulis "Gambar 1" dua kali (duplikat),
+ *   - karakter 2 menulis "Gambar 2" padahal gambarnya benar-benar gambar ke-3.
+ * `imageIndex` berisi peta { characterId -> { potret: n, board: n } } supaya
+ * nomor yang disebut selalu cocok dengan posisi gambar di request.
  */
-export function buildCharacterPromptBlock(mentions, characters) {
+export function buildCharacterPromptBlock(mentions, characters, imageIndex = null) {
   if (!mentions.length) return '';
   const lines = [`## Karakter yang muncul (maks ${MAX_MENTION_CHARACTERS})`];
   const byId = new Map(characters.map((c) => [c.id, c]));
-  mentions.forEach((m, idx) => {
+  mentions.forEach((m) => {
     const c = byId.get(m.id);
     if (!c) return;
     const assets = [];
@@ -89,11 +97,24 @@ export function buildCharacterPromptBlock(mentions, characters) {
     lines.push(String(c.identity_prompt || '').trim());
     const voice = voiceDescriptor(c);
     if (voice) lines.push(voice);
+    // Nomor gambar global (1-based). Bila peta tidak tersedia, jatuh ke urutan
+    // karakter (perilaku lama) — hanya relevan bila pemanggil tidak mengirim peta.
+    const map = imageIndex && imageIndex.get ? imageIndex.get(c.id) : null;
+    const portraitNo = map?.potret ?? null;
+    const boardNo = map?.board ?? null;
+    // Urutkan berdasarkan nomor gambar supaya penomoran di prompt selalu naik
+    // (model lebih mudah memetakan "Gambar 1", "Gambar 2", ... ke input).
+    const refs = [];
     if (c.board_path) {
-      lines.push(`Gambar ${idx + 1}: master sheet referensi untuk ${c.name} (wajah, warna rambut, pakaian, aksesori). Ikuti master sheet ini.`);
+      refs.push({ no: boardNo, text: `master sheet referensi untuk ${c.name} (wajah, warna rambut, pakaian, aksesori). Ikuti master sheet ini.` });
     }
     if (c.reference_image_path) {
-      lines.push(`Gambar ${idx + 1}: foto potret resmi ${c.name}. Wajah dan identitas visual WAJIB konsisten dengan potret ini.`);
+      refs.push({ no: portraitNo, text: `foto potret resmi ${c.name}. Wajah dan identitas visual WAJIB konsisten dengan potret ini.` });
+    }
+    refs.sort((a, b) => (a.no ?? Infinity) - (b.no ?? Infinity));
+    for (const r of refs) {
+      const label = r.no ? `Gambar ${r.no}` : 'Gambar referensi';
+      lines.push(`${label}: ${r.text}`);
     }
   });
   return lines.join('\n');
@@ -126,20 +147,59 @@ export async function loadStoredImage(supabase, bucketName, path) {
 export async function resolveCharacterReferences(supabase, bucketName, characters, mentions) {
   const images = [];
   const labels = [];
+  // D-239: peta posisi gambar (1-based) per karakter supaya prompt bisa
+  // menulis "Gambar 3" dengan benar (urutan global, bukan per karakter).
+  const imageIndex = new Map();
   const byId = new Map(characters.map((c) => [c.id, c]));
   for (const m of mentions) {
     const c = byId.get(m.id);
     if (!c) continue;
     const withSheet = images.length + 2 <= MAX_REFERENCE_IMAGES - 1;
     const portrait = await loadStoredImage(supabase, bucketName, c.reference_image_path);
-    if (portrait) { images.push(portrait); labels.push({ name: c.name, kind: 'potret' }); }
+    const map = {};
+    if (portrait) {
+      images.push(portrait);
+      labels.push({ name: c.name, kind: 'potret' });
+      map.potret = images.length;
+    }
     if (withSheet && c.board_path) {
       const board = await loadStoredImage(supabase, bucketName, c.board_path);
-      if (board) { images.push(board); labels.push({ name: c.name, kind: 'master sheet' }); }
+      if (board) {
+        images.push(board);
+        labels.push({ name: c.name, kind: 'master sheet' });
+        map.board = images.length;
+      }
     }
+    if (Object.keys(map).length) imageIndex.set(c.id, map);
     if (images.length >= MAX_REFERENCE_IMAGES - 1) break;
   }
-  return { images, labels };
+  return { images, labels, imageIndex };
+}
+
+/**
+ * D-239: geser nomor gambar referensi sebesar `offset`.
+ *
+ * Untuk VIDEO, frame adegan dikirim sebagai gambar PERTAMA di request
+ * (`[sceneImage, ...charImages]`), sedangkan untuk GAMBAR frame adegan
+ * diletakkan di AKHIR (`[...charImages, sceneImage]`).
+ * Karena itu nomor gambar karakter di prompt harus digeser agar cocok
+ * dengan posisi gambar sebenarnya di request.
+ *
+ * @param {Map<string,{potret?:number,board?:number}>} imageIndex
+ * @param {number} offset
+ * @returns {Map<string,{potret:number|null,board:number|null}>}
+ */
+export function shiftImageIndex(imageIndex, offset) {
+  const out = new Map();
+  if (!imageIndex || typeof imageIndex.forEach !== 'function') return out;
+  const n = Number(offset) || 0;
+  imageIndex.forEach((map, cid) => {
+    out.set(cid, {
+      potret: map && map.potret ? map.potret + n : null,
+      board: map && map.board ? map.board + n : null,
+    });
+  });
+  return out;
 }
 
 /** Sanitasi gambar referensi adegan yang dikirim client (frame akhir / referensi lokasi). */

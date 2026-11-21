@@ -154,3 +154,89 @@ test('videoCatalog: bentuk untuk frontend (tanpa field internal)', () => {
   assert.ok(Array.isArray(m.tiers));
   assert.ok(!('schema' in m), 'schema internal tidak dikirim ke frontend');
 });
+
+// ===== D-239: Google Gemini Omni 1.2 Flash (Kie) =====
+
+test('D-239: katalog punya model Omni 1.2 Flash dengan kapabilitas Kie yang benar', () => {
+  const m = findVideoModel('google/gemini-omni-flash-1-2');
+  assert.ok(m, 'model Omni 1.2 Flash harus ada di katalog');
+  assert.equal(m.provider, 'kie');
+  assert.equal(m.label, 'Omni 1.2 Flash');
+  assert.equal(m.maker, 'Google');
+  assert.equal(m.schema, 'omni');
+  assert.equal(m.audio, true, 'Omni punya audio native');
+  assert.equal(m.firstLastFrame, true);
+  assert.equal(m.firstLastFrameExclusive, true, 'first/last frame tidak boleh digabung image_urls');
+  assert.equal(m.maxReferences, 6);
+  // Durasi 3-15 detik (Kie: 3..15, satu detik).
+  assert.deepEqual(m.durations, [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+  assert.deepEqual(m.resolutions, ['360p', '720p', '1080p', '4k']);
+  assert.deepEqual(m.aspects, ['16:9', '9:16', 'auto']);
+  assert.ok(m.tiers.some((t) => t.id === m.defaultTier));
+});
+
+test('D-239: normalizeVideoParams menerima Omni 1.2 Flash (durasi 15 & aspect auto)', () => {
+  const out = normalizeVideoParams({
+    model: 'google/gemini-omni-flash-1-2', tier: 'standard',
+    duration: 15, resolution: '1080p', aspect: 'auto',
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.duration, 15);
+  assert.equal(out.resolution, '1080p');
+  assert.equal(out.aspect, 'auto');
+  assert.equal(out.audio, true);
+});
+
+test('D-239: normalizeVideoParams menolak kapabilitas di luar Omni (durasi 16, 8k, 1:1)', () => {
+  const badDur = normalizeVideoParams({ model: 'google/gemini-omni-flash-1-2', tier: 'standard', duration: 16, resolution: '720p', aspect: '16:9' });
+  assert.equal(badDur.ok, false);
+  assert.match(badDur.error, /Durasi/);
+  const badRes = normalizeVideoParams({ model: 'google/gemini-omni-flash-1-2', tier: 'standard', duration: 8, resolution: '8k', aspect: '16:9' });
+  assert.equal(badRes.ok, false);
+  assert.match(badRes.error, /Resolusi/);
+  const badAsp = normalizeVideoParams({ model: 'google/gemini-omni-flash-1-2', tier: 'standard', duration: 8, resolution: '720p', aspect: '1:1' });
+  assert.equal(badAsp.ok, false);
+  assert.match(badAsp.error, /Rasio aspek/);
+});
+
+test('D-239: buildVideoInput schema omni -> field Kie yang benar', () => {
+  const params = { prompt: 'kota neon', tier: 'standard', duration: 10, resolution: '720p', aspect: '16:9', audio: true };
+  const input = buildVideoInput('omni', params, []);
+  assert.equal(input.prompt, 'kota neon');
+  assert.equal(input.duration, 10, 'durasi integer');
+  assert.equal(input.resolution, '720p');
+  assert.equal(input.aspect_ratio, '16:9');
+  assert.equal(input.image_urls, undefined, 'tanpa gambar tidak ada image_urls');
+  // Field yang TIDAK boleh dikirim ke Kie untuk model ini.
+  assert.equal(input.model, undefined, 'Omni tidak pakai field model (tier)');
+  assert.equal(input.first_frame_url, undefined);
+  assert.equal(input.last_frame_url, undefined);
+  assert.equal(input.video_list, undefined);
+});
+
+test('D-239: buildVideoInput schema omni -> image_urls (maks 6) untuk referensi karakter', () => {
+  const params = { prompt: 'p', tier: 'standard', duration: 8, resolution: '1080p', aspect: '9:16', audio: true };
+  const input = buildVideoInput('omni', params, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+  assert.deepEqual(input.image_urls, ['a', 'b', 'c', 'd', 'e', 'f'], 'maks 6 referensi');
+  assert.equal(input.first_frame_url, undefined, 'first frame eksklusif -> tidak digabung');
+});
+
+test('D-239: videoCatalog mengirim field Omni ke frontend', () => {
+  const cat = videoCatalog();
+  const m = cat.models.find((x) => x.id === 'google/gemini-omni-flash-1-2');
+  assert.ok(m, 'Omni harus ada di katalog frontend');
+  assert.equal(m.maxReferences, 6);
+  assert.equal(m.firstLastFrameExclusive, true);
+  assert.equal(m.firstLastFrame, true);
+  assert.ok(!('schema' in m), 'schema tetap internal');
+});
+
+test('D-239: fallback katalog frontend (public/studio.js) sinkron dengan server', async () => {
+  const { readFileSync } = await import('node:fs');
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes("id: 'google/gemini-omni-flash-1-2'"), 'fallback frontend harus punya Omni');
+  assert.ok(studio.includes("label: 'Omni 1.2 Flash'"), 'label fallback harus sama dgn server');
+  assert.ok(studio.includes("maker: 'Google'"));
+  assert.ok(studio.includes("firstLastFrameExclusive: true"));
+  assert.ok(studio.includes('maxReferences: 6'));
+});

@@ -84,6 +84,29 @@ export const VIDEO_MODELS = [
     altModel: 'bytedance/seedance-2-fast',
   },
   {
+    // D-239: Google Gemini Omni 1.2 Flash — video 15 detik + audio native,
+    // multi-turn editing, reference consistency (Kie AI docs, Nov 2026).
+    id: 'google/gemini-omni-flash-1-2',
+    provider: 'kie',
+    label: 'Omni 1.2 Flash',
+    maker: 'Google',
+    schema: 'omni',
+    durations: range(3, 15),
+    resolutions: ['360p', '720p', '1080p', '4k'],
+    aspects: ['16:9', '9:16', 'auto'],
+    audio: true,
+    firstLastFrame: true,
+    note: 'Google Gemini Omni 1.2 Flash — 15 detik, audio native, referensi karakter paling konsisten.',
+    tiers: [{ id: 'standard', label: 'Standard' }],
+    defaultTier: 'standard',
+    defaultDuration: 8,
+    defaultResolution: '720p',
+    defaultAspect: '9:16',
+    // Kie: first_frame_url + last_frame_url TIDAK boleh digabung dengan image_urls.
+    firstLastFrameExclusive: true,
+    maxReferences: 6,
+  },
+  {
     id: 'bytedance/seedance-2-fast',
     provider: 'kie',
     label: 'Seedance 2.0 Fast',
@@ -187,6 +210,22 @@ export function buildVideoInput(schema, params, images) {
     if (urls.length) input.image_urls = urls.slice(0, 3);
     return input;
   }
+  if (schema === 'omni') {
+    // D-239: Google Gemini Omni 1.2 Flash (Kie).
+    // Field: prompt, duration (3-15), resolution, aspect_ratio, image_urls (s/d 6),
+    // first_frame_url + last_frame_url (TIDAK boleh digabung dengan image_urls).
+    const input = {
+      prompt,
+      duration,
+      resolution,
+      aspect_ratio: aspect,
+    };
+    if (urls.length) {
+      // Referensi karakter/aset -> image_urls (maks 6).
+      input.image_urls = urls.slice(0, 6);
+    }
+    return input;
+  }
   if (schema === 'seedance') {
     const input = {
       prompt,
@@ -222,6 +261,8 @@ export function videoCatalog() {
       aspects: m.aspects,
       audio: m.audio,
       firstLastFrame: m.firstLastFrame,
+      firstLastFrameExclusive: !!m.firstLastFrameExclusive,
+      maxReferences: m.maxReferences || 3,
       note: m.note,
       tiers: m.tiers,
       defaultTier: m.defaultTier,
