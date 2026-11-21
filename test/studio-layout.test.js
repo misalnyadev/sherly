@@ -2004,3 +2004,63 @@ test('D-227: badge user tetap pakai ikon user', () => {
   assert.ok(line.includes('st-asset-badge'), 'badge harus kelas st-asset-badge');
   assert.ok(line.includes("icon('user')"), 'badge harus ikon user');
 });
+
+// ===== D-240: Durasi (dan setting lain) hasil pilihan panel harus TERSIMPAN =====
+
+test('D-240 (runtime): durasi 10 detik chosen di panel TERSIMPAN setelah Simpan', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  // Pindah ke mode Video supaya baris Durasi muncul (Veo 3.1: 4/6/8 dtk).
+  h.openPanel();
+  h.clickChip('type', 'video');
+  h.openPanel();
+  h.clickChip('model', 'veo-3-1');
+  // Pilih durasi 8 detik (Veo 3.1 tidak punya 10 dtk).
+  assert.ok(h.clickChip('dur', '8'), 'chip durasi 8 detik harus ada');
+  // Simpan.
+  h.click(h.doc.getElementById('stSetSave'));
+  // Pill durasi harus menunjukkan "8 detik".
+  assert.equal(h.pill('stDurPill'), '8 detik',
+    'durasi 8 detik harus tersimpan, dapat "' + h.pill('stDurPill') + '"');
+  // Buka panel lagi -> chip 8 detik harus masih terpilih.
+  h.openPanel();
+  assert.ok(h.panel()?.querySelector('[data-set-key="dur"][data-set-v="8"].on'),
+    'durasi 8 detik harus tetap terpilih saat panel dibuka lagi');
+});
+
+test('D-240 (runtime): buka panel lagi -> setting tersimpan tetap terpilih', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  h.clickChip('type', 'video');
+  h.openPanel();
+  // Kling 3.0 punya durasi 3-15 dtk -> pakai 12 detik.
+  h.clickChip('model', 'kling-3.0/video');
+  h.clickChip('dur', '12');
+  h.click(h.doc.getElementById('stSetSave'));
+  // Buka panel lagi: chip 12 detik harus aktif.
+  h.openPanel();
+  assert.ok(h.panel()?.querySelector('[data-set-key="dur"][data-set-v="12"].on'),
+    'durasi 12 detik harus tetap aktif setelah panel dibuka lagi');
+});
+
+test('D-240 (runtime): memilih model lain TIDAK boleh menimpa durasi yang sudah dipilih', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  h.clickChip('type', 'video');
+  h.openPanel();
+  h.clickChip('model', 'kling-3.0/video');
+  h.clickChip('dur', '12');
+  // Simpan -> durasi 12 detik harus jadi default Kling.
+  h.click(h.doc.getElementById('stSetSave'));
+  assert.equal(h.pill('stDurPill'), '12 detik',
+    'durasi 12 detik harus tersimpan, dapat "' + h.pill('stDurPill') + '"');
+  // Buka panel lagi, pilih model LAIN, lalu Simpan lagi.
+  h.openPanel();
+  h.clickChip('model', 'bytedance/seedance-2');
+  h.click(h.doc.getElementById('stSetSave'));
+  // Seedance mendukung 12 detik -> durasi 12 harus tetap, bukan balik ke default 8.
+  assert.equal(h.pill('stDurPill'), '12 detik',
+    'ganti model tidak boleh menimpa durasi tersimpan, dapat "' + h.pill('stDurPill') + '"');
+});

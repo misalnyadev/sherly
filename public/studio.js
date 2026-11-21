@@ -123,7 +123,13 @@
   // resetToDefault=true -> pakai default model; false -> pertahankan nilai yang masih valid.
   function applyModelCaps(m, resetToDefault) {
     if (!m) return;
-    state.tier = m.defaultTier;
+    // D-240: tier hanya di-reset ke default model bila `resetToDefault`.
+    // Kalau tidak, tier yang sudah dipilih user dipertahankan selama masih
+    // didukung model (tier model berbeda2, mis. veo3_fast vs std vs 4K).
+    const tierIds = (m.tiers || []).map((t) => t.id);
+    if (resetToDefault || !tierIds.includes(state.tier)) {
+      state.tier = m.defaultTier;
+    }
     const dur = Number(state.duration);
     if (resetToDefault && m.defaultDuration && m.durations.includes(Number(m.defaultDuration))) {
       state.duration = String(m.defaultDuration);
@@ -1042,7 +1048,12 @@
       if (im && !im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
     } else {
       const vm = videoCatalog.models.find((m) => m.id === state.videoModel);
-      if (vm) applyModelCaps(vm, true);
+      // D-240: JANGAN reset ke default model saat menyimpan draft.
+      // `resetToDefault=false` -> nilai yang sudah dipilih user (durasi, tier,
+      // resolusi, rasio) DIPERTAHANKAN; hanya nilai yang tidak didukung model
+      // terpilih yang diganti ke default. Sebelumnya `true` sehingga durasi
+      // 10 detik yang dipilih user diam-diam balik ke default model.
+      if (vm) applyModelCaps(vm, false);
     }
     // Pill "Model gambar" (Kie) ikut mengikuti provider terpilih.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
@@ -1133,24 +1144,24 @@
     if (which === 'model') {
       target.videoModel = v;
       const m = videoCatalog.models.find((x) => x.id === v);
-      // Kapabilitas model ikut draft: tier/durasi/resolusi/aspek disesuaikan.
+      // D-240: kapabilitas model ikut draft — TAPI nilai yang masih didukung
+      // model baru (durasi/tier/resolusi/rasio) TIDAK dipaksa balik ke default.
+      // Hanya nilai yang tidak lagi valid yang diganti ke default model.
       if (m) {
-        target.tier = m.defaultTier;
+        const tierIds = (m.tiers || []).map((t) => t.id);
+        if (!tierIds.includes(target.tier)) target.tier = m.defaultTier;
         const dur = Number(target.duration);
-        if (m.defaultDuration && m.durations.includes(Number(m.defaultDuration))) {
-          target.duration = String(m.defaultDuration);
-        } else if (!m.durations.includes(dur)) {
-          target.duration = String(m.durations[m.durations.length - 1]);
+        if (!m.durations.includes(dur)) {
+          target.duration = String(m.defaultDuration && m.durations.includes(Number(m.defaultDuration))
+            ? m.defaultDuration : m.durations[m.durations.length - 1]);
         }
-        if (m.defaultResolution && m.resolutions.includes(m.defaultResolution)) {
-          target.resolution = m.defaultResolution;
-        } else if (!m.resolutions.includes(target.resolution)) {
-          target.resolution = m.resolutions[0];
+        if (!m.resolutions.includes(target.resolution)) {
+          target.resolution = m.defaultResolution && m.resolutions.includes(m.defaultResolution)
+            ? m.defaultResolution : m.resolutions[0];
         }
-        if (m.defaultAspect && m.aspects.includes(m.defaultAspect)) {
-          target.aspect = m.defaultAspect;
-        } else if (!m.aspects.includes(target.aspect)) {
-          target.aspect = m.aspects.includes('9:16') ? '9:16' : m.aspects[0];
+        if (!m.aspects.includes(target.aspect)) {
+          target.aspect = m.defaultAspect && m.aspects.includes(m.defaultAspect)
+            ? m.defaultAspect : (m.aspects.includes('9:16') ? '9:16' : m.aspects[0]);
         }
       }
     }
@@ -1270,8 +1281,10 @@
   }
   /** D-221: buka panel pengaturan (HP). */
   function openSettingsPanel() {
-    // D-231: mulai draft baru dari state saat panel dibuka.
-    beginSettingsDraft();
+    // D-240: kalau panel sudah terbuka, JANGAN buat draft baru — pilihan
+    // sementara user (mis. durasi 10 detik) harus tetap ada saat panel
+    // dibuka ulang / di-render ulang.
+    if (!settingsDraft) beginSettingsDraft();
     buildSettingsPanel();
     const el = $('stPop-settings');
     if (!el) return;
