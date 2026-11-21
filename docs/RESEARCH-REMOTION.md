@@ -161,8 +161,8 @@ Free tier 400.000 GB-second/bulan ≈ 390 render 1-menit.
 
 | Tool | Oleh | Lisensi | Stars | Bedanya |
 |---|---|---|---|---|
-| **Remotion** | Remotion GmbH | custom (free ≤3 org) | ~64k | React/TSX, paling matang |
-| **HyperFrames** | HeyGen | **Apache-2.0** | ~14k (sedikit lebih tinggi dari Remotion di Okt 2026) | HTML+ CSS+ GSAP, **gratis selamanya**; HDR 10-bit, alpha, TTS lokal (Kokoro-82M), Whisper lokal, remove-bg bawaan. Render lokal 3,2 s vs Remotion 8,5 s; install 311 MB vs 870 MB |
+| **Remotion** | Remotion GmbH | custom (free ≤3 org) | ~64–73k | React/TSX, paling matang, Lambda distributed paling matang |
+| **HyperFrames** ⭐ | HeyGen | **Apache-2.0** | **~85k** (per Nov 2026 — tembus Remotion) | HTML+ CSS+ JS, **gratis tanpa ambang seat/render**; 20 skill agent, ~450 blok siap pakai, alpha WebM/MOV, HLS, 4K+HDR, `--batch` JSON, Cloud Run/Docker/Lambda. Render lokal 3,2 s vs Remotion 8,5 s; install 311 MB vs 870 MB. Studio desktop (Mac/Win/Linux) + Claude Code plugin |
 | **Motion Canvas** | Motion Canvas | MIT | — | animasi = generator function TS; **repo inti tak rilis sejak Des 2024**, pindah ke fork (Canvas Commons, Revideo) |
 | **Claude Motion** | Anthropic | ikut paket Claude Team/Enterprise | — | Artifact template di chat, **ekspor langsung MP4**, tapi 1 video/prompt, tanpa batch API |
 | **CoAnimator** | CoAnimator | — | — | desktop studio, chat + timeline, agent-directed tanpa React; $99 sekali |
@@ -173,16 +173,23 @@ Free tier 400.000 GB-second/bulan ≈ 390 render 1-menit.
 | Aspek | Remotion | HyperFrames |
 |---|---|---|
 | Bahasa | React/TSX | HTML+ CSS+ JS |
-| Build step | wajib (bundler) | tidak |
+| Build step | wajib (bundler) | **tidak** |
 | Seek-accurate | ❌ | ✅ |
-| HDR / alpha | ❌ | ✅ |
-| TTS & transkripsi lokal | ❌ | ✅ |
-| Cloud distributed | ✅ Lambda (hyperscale) | ❌ lokal saja |
-| Lisensi | custom, free ≤3 org | **Apache 2.0, gratis** |
+| HDR / alpha | ❌ | ✅ (alpha di WebM/MOV) |
+| TTS & transkripsi lokal | ❌ | ✅ (Kokoro-82M 54 suara, Whisper) |
+| Remove background | ❌ | ✅ (model neural bawaan) |
+| Cloud distributed | ✅ Lambda (hyperscale) | ✅ AWS Lambda / Cloud Run / Docker / HeyGen cloud |
+| Skill agent | 13 official | **20** + Claude Code plugin |
+| Blok siap pakai | Remotion Elements | **~450** (`npx hyperframes add <name>`) |
+| Output | MP4, ProRes, PNG seq, VP8/9, AV1 | MP4, WebM, MOV, GIF, PNG seq, **HLS** |
+| Batch | props | `--variables` + `--batch rows.json` |
+| Lisensi | custom, free ≤3 org, **bayar ≥4 org** | **Apache 2.0, gratis selamanya** |
+| Headcount | ada ambang | **tidak ada ambang** |
 
-**HyperFrames = lebih murah & open, tapi renderer-nya lokal saja** (belum ada
-distributed cloud). Untuk SherlyStudio yang butuh server-side, Remotion lebih
-matang.
+**Kesimpulan 2026:** HyperFrames sekarang **lebih popular** (85k vs 73k stars),
+lebih murah (**nol ambang lisensi**), dan **lebih cocok dengan repo SherlyStudio**
+(vanilla JS, tanpa React/bundler). Remotion masih unggul di ecosystem React,
+Lambda distributed, dan tooling berbayar berbasis seat.
 
 ---
 
@@ -230,39 +237,165 @@ matang.
 
 1. **Lisensi**: kalau SherlyStudio jadi **prompt-to-video app** untuk user lain →
    tier **Automators** ($0,01/render, min $100/bulan). Kalau hanya untuk internal
-   kita sendiri & tim ≤3 → free.
+   kita sendiri & tim ≤3 → free. **Atau pakai HyperFrames (Apache-2.0) → nol
+   ambang, nol biaya lisensi.**
 2. **Rendering butuh Chromium headless** — di sandbox ini sudah ada
    (`@sparticuz/chromium` + `puppeteer-core`) tapi butuh alur Lambda/S3 kalau
    produksi.
 3. **Stack React**: repo SherlyStudio sekarang **vanilla JS** (tanpa React,
    tanpa bundler) — pakai Remotion berarti menambah toolchain baru (bundler,
    TSX, kompilasi composition). Ini biaya engineering signifikan.
+   **HyperFrames tidak punya masalah ini** — komposisinya HTML/CSS/JS biasa,
+   tanpa build step, dan bisa di-render dari string HTML yang disimpan di DB.
 4. **Repo baru**: Remotion butuh project structure sendiri (`src/Root.tsx`,
    `Composition`, entry point `remotion`), bukan disisipkan ke `public/`.
 
 ---
+
+## 7b. Bisa tanpa biaya bulanan? — **YA, ada 3 jalur gratis**
+
+Pertanyaan kunci. Jawaban singkat: **bisa, tapi syaratnya "kita" bukan "produk
+untuk orang lain"**.
+
+### Jalur A — Remotion Free License (lisensi $0, tapi compute/AWS tetap ada)
+
+Official LICENSE.md: gratis untuk
+- individu,
+- **for-profit dengan ≤ 3 karyawan**,
+- non-profit,
+- yang masih evaluasi (belum komersial).
+
+Komersial **diizinkan**, tanpa batas. Syaratnya: *"Even if you are incorporated, you
+can operate under the Free License, as long as your total headcount is 3 or less."*
+
+⚠️ **Dua jebakan:**
+1. **Hitung headcount, bukan revenue/pengguna.** Batasnya 3 orang, bukan "3 akun".
+2. **"Collaborations"** — kalau klien yang memiliki/mengoperasikan project Remotion,
+   headcount kedua pihak **digabung** untuk ambang 4 orang. Untuk agency, project
+   milik klien = tambah headcount klien.
+
+Yang **tidak** diizinkan: menjual/menyewakan/melicense turunan Remotion sendiri.
+
+**Yang gratis vs yang tidak di jalur ini:**
+
+| Komponen | Gratis? |
+|---|---|
+| Lisensi Remotion | **$0** (kalau ≤3 org) |
+| Render lokal / server sendiri | **$0** — kita yang bayar CPU server sendiri |
+| Remotion Studio / Player (preview) | **$0** — preview tidak dihitung render |
+| AWS Lambda | ❌ $0,017–0,021 per menit 1080p (tagih ke akun AWS kita) |
+| S3 storage + egress | ❌ $0,023/GB/bulan + $0,09/GB egress |
+| Font/media pihak ketiga | ❌ terpisah |
+
+### Jalur B — Render lokal/server sendiri (**$0 total**)
+
+`@remotion/renderer` (Node.js/Bun API) — tanpa AWS sama sekali:
+- Lisensi $0 (kalau ≤3 org) + **compute = server yang sudah kita punya** (Vercel/
+  Railway/instance yang sudah berjalan) → **biaya bulanan = $0 tambahan**
+- Trade-off: tidak distributed (1 mesin), tidak ada queue, dan kita yang bangun
+  antrean/progress/logging sendiri
+- Realistis untuk volume **rendah–menengah** (puluhan video/bulan)
+
+### Jalur C — **HyperFrames (Apache-2.0) = $0 tanpa syarat apa pun**
+
+Ini jawaban paling bersih kalau Concern utamanya "biaya bulanan":
+
+| | Remotion | **HyperFrames** |
+|---|---|---|
+| Lisensi | custom, **bayar di ≥4 org** | **Apache-2.0 — gratis untuk semua**, tanpa ambang seat/render, tanpa commercial-use threshold |
+| Render lokal | $0 | **$0**, tanpa watermark, tanpa pakai credit HeyGen |
+| Skill agent | 13 skill resmi | **20 skill** + Claude Code plugin |
+| Studio | browser | desktop app (Mac/Win/Linux) + browser |
+| Block siap pakai | Remotion Elements | **~450** (`npx hyperframes add <name>`) |
+| Output | MP4, ProRes, PNG seq, VP8/9, AV1 | MP4, WebM, MOV, GIF, PNG seq, **HLS**; alpha di WebM/MOV; 4K + HDR |
+| Batch/personalisasi | props | `--variables` + `--batch rows.json` (satu output per baris JSON) |
+| Cloud | AWS Lambda (matang) | AWS Lambda / Cloud Run / Docker / HeyGen cloud |
+| Overlay transparan | ProRes/VP9 | WebM/MOV alpha |
+| Headcount | ≤3 org | **tidak ada batas** |
+
+**HyperFrames = Apache-2.0 sejati.** Tidak ada ambang, tidak ada per-render fee,
+tidak ada minimal bulanan, boleh dipakai komersial & dimodifikasi. Yang dibayar
+hanya compute sendiri (atau opsional AWS).
+
+> Catatan: HyperFrames juga punya **Studio Pro $25/bulan** (25.000 credit + model AI
+> premium + "Reverse any video") — itu **opsional**; engine-nya sendiri gratis.
+> Cloud render HeyGen opsional ~$0,10/menit (1080p/30fps), 4K = 1,5× credit.
+
+### Ringkasan jawaban "bisa tanpa biaya bulanan?"
+
+| Skenario | Bisa $0? | Catatan |
+|---|---|---|
+| Kita pakai Remotion untuk konten internal, tim ≤3 | ✅ **ya** | lisensi $0, render di server sendiri |
+| Kita pakai Remotion & expose "prompt-to-video" ke user | ❌ **tidak** | tier Automators: $0,01/render, **min $100/bulan** |
+| Tim grows jadi 4+ org | ❌ tidak | wajib Company License ($25/seat) |
+| Kita pakai **HyperFrames** | ✅ **ya, tanpa syarat** | Apache-2.0, render lokal/server sendiri |
+| Kit render pakai AWS Lambda skala besar | ❌ tidak | $0,017/menit + S3 + egress |
+| Kit render lokal (server yang sudah ada) | ✅ **ya** | incremental cost ≈ $0 (listrik & CPU) |
+
+### Rekomendasi gw (revisi karena concern biaya)
+
+1. **Kalau fokus "tanpa biaya bulanan" → pilih HyperFrames, bukan Remotion.**
+   Apache-2.0, tanpa ambang seat, tanpa minimal bulanan, 20 skill agent, ~450
+   blok siap pakai, output lebih lengkap (alpha, HLS, HDR). Repo SherlyStudio juga
+   **vanilla JS** — HyperFrames menulis **HTML/CSS/JS** tanpa bundler & tanpa
+   React, jadi **jauh lebih nyambung** dengan arsitektur kita sekarang.
+2. **Kalau mau tetap Remotion** (React, ecosystem matang, Lambda distributed) →
+   pakai **Free License** dan render **di server sendiri** (`@remotion/renderer`),
+   bukan Lambda. Jangan build fitur "render untuk user" (tetap ada risiko lisensi
+   Automators).
+3. **Aturan main kita**: jangan pernah bikin fitur yang mengharuskan "user
+   trigger render otomatis" tanpa cek lisensi dulu. Preview/Studio tidak dihitung
+   render — aman.
+
+### Checklist sebelum adopt
+
+- [ ] Tim kita berapa orang? (≤3 → Free License aman; 4+ → bayar)
+- [ ] Render-nya lokal/server sendiri atau AWS Lambda?
+- [ ] Apakah produknya untuk user (Automators) atau untuk kita (Creators)?
+- [ ] Kalau agency: siapa yang pegang project — kita atau klien? (headcount digabung)
+- [ ] S3 + egress sudah dihitung? (bisa lebih besar dari lisensinya)
+- [ ] Remotion 5.0 akan datang — cek ulang terms (telemetry jadi wajib untuk
+      Automators, opsi opt-out Enterprise)
 
 ## 8. Rekomendasi
 
 **Jangan buru-buru.** Remotion tren karena Agent Skills + agent-friendly, bukan
 karena menggantikan tools yang ada.
 
-Prioritas kalau mau MOVE:
+**Tapi kalau kriterianya "tanpa biaya bulanan" → HyperFrames lebih tepat.**
 
-| Prioritas | Langkah | Estimasi |
-|---|---|---|
-| **P1** | **Pakai skill Remotion** di workflow agent-side (tanpa integrasi produk) — install `npx skills add remotion-dev/skills` + skill motion graphics, pakai buat membuat **intro/outro branded** & **video wrapper** untuk konten Studio | rendah |
-| **P2** | Tambah **mode "Motion Graphics"** di Studio: generate composition TSX di repo terpisah, render via `@remotion/renderer` di server, hasilnya masuk galeri aset (pipeline `sherly_video_tasks` yang sudah ada) | tinggi |
-| **P3** | Tambah **caption/subtitle massal** untuk hasil video Kie — pakai `/remotion-captions` atau alternatif lebih murah | sedang |
-| **P4** | Integrasi **hybrid**: agent pilih Kie (visual generatif) vs Remotion (layout/anotasi) per bagian | tinggi |
-| — | **Jangan** sekarang: ganti Studio ke React wholesale, atau Ads/Batch user-facing (masalah lisensi Automators) | — |
+| Prioritas | Langkah | Biaya | Estimasi |
+|---|---|---|---|
+| **P0** ⭐ | **Pakai HyperFrames** (`Apache-2.0`) buat bikin intro/outro branded, caption, dan motion graphics dari HTML/CSS/JS — render lokal di server kita (`@sparticuz/chromium` + FFmpeg) → hasil masuk galeri aset | **$0** | rendah–sedang |
+| **P1** | Install **skill Remotion** di workflow agent-side aja (tanpa integrasi produk) — `npx skills add remotion-dev/skills` + skill motion graphics (MIT) | $0 (lisensi) | rendah |
+| **P2** | Tambah **mode "Motion Graphics"** di Studio (HTML/CSS/JS composition, bukan TSX) → render server-side → masuk `sherly_video_tasks` | $0 kalau lokal | tinggi |
+| **P3** | **Caption/subtitle massal** untuk hasil video Kie | $0 | sedang |
+| **P4** | Integrasi **hybrid**: agent pilih Kie (visual generatif) vs motion graphics (layout/anotasi) per bagian | $0–murah | tinggi |
+| ❌ | **Jangan** sekarang: render via AWS Lambda skala besar (biaya muncul), atau fitur "user trigger render" (risiko lisensi Automators), atau ganti Studio ke React wholesale | — | — |
 
-**Rekomendasi gw: mulai dari P1** (skill) — nol risiko lisensi, nol perubahan
-arsitektur, tapi langsung memberi kita template intro/outro & motion graphics
-yang bisa dipakai di konten Studio. P2 baru kalau ada user yang butuh
-"video motion graphics" sebagai mode konten tersendiri.
+**Rekomendasi final gw:**
+1. **P0 — HyperFrames**, bukan Remotion, kalau prioritasnya nol biaya bulanan:
+   Apache-2.0 (tanpa ambang seat/render), 20 skill agent, ~450 blok siap pakai,
+   output lebih lengkap (alpha WebM/MOV, HLS, 4K HDR), **tanpa bundler & tanpa
+   React** → cocok banget dengan repo SherlyStudio yang vanilla JS.
+2. **P1 — skill Remotion** tetap worth install: ecosystems-nya paling matang,
+   dan `/remotion-captions` + `/remotion-markup` jadi rujukan bagus untuk agent
+   Even kalau produknya pakai HyperFrames.
+3. **P2** baru kalau ada user yang butuh "motion graphics" sebagai mode konten
+   tersendiri — dan pastikan render-nya lokal/server sendiri, bukan Lambda, supaya
+   tagihan $0.
 
----
+**Aturan main yang gw tulis buat diri sendiri:** sebelum bikin fitur yang
+mengecek "render otomatis oleh user", cek dulu **apakah output-nya meant untuk
+diteruskan/dijual** (itulah yang memicu biaya):
+
+1. Kalau video hasil render **dipakai user sebagai output** (bukan dijual sebagai
+   "software Remotion") → **tidak masalah**. Yang dibatasi lisensi adalah
+   **menjual/menyewakan turunan Remotion itu sendiri**, bukan output videonya.
+2. Yang memicu biaya Automators adalah **kita menyediakan layanan render
+   otomatis ke user** (prompt-to-video app). Kalau user cuma triggers render di
+   instance kita sendiri → ini abu-abu, **tanya Remotion** sebelum ship.
+3. Kalau ragu → pakai **HyperFrames** (Apache-2.0, nol ambang) dan nggak pusing.
 
 ## 9. Sumber
 
