@@ -1210,9 +1210,10 @@
     el.innerHTML = '<div class="st-set-head">'
       + '<span class="st-set-head-ico">' + icon('sliders') + '</span>'
       + '<div class="st-set-head-txt"><b>Pengaturan Konten</b>'
-      + '<small>Atur semua dulu, lalu tekan Simpan</small></div></div>'
-      // D-234: tombol X sebagai anak langsung panel -> absolute di pojok kanan modal.
+      + '<small>Atur semua dulu, lalu tekan Simpan</small></div>'
+      // D-235: tombol X di sudut KANAN header (flex item terakhir).
       + '<button type="button" class="st-set-close" id="stSetClose" aria-label="Tutup">' + icon('x') + '</button>'
+      + '</div>'
       + '<div class="st-set-body">'
       + '<div class="st-set-row"><div class="st-set-label">' + icon('image-plus') + '<b>Jenis Konten</b></div>'
       + '<div class="st-set-chips">' + typeChips + '</div></div>'
