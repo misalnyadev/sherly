@@ -167,6 +167,7 @@
   let promptBankLoaded = false;
   let selectedBlocks = [];      // id blok yang sudah dipilih user (ditumpuk di prompt)
   let promptBankTab = 'template'; // tab aktif di popover bank prompt
+  let promptBankQuery = '';        // D-237: kata kunci pencarian bank prompt
   let promptBankMode = 'foto';     // D-208: mode prompt (foto|video) ikut jenis konten
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
@@ -1391,7 +1392,7 @@
   // ===== D-208: aksi prompt — optimasi susunan & copy semua isi prompt =====
 
   /**
-   * Optimalkan susunan prompt.
+   * Optimasi susunan prompt.
    * Mengelompokkan prompt bebas per kategori (kamera/cahaya/teksur/color/
    * kualitas/negative) lalu menyusun ulang sesuai alur fokus hasil riset,
    * supaya hasil generate maksimal. Anti-duplikat: frasa sama tidak diulang.
@@ -1400,7 +1401,7 @@
     const ta = $('stPrompt');
     const raw = (ta?.value || '').trim();
     if (!raw && !selectedBlocks.length) {
-      window.toast?.('Isi prompt dulu sebelum dioptimalkan.');
+      window.toast?.('Isi prompt dulu sebelum dioptimasi.');
       ta?.focus();
       return;
     }
@@ -1416,17 +1417,17 @@
         }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Gagal mengoptimalkan prompt.');
+      if (!r.ok) throw new Error(d.error || 'Gagal mengoptimasi prompt.');
       if (ta && d.prompt) {
         ta.value = d.prompt;
         ta.dispatchEvent(new Event('input', { bubbles: true }));
       }
       // Blok yang sudah dipilih tetap aktif (isi-nya sudah ikut dirakit).
-      window.toast?.('Prompt sudah dioptimalkan & diurutkan.');
+      window.toast?.('Prompt sudah dioptimasi & diurutkan.');
     } catch (e) {
-      window.toast?.(e.message || 'Gagal mengoptimalkan prompt.');
+      window.toast?.(e.message || 'Gagal mengoptimasi prompt.');
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = icon('sparkles') + ' Optimalkan'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = icon('sparkles') + ' Optimasi'; }
     }
   }
 
@@ -1506,6 +1507,17 @@
       + '<button type="button" class="st-pb-tab' + (promptBankTab === 'template' ? ' on' : '') + '" data-pb-tab="template">Template</button>'
       + '<button type="button" class="st-pb-tab' + (promptBankTab === 'block' ? ' on' : '') + '" data-pb-tab="block">Blok</button>'
       + '</div>';
+    // D-237: kotak pencarian DI BAWAH tag Template/Blok — biar prompt mudah
+    // dicari saat bank prompt sudah banyak.
+    const search = '<div class="st-pb-search">'
+      + '<span class="st-pb-search-ico">' + icon('search') + '</span>'
+      + '<input type="search" id="stPbSearch" placeholder="Cari prompt…" value="' + esc(promptBankQuery) + '"'
+      + ' autocomplete="off" aria-label="Cari prompt">'
+      + '<button type="button" class="st-pb-search-clear' + (promptBankQuery ? '' : ' st-hidden') + '" id="stPbSearchClear" aria-label="Hapus pencarian">' + icon('x') + '</button>'
+      + '</div>';
+    // D-237: seluruh entri dirender; penyaringan dilakukan lewat
+    // applyPromptBankFilter (toggle visibility) supaya input search tidak
+    // pernah di-re-render -> fokus & caret tetap aman saat mengetik.
 
     let body = '';
     if (promptBankTab === 'template') {
@@ -1521,12 +1533,13 @@
       const usedGroups = groups.filter((g) => templates.some((t) => (t.group || 'umum') === g.key));
       const renderTpl = (t) => {
         const slots = Array.isArray(t.slots) ? t.slots : [];
-        return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '">'
+        return '<button type="button" class="st-pb-item" data-pb-template="' + esc(t.id) + '"'
+          + ' data-pb-search="' + esc([t.label, t.content, t.group, t.category].join(' ')) + '">'
           + '<span class="st-pop-model">' + esc(t.label)
           + (slots.length ? '<small>isi: ' + esc(slots.join(', ')) + '</small>' : '<small>' + esc(t.content.slice(0, 70)) + (t.content.length > 70 ? '…' : '') + '</small>')
           + '</span></button>';
       };
-      body = templates.length ? usedGroups.map((g) => {
+      body = usedGroups.map((g) => {
         const list = templates.filter((t) => (t.group || 'umum') === g.key);
         if (!list.length) return '';
         // D-210: group 'flow' punya sub-kategori (20 kategori x 10 kode).
@@ -1543,7 +1556,9 @@
             + '</div>';
         }
         return '<div class="st-pb-group"><b>' + esc(g.label) + '</b>' + list.map(renderTpl).join('') + '</div>';
-      }).join('') : '<p class="st-pb-empty">Belum ada template. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
+      }).join('');
+      // Pesan kosong selalu ada di DOM; filter yang menentukan tampil/pesan.
+      body += '<p class="st-pb-empty st-hidden">Belum ada template. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
     } else {
       // Blok dikelompokkan per kategori, sesuai urutan susun prompt.
       body = PROMPT_CATEGORY_ORDER.map((cat) => {
@@ -1552,14 +1567,16 @@
         return '<div class="st-pb-group"><b>' + esc(PROMPT_CATEGORY_LABEL[cat] || cat) + '</b>'
           + list.map((b) => {
             const on = selectedBlocks.some((s) => s.id === b.id);
-            return '<button type="button" class="st-pb-item' + (on ? ' on' : '') + '" data-pb-block="' + esc(b.id) + '">'
+            return '<button type="button" class="st-pb-item' + (on ? ' on' : '') + '" data-pb-block="' + esc(b.id) + '"'
+              + ' data-pb-search="' + esc([b.label, b.content, b.category].join(' ')) + '">'
               + '<span class="st-pop-model">' + esc(b.label) + '<small>' + esc(b.content.slice(0, 70)) + (b.content.length > 70 ? '…' : '') + '</small></span></button>';
           }).join('') + '</div>';
       }).join('');
-      if (!body) body = '<p class="st-pb-empty">Belum ada blok. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
+      // Pesan kosong selalu ada di DOM; filter yang menentukan tampil/pesan.
+      body += '<p class="st-pb-empty st-hidden">Belum ada blok. Tambah di Pengaturan &rarr; Bank Prompt.</p>';
     }
 
-    el.innerHTML = tabs + '<div class="st-pb-body">' + body + '</div>';
+    el.innerHTML = tabs + search + '<div class="st-pb-body">' + body + '</div>';
 
     el.querySelectorAll('[data-pb-tab]').forEach((t) => t.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1577,6 +1594,80 @@
       const entry = blocks.find((t) => t.id === b.dataset.pbBlock);
       if (entry) toggleBlock(entry);
     }));
+    // D-237: pencarian bank prompt. Filter menyaring TAMPILAN item (bukan
+    // re-render) supaya fokus + caret input tidak terputus saat mengetik.
+    const searchInput = $('stPbSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        promptBankQuery = searchInput.value;
+        applyPromptBankFilter(el);
+        const clear = $('stPbSearchClear');
+        if (clear) clear.classList.toggle('st-hidden', !promptBankQuery);
+      });
+      // Enter / Escape.
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          promptBankQuery = '';
+          buildPromptPop();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const first = el.querySelector('.st-pb-item');
+          if (first) first.click();
+        }
+      });
+    }
+    $('stPbSearchClear')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      promptBankQuery = '';
+      buildPromptPop();
+      $('stPbSearch')?.focus();
+    });
+    // Query yang sudah ada (mis. reopen popover) langsung diterapkan.
+    applyPromptBankFilter(el);
+  }
+
+  /**
+   * D-237: terapkan filter pencarian bank prompt pada item yang sudah dirender.
+   * Item/group yang tidak cocok disembunyikan (bukan dihapus) -> input tetap
+   * fokus & caret tidak terputus.
+   */
+  function applyPromptBankFilter(root) {
+    const el = root || $('stPop-prompt');
+    if (!el) return;
+    const q = promptBankQuery.trim().toLowerCase();
+    const emptyBox = el.querySelector('.st-pb-empty');
+    let visible = 0;
+    el.querySelectorAll('.st-pb-item').forEach((it) => {
+      const hay = (it.dataset.pbSearch || it.textContent || '').toLowerCase();
+      const ok = !q || hay.includes(q);
+      it.classList.toggle('st-hidden', !ok);
+      if (ok) visible++;
+    });
+    // Group & sub-kategori kosong disembunyikan.
+    el.querySelectorAll('.st-pb-group, .st-pb-sub').forEach((g) => {
+      const any = [...g.querySelectorAll('.st-pb-item')].some((it) => !it.classList.contains('st-hidden'));
+      g.classList.toggle('st-hidden', !any);
+    });
+    // Pesan: "tidak ada yang cocok" (kalau ada kata kunci) atau "bank kosong".
+    const total = el.querySelectorAll('.st-pb-item').length;
+    const kind = promptBankTab === 'template' ? 'template' : 'blok';
+    if (emptyBox) {
+      const isNone = !!q && visible === 0;
+      emptyBox.classList.remove('st-hidden');
+      if (isNone) {
+        emptyBox.textContent = 'Tidak ada ' + kind + ' yang cocok dengan "' + promptBankQuery + '".';
+      } else {
+        emptyBox.textContent = total === 0
+          ? (kind === 'template'
+            ? 'Belum ada template. Tambah di Pengaturan → Bank Prompt.'
+            : 'Belum ada blok. Tambah di Pengaturan → Bank Prompt.')
+          : '';
+        if (total > 0) emptyBox.classList.add('st-hidden');
+      }
+    }
   }
 
   // ===== D-196: generate foto =====
@@ -1737,7 +1828,7 @@
       + '<div class="st-pop st-pop-menu" id="stPop-actions">'
       + '<button type="button" class="st-menu-item" id="stResetPromptBtn" data-action="reset">' + icon('rotate-ccw') + ' <span>Reset</span></button>'
       + '<button type="button" class="st-menu-item" id="stPromptPill" data-action="prompt">' + icon('message') + ' <span>Prompt</span></button>'
-      + '<button type="button" class="st-menu-item" id="stOptimizeBtn" data-action="optimize">' + icon('sparkles') + ' <span>Optimalkan</span></button>'
+      + '<button type="button" class="st-menu-item" id="stOptimizeBtn" data-action="optimize">' + icon('sparkles') + ' <span>Optimasi</span></button>'
       + '<button type="button" class="st-menu-item" id="stCopyPromptBtn" data-action="copy">' + icon('copy') + ' <span>Copy</span></button>'
       + '</div>'
       // Popover isi Bank Prompt — dibuka dari item "Prompt" di menu.

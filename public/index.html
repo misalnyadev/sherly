@@ -813,6 +813,20 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pb-tab{flex:1;justify-content:center;background:#0f1828!important;border:1px solid #24344e!important;border-radius:8px!important;padding:7px 10px!important;font-size:12px!important;color:#91a2b9!important;cursor:pointer}
 .st-pb-tab.on{border-color:#f044a8!important;color:#f4f5fb!important;background:#24142a!important}
 .st-pb-body{display:flex;flex-direction:column;gap:4px}
+/* D-237: kotak pencarian bank prompt (di bawah tag Template/Blok). */
+.st-pb-search{display:flex;align-items:center;gap:7px;margin:0 4px 8px;
+  padding:0 9px;border-radius:10px;border:1px solid #24344e;background:#0f1828}
+.st-pb-search:focus-within{border-color:#f044a8}
+.st-pb-search-ico{display:grid;place-items:center;flex:none}
+.st-pb-search-ico svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2}
+.st-pb-search input{flex:1;min-width:0;background:transparent;border:0;outline:0;
+  padding:9px 0;font-size:12.5px;color:#f4f5fb;font-family:inherit}
+.st-pb-search input::placeholder{color:#5d6f88}
+.st-pb-search input::-webkit-search-cancel-button{display:none}
+.st-pb-search-clear{width:20px;height:20px;border:0;border-radius:6px;background:#1c2b40;
+  color:#91a2b9;cursor:pointer;display:grid;place-items:center;padding:0;flex:none}
+.st-pb-search-clear:hover{background:#24344e;color:#ffd0ec}
+.st-pb-search-clear svg{width:11px;height:11px;stroke:#91a2b9;fill:none;stroke-width:2}
 .st-pb-group{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
 .st-pb-group>b{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#5d6f88;padding:6px 11px 2px}
 /* D-210: sub-kategori (20 kategori cheat code Google Flow). */
