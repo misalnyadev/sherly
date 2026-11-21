@@ -108,12 +108,20 @@ test('D-248: background splash PERSIS sama dengan background app (kotak video hi
 
 test('D-248: tagline & bar jauh di bawah logo (tidak kena logo)', () => {
   // offset relatif ke tinggi layar (fullscreen), harus positif & cukup besar
-  const tag = html.match(/#splash \.sp-tag\{position:absolute;top:calc\(50% \+ 24vh \+ (\d+)px\)/);
+  const tag = html.match(/#splash \.sp-tag\{position:absolute;top:calc\(50% \+ (\d+)vh \+ (\d+)px\)/);
   assert.ok(tag, 'tagline harus positioned absolut dengan offset positif');
-  assert.ok(Number(tag[1]) >= 40, `offset tagline ${tag[1]}px harus >= 40px (tidak kena logo)`);
-  const bar = html.match(/#splash \.sp-bar\{position:absolute;top:calc\(50% \+ 24vh \+ (\d+)px\)/);
+  assert.ok(Number(tag[2]) >= 40, `offset tagline ${tag[2]}px harus >= 40px (tidak kena logo)`);
+  const bar = html.match(/#splash \.sp-bar\{position:absolute;top:calc\(50% \+ (\d+)vh \+ (\d+)px\)/);
   assert.ok(bar);
-  assert.ok(Number(bar[1]) > Number(tag[1]), 'progress bar harus di bawah tagline');
+  assert.ok(Number(bar[2]) > Number(tag[2]), 'progress bar harus di bawah tagline');
+});
+
+test('D-248: video punya rasio 0.5 (2:1) dgn margin sisi -> logo tak pernah terpotong', () => {
+  // area media = layar penuh + object-fit:cover; video sudah dipad agar rasio
+  // ~0.5 (lebih lebar dari rasio HP 0.462) sehingga cover hanya zoom kecil,
+  // dan logo punya margin 43px di dalam frame video.
+  assert.match(html, /#splash \.sp-media\{[^}]*width:100vw;height:100vh/);
+  assert.match(html, /#splash \.sp-media video[^{]*\{[^}]*object-fit:cover/);
 });
 
 test('D-248: durasi splash >= durasi video (3,4 dtk) supaya animasi penuh', () => {
