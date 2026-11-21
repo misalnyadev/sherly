@@ -1082,6 +1082,56 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
     + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
 
+// ===== D-234: tombol X di pojok kanan modal + deskripsi header 1 baris =====
+
+test('D-234: tombol X di pojok kanan modal (absolute, anak panel)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const close = css.match(/\.st-set-close\{[^}]*\}/s);
+  assert.ok(close, 'aturan .st-set-close tidak ada');
+  assert.ok(close[0].includes('position:absolute'), 'X harus absolute (menempel pojok modal)');
+  assert.ok(close[0].includes('top:12px'), 'X harus di pojok atas');
+  assert.ok(close[0].includes('right:12px'), 'X harus di pojok kanan');
+  assert.ok(close[0].includes('z-index:2'), 'X harus di atas konten');
+  // Panel jadi containing block untuk X.
+  const panel = css.match(/\.st-pop-settings\{[^}]*\}/);
+  assert.ok(panel[0].includes('position:relative') || panel[0].includes('position:fixed'),
+    'panel harus positioned agar X menempel ke modal');
+  // Header kasih ruang untuk X supaya judul tidak ketabrak.
+  const head = css.match(/\.st-set-head\{[^}]*\}/s);
+  assert.ok(/padding:[^;]*40px[^;]*12px/.test(head[0]), 'header harus sisakan ruang kanan untuk X');
+});
+
+test('D-234: deskripsi header satu baris (nowrap + ellipsis)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const small = css.match(/\.st-set-head-txt small\{[^}]*\}/s);
+  assert.ok(small[0].includes('white-space:nowrap'), 'deskripsi tidak boleh wrap ke baris bawah');
+  assert.ok(small[0].includes('overflow:hidden'), 'deskripsi harus overflow hidden');
+  assert.ok(small[0].includes('text-overflow:ellipsis'), 'deskripsi dipotong dengan ellipsis');
+  // Blok teks tidak boleh wrap ke dua baris.
+  const txt = css.match(/\.st-set-head-txt\{[^}]*\}/s);
+  assert.ok(txt[0].includes('flex-wrap:nowrap'), 'blok teks header tidak boleh wrap');
+  assert.ok(txt[0].includes('overflow:hidden'), 'blok teks header harus overflow hidden');
+});
+
+test('D-234 (runtime): X adalah anak langsung panel, di luar header', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  const panel = h.panel();
+  const x = panel.querySelector('#stSetClose');
+  assert.ok(x, 'tombol X harus ada');
+  assert.equal(x.parentElement, panel, 'X harus anak langsung panel (bukan di header)');
+  assert.ok(!x.closest('.st-set-head'), 'X tidak boleh berada di dalam header');
+  // Header tetap punya judul + subjudul.
+  assert.ok(panel.querySelector('.st-set-head b'), 'judul harus ada');
+  assert.ok(panel.querySelector('.st-set-head-txt small'), 'subjudul harus ada');
+  // X tetap berfungsi (menutup panel + membatalkan draft).
+  h.clickChip('aspect', '16:9');
+  h.click(x);
+  assert.ok(!panel.classList.contains('open'), 'X harus menutup panel');
+  assert.equal(h.pill('stAspectPill'), '4:5', 'X = batal, draft dibuang');
+});
+
 // ===== D-233: Panel Pengaturan Konten = GRID tombol, bukan daftar ke bawah =====
 
 test('D-233: pilihan pengaturan jadi GRID (bukan wrap ke bawah)', () => {
