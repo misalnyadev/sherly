@@ -484,23 +484,24 @@
     // D-215: referensi hanya ICON foto (tanpa nama, tanpa kapsul) supaya 3 karakter
     // + 1 gambar muat 1 baris. Info aset muncul saat kursor di-hover (tooltip).
     for (const c of mentioned) {
+      // D-223: penanda karakter jadi SATU ikon user (bukan dua badge: user +
+      // layers). Ikon layers (diamond/lapis) terlihat seperti buku — diganti
+      // user profile. Detail lengkap tetap ada di tooltip saat hover.
       const badges = [];
       const v = c.voice || {};
       const notes = [];
       notes.push(c.name);
-      if (v.name || v.style) {
-        // D-219: ikon user (bukan mic) sebagai penanda profil suara.
+      const hasVoice = !!(v.name || v.style);
+      const hasSheet = !!c.board_image_url;
+      if (hasVoice || hasSheet) {
         badges.push('<span class="st-asset-badge">' + icon('user') + '</span>');
-        notes.push('Suara: ' + (v.name || v.style));
       }
-      if (c.board_image_url) {
-        badges.push('<span class="st-asset-badge">' + icon('layers') + '</span>');
-        notes.push('Punya master sheet');
-      }
+      if (hasVoice) notes.push('Suara: ' + (v.name || v.style));
+      if (hasSheet) notes.push('Punya master sheet');
       if (c.role) notes.push(c.role);
-      // D-217: kelas has-voice / has-sheet -> outline pink di sekeliling avatar.
-      const outlineCls = (v.name || v.style) ? ' has-voice' : '';
-      const outlineCls2 = c.board_image_url ? ' has-sheet' : '';
+      // D-217/D-223: kelas has-voice / has-sheet -> outline pink di sekeliling avatar.
+      const outlineCls = hasVoice ? ' has-voice' : '';
+      const outlineCls2 = hasSheet ? ' has-sheet' : '';
       parts.push(
         '<span class="st-asset st-asset-char' + outlineCls + outlineCls2 + '" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
         + '<span class="st-asset-face">' + characterThumb(c) + '</span>'
@@ -661,9 +662,9 @@
       const on = i === mentionIndex ? ' on' : '';
       if (it.kind === 'char') {
         const c = it.data; const v = c.voice || {};
+        // D-223: satu ikon user sebagai penanda (bukan dua ikon terpisah).
         const marks = [];
-        if (v.name || v.style) marks.push(icon('user'));
-        if (c.board_image_url) marks.push(icon('layers'));
+        if ((v.name || v.style) || c.board_image_url) marks.push(icon('user'));
         const ocls = (v.name || v.style) ? ' has-voice' : (c.board_image_url ? ' has-sheet' : '');
         return '<button type="button" class="st-mention-item' + on + ocls + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
           + '<span class="st-mention-face st-mention-face-box">' + characterThumb(c) + '</span>'

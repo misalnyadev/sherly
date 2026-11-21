@@ -1230,3 +1230,29 @@ test('D-222: area tulis menyatu dengan form (tanpa border/background pembeda)', 
   assert.ok(/border:0[;}]/.test(focus[0]), 'focus tidak boleh memunculkan border');
   assert.ok(focus[0].includes('box-shadow:none'), 'focus tidak boleh memunculkan shadow');
 });
+
+// ===== D-223: badge karakter = satu ikon user (tanpa ikon buku/layers) =====
+
+test('D-223: badge karakter hanya satu ikon user, tanpa ikon layers (buku)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
+  // Badge memakai icon user.
+  assert.ok(hbody.includes("icon('user')"), 'badge harus pakai icon user');
+  // Tidak boleh ada icon layers (bentuknya seperti buku).
+  assert.ok(!hbody.includes("icon('layers')"), 'badge tidak boleh pakai icon layers');
+  // Maksimal satu badge per karakter: kondisi gabungan.
+  assert.ok(hbody.includes('if (hasVoice || hasSheet)'), 'kondisi badge harus gabungan (satu badge)');
+  // Font: penanda tetap di tooltip.
+  assert.ok(hbody.includes("notes.push('Punya master sheet')"), 'detail sheet tetap di tooltip');
+  assert.ok(hbody.includes("notes.push('Suara: '"), 'detail suara tetap di tooltip');
+});
+
+test('D-223: mention picker juga pakai satu ikon user', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const ren = studio.slice(studio.indexOf('function renderMention'));
+  const rbody = ren.slice(0, ren.indexOf('\n  }'));
+  assert.ok(rbody.includes("icon('user')"), 'penanda picker harus icon user');
+  assert.ok(!rbody.includes("icon('layers')"), 'picker tidak boleh pakai icon layers');
+  assert.ok(rbody.includes("(v.name || v.style) || c.board_image_url"), 'kondisi penanda harus gabungan');
+});
