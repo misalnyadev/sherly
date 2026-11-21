@@ -6,11 +6,44 @@
 <link rel="icon" type="image/png" href="assets/sherly-mark.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<!-- D-248: apple-touch-startup-image (iOS PWA). Ukuran HARUS persis per layar; salah 1px -> gak dipakai. -->
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-se-750x1334.png" media="(device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-x-1125x2436.png" media="(device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-xr-828x1792.png" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-xsmax-1242x2688.png" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-12-1170x2532.png" media="(device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-12promax-1284x2778.png" media="(device-width:428px) and (device-height:926px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-14pro-1179x2556.png" media="(device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-14promax-1290x2796.png" media="(device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-15pro-1320x2868.png" media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-15promax-1320x2868.png" media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-16-1179x2556.png" media="(device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-16plus-1290x2796.png" media="(device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
+<link rel="apple-touch-startup-image" href="splash/apple-splash-iphone-16promax-1320x2868.png" media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)">
 <meta name="theme-color" content="#170f20">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SherlyStudio">
+<style>
+/* D-248: splashscreen khusus tampilan HP — pre-boot splash inline (anti white-flash).
+   Video MP4 neon logo + fallback WebM/GIF, poster PNG untuk yang reduced-motion. */
+#splash{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;overflow:hidden;transition:opacity .45s ease,visibility .45s}
+#splash.done{opacity:0;visibility:hidden;pointer-events:none}
+#splash .sp-media{position:relative;width:min(86vw,360px);aspect-ratio:29/34;max-height:56vh;display:flex;align-items:center;justify-content:center}
+#splash .sp-media video,#splash .sp-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#splash .sp-media video{display:none}
+#splash .sp-media img{display:none}
+#splash .sp-media #splashGif{display:none}
+#splash .sp-tag{font-size:9.5px;letter-spacing:.34em;color:#a9b8cd;font-weight:600;padding-left:.34em;opacity:0;animation:spFade .7s .35s ease forwards}
+#splash .sp-bar{width:96px;height:2px;border-radius:2px;background:#f044a833;overflow:hidden;opacity:0;animation:spFade .7s .5s ease forwards}
+#splash .sp-bar i{display:block;height:100%;width:40%;border-radius:2px;background:linear-gradient(90deg,#ff72c5,#f044a8);animation:spSlide 1.15s ease-in-out infinite}
+@keyframes spSlide{0%{transform:translateX(-105%)}100%{transform:translateX(255%)}}
+@keyframes spFade{to{opacity:1}}
+@media(max-width:560px){body.splash-on{overflow:hidden}}
+@media(min-width:561px){#splash{display:none!important}}
+@media(prefers-reduced-motion:reduce){#splash .sp-media video,#splash .sp-media #splashGif{display:none!important}#splash .sp-media #splashImg{display:block!important}#splash .sp-bar{display:none}#splash .sp-tag,#splash .sp-bar{animation:none;opacity:1}}
+</style>
 <style>
 :root{--bg:#070b14;--panel:#0c1422;--panel2:#101b2c;--line:#1c2b40;--muted:#91a2b9;--text:#f4f5fb;--pink:#f044a8;--pink2:#ff72c5;--shadow:0 16px 42px #0008;--panel-hover:#111a2e;--well:#0f1828;--panel-deep:#0a1220;--plum:#24142a;--plum-deep:#160f20;--pink-ink:#311738;--plum-nav:#5b1f4e;--line-2:#24344e;--line-pink:#49334e;--line-btn:#74436c;--pink3:#ff9bdc;--pink-soft:#ffd0ec;--pink-hot:#d82d91;--pink-deep:#b02d80;--pink-royal:#9b1c67;--text2:#cfd6e4;--muted2:#a9b8cd;--dim:#5d6f88}
 @font-face{font-family:'Sacramento';font-style:normal;font-weight:400;font-display:swap;src:url('assets/fonts/sacramento-latin-400-normal.woff2') format('woff2')}
@@ -1144,7 +1177,57 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .wiz-voice audio{width:100%;margin-top:8px}
 @media(max-width:720px){.traits-grid{grid-template-columns:1fr}.wiz-step{font-size:9.5px;padding:8px 2px;gap:4px}.wiz-step .n{width:17px;height:17px;font-size:10px}.wiz-steps{gap:4px}}
 </style></head>
-<body>
+<body class="splash-on">
+<!-- D-248: splashscreen HP — logo neon animasi. MP4 primary, WebM/GIF fallback, PNG statis untuk reduced-motion. -->
+<div id="splash" role="status" aria-live="polite" aria-label="SherlyStudio sedang memuat">
+ <div class="sp-media">
+  <video id="splashVid" poster="assets/brand/sherly-logo-poster.png" src="assets/brand/sherly-logo.mp4" autoplay muted loop playsinline preload="auto" disablepictureinpicture></video>
+  <img id="splashImg" src="assets/brand/sherly-logo-poster.png" alt="SherlyStudio">
+  <img id="splashGif" src="assets/brand/sherly-logo.gif" alt="SherlyStudio" style="display:none">
+ </div>
+ <div class="sp-tag">CREATE &middot; EDIT &middot; SHARE</div>
+ <div class="sp-bar" aria-hidden="true"><i></i></div>
+</div>
+<script>
+/* D-248: splashscreen HP. Pilih format video terbaik, hide setelah app siap. */
+(function(){
+ var sp=document.getElementById('splash');
+ if(!sp)return;
+ var vid=document.getElementById('splashVid');
+ var img=document.getElementById('splashImg');
+ var gif=document.getElementById('splashGif');
+ var isMobile=window.matchMedia('(max-width:560px)').matches;
+ var reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+ var MIN_MS=3800; /* D-248: video 3,7 dtk -> tunggu sampai logo neon formasi penuh + denyut */
+ var shownAt=Date.now();
+ function pick(){
+  if(reduce||!vid){if(img)img.style.display='block';return}
+  var canMp4=vid.canPlayType('video/mp4');
+  var canWebm=vid.canPlayType('video/webm');
+  if(canMp4||canWebm){
+   vid.style.display='block';
+   if(!canMp4&&canWebm){vid.src='assets/brand/sherly-logo.webm';vid.load()}
+   var p=vid.play();if(p&&p.catch)p.catch(function(){});
+  }else if(gif){ /* fallback terakhir: GIF (browser sangat lawas) */
+   gif.style.display='block';
+  }else if(img){img.style.display='block'}
+ }
+ function hide(){
+  if(sp.classList.contains('done'))return;
+  var wait=Math.max(0,MIN_MS-(Date.now()-shownAt));
+  setTimeout(function(){
+   sp.classList.add('done');
+   document.body.classList.remove('splash-on');
+   if(vid){try{vid.pause()}catch(e){}}
+  },wait);
+ }
+ if(isMobile){pick()}
+ else{sp.classList.add('done');document.body.classList.remove('splash-on')}
+ var fonts=document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve();
+ Promise.all([fonts,new Promise(function(r){if(document.readyState==='complete')r();else window.addEventListener('load',r)})]).then(hide);
+ setTimeout(hide,5600); /* safety net: jangan sampai splash nyangkut */
+})();
+</script>
 <div class="app">
 <aside class="sidebar">
  <div class="brand"><img class="brand-mark" alt="Logo SherlyStudio" src="assets/sherly-mark.png"><div class="brand-text"><b>Sherly<em>Studio</em></b><small>CREATE · EDIT · SHARE</small></div></div>
