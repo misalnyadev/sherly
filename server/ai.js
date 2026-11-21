@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
 import { findImageModel, buildImageInput, DEFAULT_IMAGE_MODEL } from './image-models.js';
+import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -226,17 +227,30 @@ export function sanitizeVideoAspect(aspect) {
 
 /** Upload foto referensi (base64) ke Kie → URL publik untuk input.image_urls. */
 async function kieUploadReference(apiKey, mime, data) {
-  const dataUrl = 'data:' + (mime || 'image/png') + ';base64,' + data;
+  return kieUploadBase64(apiKey, mime, data, {
+    uploadPath: 'images/base64',
+    fileName: 'ref-' + Date.now() + '.jpg',
+    label: 'foto referensi',
+  });
+}
+
+/**
+ * D-242: upload file base64 apa pun ke Kie (gambar/audio) -> URL publik.
+ * Lipsync butuh `audio_url`; endpoint upload yang sama bisa dipakai dengan
+ * uploadPath audio + ekstensi file yang sesuai.
+ */
+export async function kieUploadBase64(apiKey, mime, data, { uploadPath = 'images/base64', fileName = 'file-' + Date.now() + '.bin', label = 'berkas' } = {}) {
+  const dataUrl = 'data:' + (mime || 'application/octet-stream') + ';base64,' + data;
   const res = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
-    body: JSON.stringify({ base64Data: dataUrl, uploadPath: 'images/base64', fileName: 'ref-' + Date.now() + '.jpg' }),
+    body: JSON.stringify({ base64Data: dataUrl, uploadPath, fileName }),
     signal: AbortSignal.timeout(60000),
   }).catch(() => null);
-  if (!res || !res.ok) throw new Error('Upload foto referensi ke Kie gagal.');
+  if (!res || !res.ok) throw new Error('Upload ' + label + ' ke Kie gagal.');
   const d = await res.json().catch(() => ({}));
   const u = d?.data?.downloadUrl || d?.data?.fileUrl || d?.data?.url || d?.downloadUrl || d?.url;
-  if (!u) throw new Error('Kie tidak mengembalikan URL upload referensi.');
+  if (!u) throw new Error('Kie tidak mengembalikan URL upload ' + label + '.');
   return u;
 }
 
@@ -391,6 +405,60 @@ export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
     } catch (error) { lastError = error; }
   }
   throw Object.assign(lastError || new Error('Generator video gagal membuat task.'), { status: 502 });
+}
+
+/**
+ * D-242: buat task LIPSYNC di Kie (potret + audio -> video karakter bicara).
+ *
+ * Berbeda dari generateVideoWithKie, di sini input BUKAN teks:
+ *  - imageUrl : URL publik potret karakter (sudah diupload ke Kie)
+ *  - audioUrl : URL publik audio (TTS / rekaman, maks 15 detik)
+ * jadi pemanggil yang menyiapkan URL-nya; fungsi ini hanya merakit payload
+ * dan membuat task (tanpa poll, sama seperti video).
+ *
+ * opts: { model, prompt, resolution, aspect, seed, imageUrl, audioUrl }
+ * Return { taskId, model, provider }.
+ */
+export async function generateLipsyncWithKie(auth = {}, opts = {}) {
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
+  }
+  const { base } = kieConfig();
+  const spec = findLipsyncModel(opts.model) || findLipsyncModel(DEFAULT_LIPSYNC_MODEL);
+  if (!opts.imageUrl || !opts.audioUrl) {
+    throw Object.assign(new Error('Lipsync butuh potret karakter dan audio (durasi maksimal ' + LIPSYNC_MAX_SECONDS + ' detik).'), { status: 400 });
+  }
+  const params = {
+    prompt: String(opts.prompt || '').slice(0, 5000),
+    resolution: opts.resolution || spec.defaultResolution,
+    aspect: opts.aspect || spec.defaultAspect,
+    seed: Number.isInteger(opts.seed) ? opts.seed : undefined,
+  };
+  const input = buildLipsyncInput(spec.schema, params, opts.imageUrl, opts.audioUrl);
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(base + '/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
+        body: JSON.stringify({ model: spec.id, input }),
+        signal: AbortSignal.timeout(30000),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const t = res ? String(await res.text()).slice(0, 200) : 'tidak terjangkau';
+        throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (Number(data?.code) && Number(data.code) !== 200) {
+        throw new Error('Kie menolak task lipsync: ' + String(data?.msg || ('kode ' + data.code)));
+      }
+      const taskId = data?.data?.taskId || data?.taskId;
+      if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task lipsync.');
+      return { taskId: String(taskId), model: spec.id, provider: 'kie' };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Generator lipsync gagal membuat task.'), { status: 502 });
 }
 
 /**

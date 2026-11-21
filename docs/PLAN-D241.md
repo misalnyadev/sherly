@@ -43,17 +43,24 @@ Semua model video kita mentok **15 detik**. Meanwhile:
 
 Kreator butuh 30 detik untuk konten sosmed. **Ini gap terbesar.**
 
-### Gap B — Tidak ada lipsync / talking avatar
+### Gap B — Tidak ada lipsync / talking avatar ✅ **SELESAI (D-242)**
 
 Sudah ada TTS (Gemini TTS, `server/tts.js`) + karakter + profil suara, tapi
 **tidak ada model yang mengubah potret + audio → video karakter bicara**.
 Kreator konten (vlog, testimonial, course, digital human) butuh ini.
 
 Model Kie yang relevan:
-- `infinitalk/from-audio` — potret + audio → talking avatar, 480p/720p, ≤15 dtk, **$0.015/dtk**
+- `infinitalk/from-audio` — potret + audio → talking avatar, 480p/720p, ≤15 dtk, **$0.015/dtk** ← **DIPAKAI (D-242)**
 - `bytedance/omni-human` — full-body digital human
 - `kwaivgi/kling-lip-sync` — text-based lip sync
 - `zsxkib/multitalk` — percakapan multi-orang (2 karakter ngobrol)
+
+> **Status D-242:** mode konten **"Karakter Bicara"** sudah diimplementasikan penuh —
+> katalog `server/lipsync-models.js`, endpoint `GET /api/ai/lipsync/models` &
+> `POST /api/ai/lipsync`, TTS Gemini memakai profil suara karakter, upload potret+audio
+> ke Kie, task disimpan di `sherly_video_tasks` (`meta.kind='lipsync'`), hasil masuk
+> galeri aset Studio. Sisa backlog Kie: `bytedance/omni-human`, `kwaivgi/kling-lip-sync`,
+> `zsxkib/multitalk` (multi-orang).
 
 ### Gap C — Tidak ada tipe konten non-foto/non-video standar
 
@@ -143,7 +150,9 @@ Tambah ke mode Foto: preset `1:1` (IG feed), `4:5` (IG portrait), `9:16` (Story/
 `server/video-models.js` / `server/image-models.js` + satu blok `schema` di
 `buildVideoInput()` / `buildImageInput()`. Frontend otomatis dapat karena
 katalog diambil dari `/api/ai/video/models` & `/api/ai/image/models`.
-Yang butuh kerja besar hanya **#3 lipsync** (mode konten baru + alur audio).
+Yang butuh kerja besar hanya **#3 lipsync** (mode konten baru + alur audio) —
+**selesai di D-242** lewat `server/lipsync-models.js` + mode UI "Karakter Bicara"
+(`/api/ai/lipsync/models` & `/api/ai/lipsync`, task reuse `sherly_video_tasks`).
 
 ---
 
