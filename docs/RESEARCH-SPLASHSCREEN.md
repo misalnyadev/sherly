@@ -138,6 +138,7 @@ Manifest sekarang sudah bener. Tambahan opsional:
 | **A. Minimal (HTML/CSS saja)** | Pre-boot splash inline | 1 blok HTML + CSS + 1 baris JS. Gak ada file gambar baru. Beres white-flash di semua HP. | ~2 KB |
 | **B. Lengkap** | A + 13/26 apple startup image + `<link>` | Perlu script generate (`tools/generate-splash.sh` pakai ImageMagick). | ~270 KB |
 | **C. Native-ish (PWA)** | B + service worker cache splash | `public/sw.js` sudah ada — cek apakah sudah cache aset. | + SW work |
+| **D. B + video animasi** | B + MP4/GIF logo di pre-boot splash | Pakai file animasi user. System splash tetap PNG statis (wajib). | + ukuran video |
 
 ### Rekomendasi gw: **Opsi B**
 Reason:
@@ -236,17 +237,109 @@ Verifikasi di:
 
 ---
 
+## 6b. Opsi baru: MP4 / GIF animasi logo (dari user)
+
+User sudah bikin **file MP4 + GIF animasi logo SherlyStudio**. Pertanyaannya:
+**bisa dipakai gak?** → **BISA, dan bagus banget.** Tapi ada batasan penting
+per platform.
+
+### 6b.1 Batasan utama: mana yang bisaanimated
+
+| Target | Animated? | Mekanisme |
+|---|---|---|
+| **Android/Chromium splash** | ❌ **TIDAK** | Chromium generates splash dari manifest → **harus statis** (PNG/SVG) |
+| **iOS `apple-touch-startup-image`** | ❌ **TIDAK** | Apple hanya baca **gambar statis** (PNG/JPEG). Tidak ada video/GIF |
+| **Pre-boot splash (kita bikin sendiri)** | ✅ **BISA** | Kita kontrol sendiri → `<video>` atau `<img src=gif>` |
+
+> ⚠️ **Ini poin paling penting:** bagian yang otomatis (system splash) **harus
+> tetap statis**. Tapi bagian yang **kita kendalikan sendiri** (pre-boot splash
+> yang fade in setelah app load) **bisa animated**.
+
+### 6b.2 MP4 vs GIF
+
+| | MP4 (H.264) | GIF |
+|---|---|---|
+| Ukuran | **200 KB – 1,5 MB** (5 detik) | **2 – 15 MB** (5 detik) |
+| Kompresi | Modern, inter-frame | 256 warna, tanpa inter-frame |
+| Alpha | ❌ tidak | ⚠️ **binary** (1-bit, tepi bergerigi) |
+| Loop | ✅ `loop` attribute | ✅ otomatis |
+| Autoplay mobile | ✅ perlu `muted` + `playsinline` | ✅ selalu jalan |
+| Software | Butuh ffmpeg | Gak butuh |
+
+**Data konkret** (5 detik, 480p, 24 fps):
+| Format | Ukuran |
+|---|---|
+| GIF (256 warna) | 8,4 MB |
+| GIF (128 warna, 12 fps) | 3,1 MB |
+| Animated WebP (lossy) | 1,1 MB |
+| MP4 H.264 CRF 23 | **211 KB** |
+| MP4 H.265 CRF 28 | 142 KB |
+| WebM VP9 CRF 30 | 178 KB |
+
+→ **MP4 menang telak untuk ukuran** (40× lebih kecil dari GIF).
+→ Tapi MP4 **tidak bisa alpha** → butuh **background baked in** (warna `#070b14`).
+
+### 6b.3 Rekomendasi: Pakai KEDUA-DUA-nya
+
+| Peran | Format | Alasan |
+|---|---|---|
+| **System splash** (Android + iOS) | **PNG statis** (frame pertama / poster) | Wajib statis. Ambil **frame 1** dari MP4-mu → PNG |
+| **Pre-boot splash** (kita) | **MP4** (primary) + **GIF** (fallback) | MP4 ringan, GIF buat browser yg gak dukung video |
+
+Implementasi pre-boot:
+```html
+<video id="splashVid" src="/assets/brand/sherly-logo.mp4"
+       autoplay muted loop playsinline preload="auto"
+       style="display:none"></video>
+<img id="splashGif" src="/assets/brand/sherly-logo.gif" alt=""
+     style="display:none">
+```
+```js
+// pilih: video kalau didukung, kalau gagal -> GIF
+const v = document.getElementById('splashVid');
+if (v && v.canPlayType('video/mp4')) { v.style.display='block'; }
+else { document.getElementById('splashGif').style.display='block'; }
+```
+
+### 6b.4 Format lain yang lebih ideal: **Animated WebP**
+- Full alpha channel ✅
+- ~5× lebih kecil dari GIF
+- Support browser luas (Chrome, Firefox, Safari 14+, Edge)
+- ❗ Gak bisa dipakai buat system splash (tetap statis)
+
+**Kalau MP4-mu punya background solid** (baked), MP4 + GIF fallback udah cukup.
+**Kalau butuh transparan** → convert ke **animated WebP**.
+
+### 6b.5 Checklist kalau file-nya udah ada
+- [ ] Durasi animasi ≤ **2 detik** (splash ga boleh lama)
+- [ ] Loop seamless (frame terakhir nyambung ke frame pertama)
+- [ ] Resolusi cukup: **minimal 512×512** logo (bisa di-scale)
+- [ ] Background **solid** `#070b14` baked in (kalau MP4)
+- [ ] **Tanpa audio track** (harus `muted`)
+- [ ] Encoder: H.264 High Profile, `faststart` flag, CRF ~23, 24–30 fps
+- [ ] Ukuran MP4 target **< 500 KB**; GIF target **< 1,5 MB**
+- [ ] Ambil **frame pertama** → PNG untuk system splash (Android + iOS)
+- [ ] Respect `prefers-reduced-motion` → tampilkan **PNG statis**, bukan animasi
+- [ ] Jangan jadikan video sebagai **LCP element** → pakai `poster` PNG
+
+### 6b.6 Catatan: fps & loop
+Durasi splash rata-rata target **1,2–2 detik**. Kalau animasi logo 2 detik → user
+bakal lihat ~1 loop penuh. Jangan lupa `loop` supaya ga ada "flicker" di akhir.
+
+---
+
 ## 7. Estimasi kerja
 
 | Bagian | Waktu |
 |---|---|
 | Pre-boot splash inline (HTML + CSS + JS hide) | ~20 menit |
+| Integrasi MP4/GIF animasi (video element + fallback) | ~20 menit |
 | Script generate apple startup images (ImageMagick) | ~30 menit |
 | 13/26 `<link>` + media query | ~15 menit |
 | Manifest Android tweak | ~5 menit |
 | Test visual (Chromium HP + cek iOS via media query) | ~30 menit |
 | Regression test | ~20 menit |
-| **Total** | **~2 jam** |
+| **Total** | **~2,5 jam** |
 
 ---
 
@@ -256,9 +349,13 @@ Verifikasi di:
 - Pre-boot splash inline (semua HP + browser), **minimum 600 ms**, hilang
   otomatis + safety net
 - **Hanya tampil di HP** (`@media(max-width:560px)`) — sesuai permintaan
-- 13 apple startup image (portrait) → 26 kalau mau landscape juga
-- Warna `#070b14` + logo `sherly-mark.png` + tagline
-- Animasi denyut halus pada logo (mati kalau `prefers-reduced-motion`)
+- **Video MP4 animasi logo** (dari user) di pre-boot splash + **GIF** sebagai
+  fallback; **poster PNG** (frame 1) untuk `poster` attribute + system splash
+- 13 apple startup image (portrait, **statis** — frame 1) → 26 kalau mau
+  landscape juga
+- Warna `#070b14` (sama dengan background MP4)
+- Tagline "CREATE · EDIT · SHARE" di bawah logo
+- `prefers-reduced-motion` → tampilkan PNG statis, bukan animasi
 - Android: manifest sudah cukup, tinggal pastikan
 
 ---
@@ -277,3 +374,9 @@ Verifikasi di:
 - https://simicart.com/blog/pwa-splash-screen/ — pola meta tag
 - https://github.com/HurshMJ/daily-checkin/issues/31 — rekomendasi: skip
   per-device launch image, pastikan first paint gelap
+- https://www.kalex.studio/blog/lottie-vs-gif-vs-mp4-vs-webm-web-animation-formats —
+  tabel ukuran format animasi web, rule "never make animation the LCP element"
+- https://www.utilitykit.tools/blog/gif-vs-webp-vs-mp4-for-the-web/ — angka konkret
+  8,4 MB GIF vs 211 KB MP4 (5 detik, 480p), alpha channel per format
+- https://stackoverflow.com/questions/30979309/ios-animated-splash-screen —
+  iOS launch image **harus statis**
