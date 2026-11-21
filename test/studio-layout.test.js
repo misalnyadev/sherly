@@ -1158,6 +1158,116 @@ test('D-235: deskripsi DI BAWAH judul di header', async () => {
   assert.ok(!rule.includes('flex-direction:row'), 'blok teks tidak boleh row (deskripsi sebaris)');
 });
 
+// ===== D-238: input search Bank Prompt harus TERLIHAT (tidak tertekan 0px) =====
+
+test('D-238: selector search pakai .st-pop prefix (kena rule ".st-pop button")', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Ada rule global ".st-pop button{...width:100%...}" (specificity 0,1,1).
+  const popBtn = css.match(/\.st-pop button\{[^}]*\}/);
+  assert.ok(popBtn, 'rule .st-pop button harus ada (documentasi)');
+  assert.ok(popBtn[0].includes('width:100%'), 'rule .st-pop button memangLebar 100%');
+  // Karena itu semua selector search WAJIB pakai prefix ".st-pop" (0,2,0+).
+  assert.ok(css.includes('.st-pop .st-pb-search input{'), 'input search harus pakai prefix .st-pop');
+  assert.ok(css.includes('.st-pop .st-pb-search-ico{'), 'ikon search harus pakai prefix .st-pop');
+  assert.ok(css.includes('.st-pop .st-pb-search-clear{'), 'tombol clear harus pakai prefix .st-pop');
+  // Input & ikon harus punya lebar eksplisit (tidak boleh 0).
+  const input = css.match(/\.st-pop \.st-pb-search input\{[^}]*\}/s);
+  assert.ok(input[0].includes('flex:1 1 auto'), 'input harus grow di dalam flex');
+  assert.ok(input[0].includes('width:auto'), 'input tidak boleh width:100%');
+  const ico = css.match(/\.st-pop \.st-pb-search-ico\{[^}]*\}/s);
+  assert.ok(/width:1[0-9]px/.test(ico[0]), 'ikon search harus punya lebar tetap');
+  const clr = css.match(/\.st-pop \.st-pb-search-clear\{[^}]*\}/s);
+  assert.ok(/width:20px/.test(clr[0]), 'tombol clear harus 20px');
+  assert.ok(clr[0].includes('flex:none'), 'tombol clear tidak boleh melebar');
+  // Teks input dipaksa terang (WebKit fieldtext default = gelap).
+  assert.ok(input[0].includes('-webkit-text-fill-color:#f4f5fb'), 'teks input harus dipaksa terang');
+  assert.ok(input[0].includes('caret-color:#ff9bdc'), 'caret harus pink');
+});
+
+test('D-238: input search pakai type=text (bukan search)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('<input type="text" id="stPbSearch"'), 'input harus type=text');
+  assert.ok(!studio.includes('<input type="search" id="stPbSearch"'),
+    'type=search brings native cancel button + fieldtext default color');
+});
+
+test('D-238 (runtime): input search punya lebar > 0 & teks terlihat', async () => {
+  // Render sungguhan via Chromium (butuh @sparticuz/chromium + puppeteer-core).
+  // Kalau browser tidak tersedia, test di-skip (bukan gagal).
+  let chromium, puppeteer;
+  try {
+    chromium = (await import('@sparticuz/chromium')).default;
+    puppeteer = (await import('puppeteer-core')).default;
+  } catch (_) { return; } // skip bila dependensi browser tidak ada
+  const htmlSrc = readFileSync('public/index.html', 'utf8');
+  let css = ''; let idx = 0;
+  while (true) {
+    const a = htmlSrc.indexOf('<style>', idx);
+    if (a === -1) break;
+    const b = htmlSrc.indexOf('</style>', a);
+    if (b === -1) break;
+    css += htmlSrc.slice(a + 7, b) + '\n';
+    idx = b + 8;
+  }
+  const iconsSrc = htmlSrc.slice(htmlSrc.indexOf('const ICONS'), htmlSrc.indexOf('const ICONS') + 40000);
+  const start = iconsSrc.indexOf('{');
+  let depth = 0, end = -1;
+  for (let i = start; i < iconsSrc.length; i++) {
+    if (iconsSrc[i] === '{') depth++;
+    else if (iconsSrc[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  // eslint-disable-next-line no-eval
+  const ICONS = eval('(' + iconsSrc.slice(start, end) + ')');
+  let browser;
+  try {
+    const exe = process.env.CHROME_EXE || '/tmp/chromium';
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: exe,
+      headless: true,
+      env: { ...process.env, LD_LIBRARY_PATH: '/tmp/chr/lib:/tmp/chr' },
+    });
+  } catch (_) { return; } // skip bila browser tidak bisa jalan
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 420, height: 760 });
+    await page.setContent(
+      '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<style>' + css + '</style><script>window.ICONS=' + JSON.stringify(ICONS) + ';</script></head>'
+      + '<body><div id="studioRoot"></div></body></html>',
+      { waitUntil: 'domcontentloaded' }
+    );
+    await page.evaluate(`window.fetch = async () => ({ ok:true, json: async()=>({ entries:[
+      { id:'t1', kind:'template', label:'Neon Cyberpunk', content:'neon cyberpunk city', group:'style', slots:[] },
+      { id:'t2', kind:'template', label:'Product Studio', content:'clean product photo', group:'umum', slots:[] }
+    ], characters:[] })});`);
+    await page.addScriptTag({ content: readFileSync('public/studio.js', 'utf8') });
+    await page.evaluate(`window.__sherlyStudioMode='photo'; window.renderStudio();`);
+    await page.evaluate(`document.getElementById('stPromptPill').dispatchEvent(new MouseEvent('click',{bubbles:true}));`);
+    await new Promise((r) => setTimeout(r, 400));
+    await page.evaluate(`(()=>{const i=document.getElementById('stPbSearch'); i.focus(); i.value='neon';
+      i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await new Promise((r) => setTimeout(r, 200));
+    const m = await page.evaluate(`(()=>{const i=document.getElementById('stPbSearch'); const cs=getComputedStyle(i);
+      const r=i.getBoundingClientRect(); const par=i.parentElement;
+      return { w:r.width, color:cs.color, value:i.value,
+        icoW: par.querySelector('.st-pb-search-ico').getBoundingClientRect().width,
+        clrW: document.getElementById('stPbSearchClear').getBoundingClientRect().width,
+        visible: [...document.querySelectorAll('#stPop-prompt .st-pb-item')]
+          .filter(x=>!x.classList.contains('st-hidden')).map(x=>x.textContent.trim().slice(0,12)) };})()`);
+    // Input HARUS punya lebar nyata (bug D-238: 0px -> teks tak terlihat).
+    assert.ok(m.w > 100, 'lebar input harus > 100px, dapat ' + m.w);
+    assert.ok(m.icoW >= 10, 'lebar ikon harus >= 10px, dapat ' + m.icoW);
+    assert.ok(m.clrW <= 30, 'lebar tombol clear harus <= 30px, dapat ' + m.clrW);
+    assert.ok(m.color !== 'rgb(0, 0, 0)', 'warna teks input tidak boleh hitam, dapat ' + m.color);
+    assert.equal(m.value, 'neon', 'nilai input harus ' + m.value);
+    // Filter: hanya 1 item yang cocok.
+    assert.equal(m.visible.length, 1, 'hanya 1 item cocok, dapat ' + m.visible.length);
+  } finally {
+    await browser.close();
+  }
+});
+
 // ===== D-237: label "Optimasi" + kotak search Bank Prompt =====
 
 test('D-237: aksi.optimasi ditulis "Optimasi" (bukan "Optimalkan")', () => {
