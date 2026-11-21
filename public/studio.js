@@ -251,8 +251,12 @@
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
   let motionAvailable = false;   // renderer siap di server?
+  let motionStatus = 'idle';     // idle | ready | installing | missing | failed
+  let motionReason = '';         // alasan kalau gagal
   let motionTask = null;         // task render Motion Graphics yang sedang berjalan
-  let motionTimer = null;
+  let motionTimer = null;      // polling status render
+  let motionSetupTimer = null; // polling status persiapan renderer
+  let motionSetupTries = 0;    // batas percobaan polling (2 menit)
   // D-207: Bank Prompt — template utuh + blok modular.
   let promptBank = [];          // entri dari server (template & block)
   let promptBankLoaded = false;
@@ -884,19 +888,41 @@
       || motionTemplates[0]
       || null;
   }
-  /** Muat daftar template Motion Graphics (sekali per render Studio). */
+  /**
+   * Muat daftar template Motion Graphics.
+   * D-249: kalau server sedang memasang dependency Remotion (status
+   * 'installing'), poll ulang tiap 3 detik sampai selesai — mode tetap
+   * terlihat di panel, user tinggal menunggu sebentar.
+   */
   async function loadMotionTemplates() {
     try {
       const r = await fetch('/api/studio/motion-graphics/templates', { headers: await authHeaders() });
       const d = await r.json();
       motionTemplates = Array.isArray(d?.templates) ? d.templates : [];
       motionAvailable = !!d?.available;
+      motionStatus = String(d?.status || (motionAvailable ? 'ready' : 'missing'));
+      motionReason = String(d?.reason || '');
     } catch {
       motionTemplates = [];
       motionAvailable = false;
+      motionStatus = 'missing';
+      motionReason = 'Server tidak bisa dihubungi.';
     }
     renderMotionBar();
     updatePillLabels();
+    // Server sedang memasang dependency -> tunggu sampai siap.
+    if (motionStatus === 'installing') {
+      if (motionSetupTimer) clearTimeout(motionSetupTimer);
+      // Maks 40x polling (2 menit) supaya tidak berjalan tanpa henti.
+      motionSetupTries = (motionSetupTries || 0) + 1;
+      if (motionSetupTries <= 40) {
+        motionSetupTimer = setTimeout(() => { loadMotionTemplates(); }, 3000);
+      }
+    } else if (motionSetupTimer) {
+      clearTimeout(motionSetupTimer);
+      motionSetupTimer = null;
+      motionSetupTries = 0;
+    }
   }
   /** Baris pilihan template + field isinya (mode Motion Graphics). */
   function renderMotionBar() {
@@ -904,6 +930,22 @@
     const isMotion = state.mode === 'motion';
     bar.classList.toggle('st-hidden', !isMotion);
     if (!isMotion) return;
+    // D-249: renderer belum siap -> tampilkan status, jangan diam-diam
+    // Hilang (user jadi tahu kenapa belum bisa render).
+    if (!motionAvailable) {
+      const installing = motionStatus === 'installing';
+      const failed = motionStatus === 'failed';
+      bar.innerHTML = '<div class="st-motion-head">' + icon('film') + '<b>Motion Graphics</b>'
+        + '<small>' + esc(failed
+          ? (motionReason || 'Gagal menyiapkan renderer.')
+          : installing
+            ? 'Sedang menyiapkan renderer video… (sekali saja, tunggu sebentar)'
+            : 'Menyiapkan renderer video…') + '</small></div>'
+        + '<div class="st-motion-status' + (installing ? ' st-motion-status-wait' : failed ? ' st-motion-status-err' : '') + '">'
+        + '<span class="st-motion-spinner"></span>'
+        + '<span>' + esc(failed ? 'Renderer tidak tersedia' : 'Menyiapkan…') + '</span></div>';
+      return;
+    }
     const tpl = motionTemplate();
     if (!tpl) { bar.innerHTML = ''; return; }
     const fields = (tpl.fields || []).map((f) => {
@@ -948,12 +990,13 @@
   ];
   /**
    * D-249: daftar jenis konten yang TERSEDIA.
-   * Mode Motion Graphics disembunyikan kalau renderer tidak siap di server
-   * (mis. dependency Remotion belum terpasang) — user tidak boleh melihat
-   * pilihan yang tidak bisa dipakai.
+   * Mode Motion Graphics SELALU tampil — kalau renderer belum siap, mode itu
+   * menunjukkan status "Sedang menyiapkan…" di bar isian (bukan hilang
+   * diam-diam). User jadi tahu apa yang terjadi, dan tidak bingung mencari
+   * mode yang mendadak tidak ada.
    */
   function availableContentTypes() {
-    return CONTENT_TYPES.filter(([v]) => v !== 'motion' || motionAvailable);
+    return CONTENT_TYPES.slice();
   }
   function setMode(m) {
     // D-242: tiga mode konten — foto, video, dan karakter bicara (lipsync).
@@ -2127,6 +2170,13 @@
   // background) -> polling status -> video tersimpan sebagai aset di galeri.
 
   async function generateMotionGraphics() {
+    // D-249: renderer belum siap -> jelaskan ke user (bukan diam).
+    if (!motionAvailable) {
+      window.toast?.(motionStatus === 'installing'
+        ? 'Renderer video sedang disiapkan — tunggu sebentar ya.'
+        : (motionReason || 'Renderer Motion Graphics belum siap. Jalankan: npm run setup'));
+      return;
+    }
     const tpl = motionTemplate();
     if (!tpl) { window.toast?.('Template Motion Graphics belum tersedia.'); return; }
     const props = motionRenderProps();

@@ -395,7 +395,8 @@ test('D-203: hasil render — Unggah di sudut, pill jenis konten di bawah kompos
   const panel = doc.getElementById('stPop-settings');
   assert.ok(panel.classList.contains('open'), 'panel pengaturan tidak terbuka');
   const opts = [...panel.querySelectorAll('[data-set-key="type"]')].map((b) => b.dataset.setV);
-  assert.deepEqual(opts, ['photo', 'video', 'lipsync'], 'pilihan jenis konten: ' + opts.join(','));
+  // D-249: mode "Motion Graphics" ikut jadi pilihan jenis konten.
+  assert.deepEqual(opts, ['photo', 'video', 'lipsync', 'motion'], 'pilihan jenis konten: ' + opts.join(','));
 });
 
 test('D-203: pilih jenis konten Video lewat satu kotak -> mode video aktif', async () => {
@@ -2631,7 +2632,8 @@ test('D-247: PC & HP sama-sama buka panel Pengaturan dari pill jenis konten', as
   assert.ok(!panel.classList.contains('st-pop-center'), 'di desktop panel bukan modal tengah');
   // Panel punya grup Jenis Konten dengan 3 pilihan.
   const types = [...panel.querySelectorAll('[data-set-key="type"]')].map((b) => b.dataset.setV);
-  assert.deepEqual(types, ['photo', 'video', 'lipsync'], 'pilihan jenis konten di panel');
+  // D-249: mode "Motion Graphics" ikut jadi pilihan jenis konten.
+  assert.deepEqual(types, ['photo', 'video', 'lipsync', 'motion'], 'pilihan jenis konten di panel');
   // Panel adalah anak composer (posisi dropdown stabil).
   assert.ok(panel.closest('.st-composer'), 'panel pengaturan harus anak composer');
 });

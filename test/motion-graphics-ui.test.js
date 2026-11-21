@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
@@ -35,18 +35,24 @@ function buildStudio(fetchImpl) {
   const script = doc.createElement('script');
   script.textContent = studio;
   doc.body.appendChild(script);
+  openWindows.push(win);
   return { win, doc };
 }
 
 /** Fetch mock: katalog video/gambar standar + template Motion Graphics. */
 function makeFetch(opts = {}) {
   const mgAvailable = opts.mgAvailable !== false;
+  const mgStatus = opts.mgStatus || (mgAvailable ? 'ready' : 'installing');
+  const mgReason = opts.mgReason || '';
   const calls = [];
   const impl = async (url, init = {}) => {
     calls.push({ url: String(url), method: init.method || 'GET', body: init.body });
     const u = String(url);
     if (u.includes('/api/studio/motion-graphics/templates')) {
-      return { ok: true, json: async () => ({ ok: true, available: mgAvailable, templates: mgAvailable ? MG_TEMPLATES : [] }) };
+      return { ok: true, json: async () => ({
+        ok: true, available: mgAvailable, status: mgStatus, reason: mgReason,
+        templates: mgAvailable ? MG_TEMPLATES : [],
+      }) };
     }
     if (u.includes('/api/studio/motion-graphics') && (init.method || 'GET') === 'POST') {
       return { ok: true, json: async () => ({ ok: true, task: { id: 'task-1', status: 'queued', progress: 0 } }) };
@@ -68,6 +74,17 @@ function makeFetch(opts = {}) {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// JSDOM window yang dibuat per test harus ditutup, kalau tidak timer polling
+// Motion Graphics (interval 3 detik saat status 'installing') bikin proses
+// test tidak pernah exit.
+const openWindows = [];
+afterEach(() => {
+  while (openWindows.length) {
+    const win = openWindows.pop();
+    try { win.close(); } catch { /* sudah tertutup */ }
+  }
+});
 
 async function pickTypeWithPanel(win, doc, kind) {
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
@@ -96,15 +113,51 @@ test('D-249: mode Motion Graphics muncul di panel Jenis Konten saat renderer sia
   assert.ok(kinds.includes('video'));
 });
 
-test('D-249: mode Motion Graphics DISEMBUNYIKAN saat renderer tidak siap', async () => {
-  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false }));
+test('D-249: mode Motion Graphics TETAP tampil saat renderer belum siap', async () => {
+  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'installing' }));
   await win.renderStudio();
   await wait(150);
   doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await wait(60);
   const panel = doc.getElementById('stPop-settings');
   const kinds = [...panel.querySelectorAll('[data-set-key="type"]')].map((b) => b.dataset.setV);
-  assert.ok(!kinds.includes('motion'), 'mode motion harus disembunyikan kalau renderer tidak siap');
+  assert.ok(kinds.includes('motion'), 'mode motion harus tetap terlihat walau renderer belum siap');
+});
+
+test('D-249: renderer belum siap -> bar isian nampilin status "Menyiapkan…" (bukan kosong)', async () => {
+  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'installing' }));
+  await win.renderStudio();
+  await wait(150);
+  await pickTypeWithPanel(win, doc, 'motion');
+  const bar = doc.getElementById('stMotionBar');
+  assert.ok(!bar.classList.contains('st-hidden'), 'bar harus tetap tampil');
+  assert.match(bar.innerHTML, /st-motion-status/, 'harus ada bar status');
+  assert.match(bar.innerHTML, /Menyiapkan|Menyiapkan renderer/, 'status harus menjelaskan renderer sedang disiapkan');
+  // Kolom isian belum ada karena template belum bisa dipakai.
+  assert.ok(!doc.getElementById('stMotionField-title'), 'kolom isian belum tampil sebelum renderer siap');
+});
+
+test('D-249: renderer gagal -> status menampilkan alasannya', async () => {
+  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'failed', mgReason: 'npm install gagal'}));
+  await win.renderStudio();
+  await wait(150);
+  await pickTypeWithPanel(win, doc, 'motion');
+  const bar = doc.getElementById('stMotionBar');
+  assert.match(bar.innerHTML, /npm install gagal/, 'harus tampilkan alasan kegagalan');
+  assert.match(bar.innerHTML, /st-motion-status-err/, 'harus pakai style error');
+});
+
+test('D-249: renderer belum siap -> tombol Render tidak request ke server', async () => {
+  const fetchImpl = makeFetch({ mgAvailable: false, mgStatus: 'installing' });
+  const { win, doc } = buildStudio(fetchImpl);
+  await win.renderStudio();
+  await wait(150);
+  await pickTypeWithPanel(win, doc, 'motion');
+  doc.getElementById('stMotionBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await wait(120);
+  const post = fetchImpl.calls.find((c) => c.method === 'POST' && c.url.includes('/api/studio/motion-graphics'));
+  assert.ok(!post, 'tidak boleh request render kalau renderer belum siap');
+  assert.match(doc.getElementById('toast').textContent, /disiapkan|n上台|siap/i, 'harus ada pesan ke user');
 });
 
 test('D-249: pilih Motion Graphics -> bar template tampil + tombol Render muncul', async () => {
