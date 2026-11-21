@@ -95,6 +95,36 @@ export const IMAGE_MODELS = [
     defaultAspect: '4:5',
   },
   {
+    // D-241: ByteDance Seedream 5.5 — edit chain 100 putaran, background
+    // TRANSPARAN native, teks kecil padat (Kie, Nov 2026).
+    id: 'bytedance/seedream-5-5',
+    provider: 'kie',
+    schema: 'seedream55',
+    maker: 'ByteDance',
+    label: 'Seedream 5.5',
+    resolutions: ['1K', '2K', '4K'],
+    aspects: ['1:1', '4:5', '9:16', '16:9', '3:4', '4:3', '3:2', '2:3', '5:4', '21:9'],
+    maxReferences: 10,
+    note: 'ByteDance Seedream 5.5 — background transparan, edit chain panjang, teks kecil rapi.',
+    defaultResolution: '2K',
+    defaultAspect: '4:5',
+  },
+  {
+    // D-241: OpenAI GPT Image 2.6 — layout/poster terbaik, output SVG & GIF,
+    // quality low→max, background transparan (Kie, Nov 2026).
+    id: 'gpt-image-2-6/flare-text-to-image',
+    provider: 'kie',
+    schema: 'gpt-image-26',
+    maker: 'OpenAI',
+    label: 'GPT Image 2.6',
+    resolutions: ['1K', '2K', '4K'],
+    aspects: ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9', '2:11', '1:2'],
+    maxReferences: 16,
+    note: 'OpenAI GPT Image 2.6 — poster & layout paling rapi, bisa SVG/GIF & transparan.',
+    defaultResolution: '2K',
+    defaultAspect: '4:5',
+  },
+  {
     id: 'flux-2-pro-text-to-image',
     provider: 'kie',
     schema: 'flux',
@@ -180,6 +210,34 @@ export function buildImageInput(schema, params = {}, urls = []) {
       resolution,
       output_format: 'png',
       ...(list.length ? { image_input: list.slice(0, 10) } : {}),
+    };
+  }
+  if (schema === 'seedream55') {
+    // D-241: ByteDance Seedream 5.5 (Kie).
+    // Field: prompt, aspect_ratio, resolution, sequential_image_generation,
+    //   sequential_image_generation_mode (auto/multi), output_format (png),
+    //   image_input (s/d 10 referensi).
+    return {
+      prompt,
+      aspect_ratio: aspect,
+      resolution,
+      output_format: 'png',
+      ...(list.length ? { image_input: list.slice(0, 10) } : {}),
+    };
+  }
+  if (schema === 'gpt-image-26') {
+    // D-241: OpenAI GPT Image 2.6 (Kie).
+    // Field: prompt, aspect_ratio, resolution, quality (low..max), background
+    //   (transparent/opaque/auto), output_format (png/jpeg/webp/gif/svg),
+    //   input_urls (s/d 16), mask_url.
+    return {
+      prompt,
+      aspect_ratio: aspect,
+      resolution,
+      quality: 'medium',
+      background: 'opaque',
+      output_format: 'png',
+      ...(list.length ? { input_urls: list.slice(0, 16) } : {}),
     };
   }
   if (schema === 'flux') {

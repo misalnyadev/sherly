@@ -240,3 +240,108 @@ test('D-239: fallback katalog frontend (public/studio.js) sinkron dengan server'
   assert.ok(studio.includes("firstLastFrameExclusive: true"));
   assert.ok(studio.includes('maxReferences: 6'));
 });
+
+// ===== D-241: model video panjang (30 detik) & multimodal =====
+
+test('D-241: Seedance 2.5 — 30 detik, 4K, 30 referensi, mode draft', () => {
+  const m = findVideoModel('bytedance/seedance-2-5');
+  assert.ok(m, 'Seedance 2.5 harus ada di katalog');
+  assert.equal(m.label, 'Seedance 2.5');
+  assert.equal(m.maker, 'ByteDance');
+  assert.equal(m.schema, 'seedance25');
+  assert.equal(Math.max(...m.durations), 30, 'harus sampai 30 detik');
+  assert.equal(m.durations.length, 27, 'durasi 4-30 (integer)');
+  assert.ok(m.resolutions.includes('4k'), 'harus support native 4K');
+  assert.equal(m.maxReferences, 30);
+  assert.ok(m.tiers.some((t) => t.id === 'draft'), 'harus punya tier draft (preview 480p)');
+});
+
+test('D-241: Wan 3.0 — 2-30 detik, multimodal, termurah', () => {
+  const m = findVideoModel('wan/3-0-video');
+  assert.ok(m, 'Wan 3.0 harus ada di katalog');
+  assert.equal(m.label, 'Wan 3.0');
+  assert.equal(m.maker, 'Alibaba');
+  assert.equal(m.schema, 'wan3');
+  assert.equal(m.durations[0], 2);
+  assert.equal(Math.max(...m.durations), 30);
+  assert.ok(m.aspects.includes('adaptive'), 'harus punya rasio adaptive');
+  assert.ok(m.audio, 'Wan 3.0 punya audio');
+});
+
+test('D-241: Kling 4.0 — 30 detik, 4K HDR, 15 referensi', () => {
+  const m = findVideoModel('kling-4-0/reference-to-video');
+  assert.ok(m, 'Kling 4.0 harus ada di katalog');
+  assert.equal(m.label, 'Kling 4.0');
+  assert.equal(m.maker, 'Kuaishou');
+  assert.equal(m.schema, 'kling4');
+  assert.equal(Math.max(...m.durations), 30);
+  assert.ok(m.resolutions.includes('4k'));
+  assert.ok(m.tiers.some((t) => t.id === 'hdr'), 'harus punya tier HDR');
+  assert.equal(m.maxReferences, 15);
+});
+
+test('D-241: buildVideoInput schema seedance25 — field Kie 2.5', () => {
+  const params = { prompt: 'p', tier: 'standard', duration: 25, resolution: '1080p', aspect: '9:16', audio: true };
+  const input = buildVideoInput('seedance25', params, ['a', 'b']);
+  assert.equal(input.duration, 25);
+  assert.equal(input.resolution, '1080p');
+  assert.equal(input.aspect_ratio, '9:16');
+  assert.equal(input.generate_audio, true);
+  assert.deepEqual(input.reference_image_urls, ['a', 'b']);
+  assert.equal(input.draft, undefined, 'tier standard bukan draft');
+});
+
+test('D-241: buildVideoInput schema seedance25 — tier draft = preview 480p', () => {
+  const params = { prompt: 'p', tier: 'draft', duration: 10, resolution: '1080p', aspect: '16:9', audio: false };
+  const input = buildVideoInput('seedance25', params, []);
+  assert.equal(input.draft, true, 'draft harus true');
+  assert.equal(input.resolution, '480p', 'draft dipaksa ke 480p');
+  assert.equal(input.generate_audio, false);
+});
+
+test('D-241: buildVideoInput schema wan3 — field Wan 3.0', () => {
+  const params = { prompt: 'p', tier: 'standard', duration: 20, resolution: '720p', aspect: 'adaptive', audio: true };
+  const input = buildVideoInput('wan3', params, ['x']);
+  assert.equal(input.duration, 20);
+  assert.equal(input.aspect_ratio, 'adaptive');
+  assert.equal(input.audio, true, 'wan3 pakai field "audio" (bool)');
+  assert.deepEqual(input.reference_image_urls, ['x']);
+  assert.equal(input.generate_audio, undefined, 'wan3 tidak pakai generate_audio');
+});
+
+test('D-241: buildVideoInput schema kling4 — field Kling 4.0', () => {
+  const params = { prompt: 'p', tier: 'std', duration: 30, resolution: '4k', aspect: '21:9', audio: true };
+  const input = buildVideoInput('kling4', params, ['u1']);
+  assert.equal(input.duration, 30);
+  assert.equal(input.resolution, '4k');
+  assert.equal(input.aspect_ratio, '21:9');
+  assert.deepEqual(input.image_urls, ['u1'], 'kling4 pakai image_urls');
+  assert.equal(input.mode, undefined, 'kling4 tak punya field mode');
+});
+
+test('D-241: videoCatalog menandai model longForm (durasi > 15 detik)', () => {
+  const cat = videoCatalog();
+  const seed25 = cat.models.find((m) => m.id === 'bytedance/seedance-2-5');
+  const wan = cat.models.find((m) => m.id === 'wan/3-0-video');
+  const kling4 = cat.models.find((m) => m.id === 'kling-4-0/reference-to-video');
+  assert.equal(seed25.longForm, true);
+  assert.equal(wan.longForm, true);
+  assert.equal(kling4.longForm, true);
+  // Model lama tetap false.
+  assert.equal(cat.models.find((m) => m.id === 'veo-3-1').longForm, false);
+});
+
+test('D-241: fallback frontend sinkron dengan server (3 model baru)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const studio = readFileSync('public/studio.js', 'utf8');
+  for (const [id, label] of [
+    ['bytedance/seedance-2-5', 'Seedance 2.5'],
+    ['wan/3-0-video', 'Wan 3.0'],
+    ['kling-4-0/reference-to-video', 'Kling 4.0'],
+  ]) {
+    assert.ok(studio.includes(`id: '${id}'`), 'fallback frontend harus punya ' + id);
+    assert.ok(studio.includes(`label: '${label}'`), 'label fallback harus ' + label);
+  }
+  assert.ok(studio.includes("id: 'bytedance/seedream-5-5'"), 'fallback frontend harus punya Seedream 5.5');
+  assert.ok(studio.includes("id: 'gpt-image-2-6/flare-text-to-image'"), 'fallback frontend harus punya GPT Image 2.6');
+});

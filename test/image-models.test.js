@@ -20,7 +20,7 @@ test('katalog gambar: semua model punya id, provider, maker, label, schema', () 
     assert.ok(m.provider, 'provider wajib');
     assert.ok(m.maker, 'maker wajib');
     assert.ok(m.label, 'label wajib');
-    assert.ok(['nano-banana', 'gpt-image', 'seedream', 'flux'].includes(m.schema), 'schema tak dikenal: ' + m.schema);
+    assert.ok(['nano-banana', 'gpt-image', 'seedream', 'seedream55', 'gpt-image-26', 'flux'].includes(m.schema), 'schema tak dikenal: ' + m.schema);
     assert.ok(m.resolutions.every((r) => IMAGE_RESOLUTIONS.includes(r)), 'resolusi di luar daftar: ' + m.id);
     assert.ok(m.aspects.includes('4:5'), 'rasio 4:5 harus didukung: ' + m.id);
     assert.ok(m.aspects.includes('9:16'), 'rasio 9:16 harus didukung: ' + m.id);
@@ -122,4 +122,45 @@ test('imageCatalog: bentuk untuk frontend (tanpa field internal)', () => {
   assert.ok(Array.isArray(m.resolutions) && Array.isArray(m.aspects));
   assert.ok(typeof m.maxReferences === 'number');
   assert.ok(!('schema' in m), 'schema internal tidak dikirim ke frontend');
+});
+
+// ===== D-241: Seedream 5.5 & GPT Image 2.6 =====
+
+test('D-241: Seedream 5.5 — background transparan & edit chain panjang', () => {
+  const m = findImageModel('bytedance/seedream-5-5');
+  assert.ok(m, 'Seedream 5.5 harus ada di katalog');
+  assert.equal(m.label, 'Seedream 5.5');
+  assert.equal(m.maker, 'ByteDance');
+  assert.equal(m.schema, 'seedream55');
+  assert.equal(m.maxReferences, 10);
+});
+
+test('D-241: GPT Image 2.6 — poster & layout, bisa SVG/GIF', () => {
+  const m = findImageModel('gpt-image-2-6/flare-text-to-image');
+  assert.ok(m, 'GPT Image 2.6 harus ada di katalog');
+  assert.equal(m.label, 'GPT Image 2.6');
+  assert.equal(m.maker, 'OpenAI');
+  assert.equal(m.schema, 'gpt-image-26');
+  assert.equal(m.maxReferences, 16);
+  assert.ok(m.aspects.includes('2:11'), 'rasio panorama 2:11 harus ada');
+  assert.ok(m.aspects.includes('9:16'), 'rasio 9:16 harus ada');
+});
+
+test('D-241: buildImageInput schema seedream55 & gpt-image-26', () => {
+  const s55 = buildImageInput('seedream55', { prompt: 'p', aspect: '4:5', resolution: '2K' }, ['a']);
+  assert.equal(s55.output_format, 'png');
+  assert.deepEqual(s55.image_input, ['a'], 'seedream55 pakai image_input');
+  const g26 = buildImageInput('gpt-image-26', { prompt: 'p', aspect: '4:5', resolution: '2K' }, ['b']);
+  assert.equal(g26.quality, 'medium');
+  assert.equal(g26.background, 'opaque');
+  assert.deepEqual(g26.input_urls, ['b'], 'gpt-image-26 pakai input_urls');
+});
+
+test('D-241: katalog frontend (fallback) sinkron untuk model gambar baru', async () => {
+  const { readFileSync } = await import('node:fs');
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes("id: 'bytedance/seedream-5-5'"));
+  assert.ok(studio.includes("label: 'Seedream 5.5'"));
+  assert.ok(studio.includes("id: 'gpt-image-2-6/flare-text-to-image'"));
+  assert.ok(studio.includes("label: 'GPT Image 2.6'"));
 });
