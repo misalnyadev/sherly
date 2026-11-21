@@ -100,3 +100,28 @@ test('D-242: lipsyncCatalog mengirim data untuk frontend', () => {
   assert.equal(m.maxSeconds, 15);
   assert.ok(!('schema' in m), 'schema internal tidak dikirim ke frontend');
 });
+
+// ===== D-244: arahan adegan & gambar referensi (karakter di lokasi tertentu) =====
+
+test('D-244: buildLipsyncInput menerima prompt arahan adegan (lokasi/kamera/aksi)', () => {
+  const input = buildLipsyncInput('infinitalk',
+    { prompt: 'di studio podcast, kamera close-up, dia tersenyum dan gestur tangan', resolution: '720p' },
+    'https://img/karakter-di-studio.jpg', 'https://audio/suara.wav');
+  assert.equal(input.prompt, 'di studio podcast, kamera close-up, dia tersenyum dan gestur tangan');
+  assert.equal(input.image_url, 'https://img/karakter-di-studio.jpg');
+  assert.equal(input.audio_url, 'https://audio/suara.wav');
+});
+
+test('D-244: hanya SATU image_url yang dikirim (model InfiniteTalk)', () => {
+  const input = buildLipsyncInput('infinitalk', { prompt: 'x', resolution: '720p' },
+    'https://img/utama.jpg', 'https://audio/a.wav');
+  const imageKeys = Object.keys(input).filter((k) => k.includes('image'));
+  assert.deepEqual(imageKeys, ['image_url'], 'hanya boleh ada satu field gambar');
+  assert.equal(input.image_urls, undefined, 'tidak boleh ada image_urls (array)');
+  assert.equal(input.reference_image_urls, undefined, 'tidak boleh ada reference_image_urls');
+});
+
+test('D-244: prompt arahan adegan dipotong 5.000 karakter (batas Kie)', () => {
+  const input = buildLipsyncInput('infinitalk', { prompt: 'a'.repeat(9000), resolution: '720p' }, 'i', 'a');
+  assert.equal(input.prompt.length, 5000);
+});

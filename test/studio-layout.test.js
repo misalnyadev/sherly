@@ -2263,3 +2263,98 @@ test('D-243: mode lipsync tidak punya pill durasi (durasi mengikuti naskah)', as
   // Tidak ada popover durasi untuk lipsync.
   assert.equal(doc.getElementById('stPop-dur').children.length, 0, 'popover durasi tidak boleh terisi di mode lipsync');
 });
+
+// ===== D-244: arahan adegan + gambar @mention (karakter di lokasi tertentu) =====
+
+test('D-244: mode Karakter Bicara punya input "Arahan adegan" terpisah dari naskah', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // Box arahan adegan tersembunyi di mode foto.
+  assert.ok(doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus hidden di mode foto');
+  // Masuk mode lipsync.
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  assert.ok(!doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus tampil di mode lipsync');
+  assert.ok(doc.getElementById('stSceneHint'), 'textarea arahan adegan harus ada');
+  assert.ok(doc.getElementById('stSceneHint').getAttribute('maxlength'), 'textarea arahan adegan punya batas panjang');
+  // Placeholder composer naskah menyuruh mention gambar.
+  assert.match(doc.getElementById('stPrompt').placeholder, /mention @ gambar/i);
+});
+
+test('D-244: request lipsync mengirim arahan adegan sebagai prompt', async () => {
+  let captured = null;
+  const lipFetch = async (url, opts) => {
+    const u = String(url || '');
+    if (u.includes('/api/ai/lipsync') && opts && opts.method === 'POST') {
+      captured = JSON.parse(opts.body);
+      return { ok: true, json: async () => ({ ok: true, id: 'task-1', task_id: 'kie-1' }) };
+    }
+    if (u.includes('/api/ai/lipsync/models')) {
+      return { ok: true, json: async () => ({ ok: true, defaultModel: 'infinitalk/from-audio', maxSeconds: 15, models: [
+        { id: 'infinitalk/from-audio', provider: 'kie', label: 'InfiniteTalk', maker: 'MeiGen-AI',
+          resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
+          defaultResolution: '720p', defaultAspect: '9:16' }] }) };
+    }
+    if (u.includes('/api/characters')) {
+      return { ok: true, json: async () => ({ characters: [
+        { id: '11111111-1111-4111-8111-111111111111', name: 'Sherly', reference_image_path: 'a.png', voice: { name: 'Zephyr' } }] }) };
+    }
+    return { ok: true, json: async () => (u.includes('/api/ai/image/models') ? IMAGE_CATALOG : u.includes('/api/prompt-bank') ? PROMPT_BANK : CATALOG) };
+  };
+  const { win, doc } = buildStudio(lipFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  const realSetTimeout = win.setTimeout;
+  win.setTimeout = (fn, ms) => (ms >= 1000 ? 0 : realSetTimeout(fn, ms));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  // Pilih karakter.
+  click(doc.getElementById('stLipsyncCharBtn'));
+  await new Promise((r) => setTimeout(r, 40));
+  click(doc.getElementById('stPop-lipsyncchar').querySelector('[data-lip-char]'));
+  // Isi arahan adegan + naskah.
+  const sh = doc.getElementById('stSceneHint');
+  sh.value = 'di studio podcast, kamera close-up';
+  sh.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'Halo, aku Sherly.';
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  click(doc.getElementById('stLipsyncBtn'));
+  await new Promise((r) => setTimeout(r, 120));
+  assert.ok(captured, 'request lipsync tidak terkirim');
+  assert.equal(captured.prompt, 'di studio podcast, kamera close-up', 'arahan adegan harus dikirim sebagai prompt');
+  assert.equal(captured.script, 'Halo, aku Sherly.', 'naskah harus dikirim terpisah');
+  // Tanpa mention gambar -> tidak ada referenceImage (backend pakai potret karakter).
+  assert.equal(captured.referenceImage, undefined, 'tanpa mention tidak boleh kirim referenceImage');
+});
+
+test('D-244: karakter tanpa potret tidak bisa dipilih (picker hanya karakter berpotret)', async () => {
+  const spyFetch = async (url) => {
+    const u = String(url || '');
+    if (u.includes('/api/characters')) {
+      return { ok: true, json: async () => ({ characters: [
+        { id: '11111111-1111-4111-8111-111111111111', name: 'TanpaPotret', voice: { name: 'Zephyr' } },
+        { id: '22222222-2222-4222-8222-222222222222', name: 'AdaPotret', reference_image_path: 'a.png' }] }) };
+    }
+    return { ok: true, json: async () => (u.includes('/api/ai/image/models') ? IMAGE_CATALOG : u.includes('/api/prompt-bank') ? PROMPT_BANK : CATALOG) };
+  };
+  const { win, doc } = buildStudio(spyFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  click(doc.getElementById('stLipsyncCharBtn'));
+  await new Promise((r) => setTimeout(r, 40));
+  const ids = [...doc.getElementById('stPop-lipsyncchar').querySelectorAll('[data-lip-char]')].map((b) => b.dataset.lipChar);
+  assert.deepEqual(ids, ['22222222-2222-4222-8222-222222222222'], 'hanya karakter berpotret yang bisa dipilih');
+});
