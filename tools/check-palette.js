@@ -13,6 +13,7 @@ const HEX_ALLOW = new Set([
   // permukaan gelap
   '#070b14', '#0c1422', '#101b2c', '#111a2e', '#0f1828', '#0a1220',
   '#0c1422f2', '#0c1422f7', '#0c1422cc', '#101b2ccc',
+  '#0c142299', '#0c1422b3', // D-230: badge user semi transparan (foto avatar tetap terlihat)
   // plum / tinta pink
   '#160f20', '#24142a', '#24142aa6', '#311738', '#5b1f4e', '#170f20' /* meta theme-color */,
   // garis
