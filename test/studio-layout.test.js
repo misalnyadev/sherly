@@ -1190,3 +1190,43 @@ test('D-221: CSS — pill pengaturan disembunyikan di HP, panel tampil tengah', 
   // Panel di HP diposisikan di tengah layar (modal).
   assert.ok(/\.st-pop-settings\{position:fixed;left:50%;top:50%/.test(css), 'panel di HP harus di tengah layar');
 });
+
+// ===== D-222: placeholder singkat + area tulis menyatu dengan form =====
+
+test('D-222: placeholder prompt singkat, tanpa contoh panjang', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Placeholder statis di markup.
+  assert.ok(studio.includes('placeholder="Prompt… mention @ karakter/aset dll."'),
+    'placeholder statis harus singkat');
+  // Tidak ada placeholder lama yang panjang.
+  assert.ok(!studio.includes('cth: @sherly dan @novi'), 'placeholder lama (contoh panjang) harus hilang');
+  assert.ok(!studio.includes('cth: opening reels'), 'placeholder video lama harus hilang');
+  // Placeholder dinamis (mode video) juga singkat.
+  const sm = studio.slice(studio.indexOf('function setMode('));
+  const sbody = sm.slice(0, sm.indexOf('\n  }'));
+  assert.ok(sbody.includes("'Prompt video… mention @ karakter/aset dll.'"), 'placeholder video harus ringkas');
+  assert.ok(sbody.includes("'Prompt… mention @ karakter/aset dll.'"), 'placeholder foto harus ringkas');
+  // Panjang maksimal ~40 karakter supaya tidak memenuhi area tulis.
+  const ph = /placeholder="([^"]+)"/.exec(studio);
+  assert.ok(ph, 'placeholder harus ada');
+  assert.ok(ph[1].length <= 45, 'placeholder terlalu panjang: ' + ph[1].length);
+});
+
+test('D-222: area tulis menyatu dengan form (tanpa border/background pembeda)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const ta = css.match(/\.st-composer textarea\{[^}]*\}/s);
+  assert.ok(ta, 'aturan .st-composer textarea harus ada');
+  const rule = ta[0];
+  assert.ok(rule.includes('background:transparent'), 'background textarea harus transparan');
+  assert.ok(/border:0[;}]/.test(rule), 'border textarea harus 0');
+  assert.ok(rule.includes('border-radius:0'), 'border-radius textarea harus 0');
+  // Padding horizontal dihapus -> area tulis lebih luas.
+  assert.ok(rule.includes('padding:2px 0 6px'), 'padding horizontal textarea harus 0');
+  // Wrapper mention-box tetap polos.
+  assert.ok(css.includes('.st-mention-box{position:relative}'), 'wrapper mention-box tidak boleh punya border/background');
+  // Fokus tidak boleh memunculkan border pink (tetap menyatu).
+  const focus = css.match(/\.st-composer textarea:focus\{[^}]*\}/s);
+  assert.ok(focus, 'aturan focus harus ada');
+  assert.ok(/border:0[;}]/.test(focus[0]), 'focus tidak boleh memunculkan border');
+  assert.ok(focus[0].includes('box-shadow:none'), 'focus tidak boleh memunculkan shadow');
+});

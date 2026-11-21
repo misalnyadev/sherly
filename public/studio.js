@@ -774,7 +774,8 @@
       const aspects = videoModel()?.aspects || ['16:9', '9:16'];
       if (!aspects.includes(state.aspect)) state.aspect = aspects.includes('9:16') ? '9:16' : aspects[0];
     } else if (!ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '4:5';
-    const ta = $('stPrompt'); if (ta) ta.placeholder = isVideo ? 'cth: opening reels — @sherly berjalan masuk cafe di Bogor, kamera slowly zoom in…' : 'cth: @sherly dan @novi sedang berjalan di GBK menikmati udara pagi…';
+    // D-222: placeholder ringkas (tidak ada contoh panjang).
+    const ta = $('stPrompt'); if (ta) ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.' : 'Prompt… mention @ karakter/aset dll.';
     $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
@@ -1576,7 +1577,7 @@
       + '</div>'
       + '</div>'
       + '<div class="st-mention-box">'
-      + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="cth: @sherly dan @novi sedang berjalan di GBK sambil menikmati udara pagi…"></textarea>'
+      + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
