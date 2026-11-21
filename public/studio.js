@@ -1511,8 +1511,12 @@
     // dicari saat bank prompt sudah banyak.
     const search = '<div class="st-pb-search">'
       + '<span class="st-pb-search-ico">' + icon('search') + '</span>'
-      + '<input type="search" id="stPbSearch" placeholder="Cari prompt…" value="' + esc(promptBankQuery) + '"'
-      + ' autocomplete="off" aria-label="Cari prompt">'
+      // D-238: pakai type="text" (bukan "search") — type=search brings native
+      // cancel button & "fieldtext" default color yang bikin teks tak terlihat
+      // di beberapa browser/WebView.
+      + '<input type="text" id="stPbSearch" placeholder="Cari prompt…" value="' + esc(promptBankQuery) + '"'
+      + ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"'
+      + ' aria-label="Cari prompt">'
       + '<button type="button" class="st-pb-search-clear' + (promptBankQuery ? '' : ' st-hidden') + '" id="stPbSearchClear" aria-label="Hapus pencarian">' + icon('x') + '</button>'
       + '</div>';
     // D-237: seluruh entri dirender; penyaringan dilakukan lewat
