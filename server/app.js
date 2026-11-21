@@ -14,7 +14,7 @@ import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEM
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
 import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
-import { parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, sanitizeInlineImage } from './studio-characters.js';
+import { parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, sanitizeInlineImage, shiftImageIndex } from './studio-characters.js';
 import {
   saveAsset, saveGeneratedAsset, listAssets, signedAsset, deleteAsset, getAsset,
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
@@ -478,7 +478,7 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     // 2) Parse "@nama" di prompt -> maksimal 3 karakter.
     const mentions = parseMentions(prompt, allCharacters);
     // 3) Resolve gambar referensi karakter (potret + master sheet) dari Storage.
-    const { images: charImages, labels: charLabels } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
+    const { images: charImages, labels: charLabels, imageIndex } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
     // 4) Referensi gambar adegan (frame akhir adegan sebelumnya / referensi lokasi) — dikirim client.
     const sceneImage = sanitizeInlineImage(rawSceneRef);
     const references = sceneImage ? [...charImages, sceneImage] : charImages;
@@ -488,7 +488,7 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     const promptBlocks = [];
     if (sceneNo > 0 && sceneTot > 0) promptBlocks.push(`[Adegan ${sceneNo} dari ${sceneTot}]`);
     promptBlocks.push(prompt);
-    const charBlock = buildCharacterPromptBlock(mentions, allCharacters);
+    const charBlock = buildCharacterPromptBlock(mentions, allCharacters, imageIndex);
     if (charBlock) promptBlocks.push(charBlock);
     if (sceneImage) {
       promptBlocks.push('## Referensi gambar adegan\nGambar terakhir adegan sebelumnya (referensi continuity): pertahankan lokasi, pencahayaan, wardrobe, warna, dan wajah yang konsisten. Lanjutkan adegan dari gambar ini secara natural.');
@@ -523,14 +523,44 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
     }
     let image, usedProvider = 'gemini', fallbackUsed = false;
     if (references.length) {
-      // D-196: multi-referensi (potret + sheet karakter + frame adegan) hanya didukung Gemini.
-      if (provider !== 'gemini') fallbackUsed = true;
-      image = await generateImageWithGemini(multiPrompt, auth, { aspect, references }); usedProvider = 'gemini';
+      // D-239: Kie (Nano Banana 2/Pro, GPT Image 2, Seedream 5.0, FLUX 2 Pro) sudah
+      // mendukung multi-referensi -> pakai mesin yang user pilih, bukan dipaksa Gemini.
+      // Kalau Kie gagal -> fallback ke Gemini (konsistensi karakter tetap terjaga).
+      if (wantsKie && !customId) {
+        try {
+          image = await generateImageWithKie(multiPrompt, aspect, auth, {
+            model: imageSpec.model.id, resolution: imageSpec.resolution, references,
+          });
+          usedProvider = 'kie';
+        } catch (kieErr) {
+          image = await generateImageWithGemini(multiPrompt, auth, { aspect, references });
+          usedProvider = 'gemini';
+          fallbackUsed = true;
+        }
+      } else {
+        // Gemini / provider custom: multi-referensi hanya didukung Gemini.
+        if (provider !== 'gemini') fallbackUsed = true;
+        image = await generateImageWithGemini(multiPrompt, auth, { aspect, references }); usedProvider = 'gemini';
+      }
     }
     else if (reference) {
-      // D-98: img2img dengan foto referensi hanya didukung Gemini — mesin lain dialihkan otomatis.
-      if (provider !== 'gemini') fallbackUsed = true;
-      image = await generateImageWithGemini(prompt, auth, { aspect, reference }); usedProvider = 'gemini';
+      // D-98: img2img dengan foto referensi — D-239: Kie juga mendukung (1 referensi).
+      if (wantsKie && !customId) {
+        try {
+          image = await generateImageWithKie(prompt, aspect, auth, {
+            model: imageSpec.model.id, resolution: imageSpec.resolution, reference,
+          });
+          usedProvider = 'kie';
+        } catch (kieErr) {
+          image = await generateImageWithGemini(prompt, auth, { aspect, reference });
+          usedProvider = 'gemini';
+          fallbackUsed = true;
+        }
+      } else {
+        // D-98: img2img hanya didukung Gemini — mesin lain dialihkan otomatis.
+        if (provider !== 'gemini') fallbackUsed = true;
+        image = await generateImageWithGemini(prompt, auth, { aspect, reference }); usedProvider = 'gemini';
+      }
     }
     else if (customId) {
       const customs = await listCustomProviders(req.supabase, req.user.id, true);
@@ -730,15 +760,21 @@ app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
     if (charsErr) return res.status(400).json({ ok: false, error: charsErr.message });
     const allCharacters = Array.isArray(ownedChars) ? ownedChars : [];
     const mentions = parseMentions(prompt, allCharacters);
-    const { images: charImages } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
+    const { images: charImages, imageIndex } = await resolveCharacterReferences(req.supabase, bucket, allCharacters, mentions);
     const sceneImage = sanitizeInlineImage(rawSceneRef);
+
+    // D-239: untuk VIDEO, frame adegan dikirim sebagai gambar PERTAMA di request,
+    // jadi nomor gambar karakter harus digeser +1 (lihat imageIndex video).
+    // Tanpa ini, prompt bilang "Gambar 1: potret Sherly" padahal gambar ke-1
+    // di request adalah frame adegan -> model salah memetakan referensi.
+    const videoImageIndex = shiftImageIndex(imageIndex, sceneImage ? 1 : 0);
 
     // Prompt final: deskripsi + blok karakter (identitas & suara) + continuity adegan.
     const promptBlocks = [prompt];
-    const charBlock = buildCharacterPromptBlock(mentions, allCharacters);
+    const charBlock = buildCharacterPromptBlock(mentions, allCharacters, videoImageIndex);
     if (charBlock) promptBlocks.push(charBlock);
     if (sceneImage) {
-      promptBlocks.push('## Referensi gambar adegan\nGambar terakhir adegan sebelumnya (referensi continuity): pertahankan lokasi, pencahayaan, wardrobe, warna, dan wajah yang konsisten. Jadikan gambar ini frame pertama adegan.');
+      promptBlocks.push('## Referensi gambar adegan\nGambar 1: frame terakhir adegan sebelumnya (referensi continuity). Pertahankan lokasi, pencahayaan, wardrobe, warna, dan wajah yang konsisten. Jadikan gambar ini frame pertama adegan.');
     }
     promptBlocks.push('Gaya video: sinematik, gerakan kamera halus dan natural, pencahayaan konsisten.');
     const finalPrompt = promptBlocks.join('\n\n');

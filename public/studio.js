@@ -78,6 +78,14 @@
       note: 'Seedance 2.0 Fast — hanya sampai 720p tapi generates lebih cepat.',
       tiers: [{ id: 'fast', label: 'Fast' }],
       defaultTier: 'fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+    // D-239: Google Gemini Omni 1.2 Flash — 15 detik + audio native.
+    { id: 'google/gemini-omni-flash-1-2', provider: 'kie', label: 'Omni 1.2 Flash', maker: 'Google',
+      durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      resolutions: ['360p', '720p', '1080p', '4k'], aspects: ['16:9', '9:16', 'auto'], audio: true, firstLastFrame: true,
+      firstLastFrameExclusive: true, maxReferences: 6,
+      note: 'Google Gemini Omni 1.2 Flash — 15 detik, audio native, referensi karakter paling konsisten.',
+      tiers: [{ id: 'standard', label: 'Standard' }],
+      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
   ];
   // D-203: katalog model gambar (Kie: Nano Banana / GPT Image / Seedream / FLUX).
   const FALLBACK_IMAGE_MODELS = [
@@ -110,7 +118,7 @@
   const durationOptions = (ctx) => (videoModelOf(ctx)?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
   const resolutionOptions = (ctx) => (videoModelOf(ctx)?.resolutions || ['720p']).map((r) => [r, r === '4k' ? '4K' : r]);
   const tierOptions = (ctx) => (videoModelOf(ctx)?.tiers || []).map((t) => [t.id, t.label]);
-  const aspectOptions = (ctx) => (videoModelOf(ctx)?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a]);
+  const aspectOptions = (ctx) => (videoModelOf(ctx)?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a === 'auto' ? 'Otomatis (model)' : a]);
   // D-200: samakan pilihan pengguna dengan kapabilitas model aktif.
   // resetToDefault=true -> pakai default model; false -> pertahankan nilai yang masih valid.
   function applyModelCaps(m, resetToDefault) {

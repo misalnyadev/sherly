@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  parseMentions, buildCharacterPromptBlock, resolveCharacterReferences,
+  parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, shiftImageIndex,
   sanitizeInlineImage, slugifyName, voiceDescriptor,
   MAX_MENTION_CHARACTERS, MAX_REFERENCE_IMAGES,
 } = await import('../server/studio-characters.js');
@@ -139,4 +139,75 @@ test('resolveCharacterReferences: file hilang di Storage -> dilewati diam-diam',
   const { images, labels } = await resolveCharacterReferences(storage, 'character-references', CHARS, mentions);
   assert.equal(images.length, 0);
   assert.equal(labels.length, 0);
+});
+
+// ===== D-239: nomor gambar referensi harus mengikuti urutan GLOBAL =====
+
+test('D-239: buildCharacterPromptBlock memakai nomor gambar global (bukan per karakter)', () => {
+  const mentions = parseMentions('@sherly @novi', CHARS);
+  // Peta global: Sherly potret=1, board=2; Novi potret=3.
+  const imageIndex = new Map([
+    [CHARS.find((c) => c.name === 'Sherly').id, { potret: 1, board: 2 }],
+    [CHARS.find((c) => c.name === 'Novi').id, { potret: 3 }],
+  ]);
+  const block = buildCharacterPromptBlock(mentions, CHARS, imageIndex);
+  // Sherly: potret Gambar 1, sheet Gambar 2
+  assert.match(block, /Gambar 2: master sheet referensi untuk Sherly/);
+  assert.match(block, /Gambar 1: foto potret resmi Sherly/);
+  // Novi: potret harus Gambar 3 (bukan "Gambar 2" seperti versi lama)
+  assert.match(block, /Gambar 3: foto potret resmi Novi/);
+  // Tidak boleh ada nomor yang bentrok/duplikat.
+  const nums = [...block.matchAll(/Gambar (\d+):/g)].map((m) => Number(m[1]));
+  assert.deepEqual(nums, [...nums].sort((a, b) => a - b), 'nomor gambar harus urut');
+  assert.equal(new Set(nums).size, nums.length, 'nomor gambar tidak boleh duplikat');
+});
+
+test('D-239: resolveCharacterReferences mengembalikan peta index gambar global', async () => {
+  const storage = fakeStorage({
+    'u/p1.png': blob('P1'), 'u/b1.png': blob('B1'), 'u/p2.png': blob('P2'),
+  });
+  const mentions = parseMentions('@sherly @novi', CHARS);
+  const { images, imageIndex } = await resolveCharacterReferences(storage, 'character-references', CHARS, mentions);
+  assert.equal(images.length, 3);
+  const sherly = CHARS.find((c) => c.name === 'Sherly').id;
+  const novi = CHARS.find((c) => c.name === 'Novi').id;
+  assert.equal(imageIndex.get(sherly).potret, 1);
+  assert.equal(imageIndex.get(sherly).board, 2);
+  assert.equal(imageIndex.get(novi).potret, 3);
+});
+
+test('D-239: tanpa peta index -> nomor gambar tidak boleh bentrok (fallback aman)', () => {
+  const mentions = parseMentions('@sherly @novi', CHARS);
+  const block = buildCharacterPromptBlock(mentions, CHARS);
+  // Tanpa peta, label pakai "Gambar referensi" (tanpa angka) -> tidak ada nomor salah.
+  const nums = [...block.matchAll(/Gambar (\d+):/g)].map((m) => Number(m[1]));
+  assert.equal(nums.length, 0, 'tanpa peta tidak boleh menyebut nomor gambar');
+  assert.match(block, /Gambar referensi/);
+});
+
+
+test('D-239: shiftImageIndex menggeser nomor gambar (video: frame adegan = gambar 1)', () => {
+  const idx = new Map([
+    ['c1', { potret: 1, board: 2 }],
+    ['c2', { potret: 3 }],
+  ]);
+  // Tanpa frame adegan -> offset 0 (gambar karakter tetap 1,2,3).
+  const same = shiftImageIndex(idx, 0);
+  assert.equal(same.get('c1').potret, 1);
+  assert.equal(same.get('c1').board, 2);
+  assert.equal(same.get('c2').potret, 3);
+  // Dengan frame adegan -> semua digeser +1 (karena frame adegan = gambar 1).
+  const shifted = shiftImageIndex(idx, 1);
+  assert.equal(shifted.get('c1').potret, 2);
+  assert.equal(shifted.get('c1').board, 3);
+  assert.equal(shifted.get('c2').potret, 4);
+  // Peta asli tidak boleh termutasi.
+  assert.equal(idx.get('c1').potret, 1);
+});
+
+test('D-239: shiftImageIndex aman untuk peta kosong / null', () => {
+  assert.equal(shiftImageIndex(null, 1).size, 0);
+  assert.equal(shiftImageIndex(new Map(), 1).size, 0);
+  const out = shiftImageIndex(new Map([['c', { potret: 1 }]]), 0);
+  assert.equal(out.get('c').board, null, 'board yang tidak ada -> null');
 });

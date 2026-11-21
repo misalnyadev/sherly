@@ -245,13 +245,22 @@ async function kieUploadReference(apiKey, mime, data) {
  * D-203: input dibangun lewat buildImageInput() sesuai skema model terpilih,
  * dan referensi dikirim sebagai `image_input` (nano-banana/seedream/flux)
  * atau `input_urls` (gpt-image).
+ *
+ * D-239: `reference` boleh array [{mime,data}] (multi-referensi karakter/adegan)
+ * — dipakai model Kie yang mendukung multi-reference (Nano Banana 2/Pro,
+ * GPT Image 2, Seedream 5.0, FLUX 2 Pro). Jumlah dibatasi maxReferences model.
  */
 async function kieImageToImage(apiKey, base, prompt, reference, aspect, model, opts = {}) {
-  const refUrl = await kieUploadReference(apiKey, reference.mime, reference.data);
   const spec = findImageModel(model) || findImageModel(DEFAULT_IMAGE_MODEL);
+  const refs = (Array.isArray(reference) ? reference : [reference])
+    .filter((r) => r && typeof r.data === 'string' && r.data.length > 8)
+    .slice(0, spec.maxReferences || 1);
+  if (!refs.length) throw new Error('Tidak ada foto referensi untuk dikirim ke Kie.');
+  const refUrls = [];
+  for (const r of refs) refUrls.push(await kieUploadReference(apiKey, r.mime, r.data));
   const input = buildImageInput(spec.schema, {
     prompt, aspect: aspect || '1:1', resolution: opts.resolution || spec.defaultResolution,
-  }, [refUrl]);
+  }, refUrls);
   const res = await fetch(base + '/api/v1/jobs/createTask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
@@ -437,7 +446,11 @@ export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {})
   }
   const { base } = kieConfig();
   const spec = findImageModel(opts.model) || findImageModel(DEFAULT_IMAGE_MODEL);
-  const reference = opts.reference && typeof opts.reference.data === 'string' && opts.reference.data.length > 8 ? opts.reference : null;
+  // D-239: `reference` bisa satu {mime,data} atau array (multi-referensi).
+  const referenceList = (Array.isArray(opts.references) ? opts.references
+    : opts.reference ? [opts.reference] : [])
+    .filter((r) => r && typeof r.data === 'string' && r.data.length > 8);
+  const reference = referenceList.length ? referenceList : null;
   let lastError = null;
   for (const attempt of attempts) {
     try {
