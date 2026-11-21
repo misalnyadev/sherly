@@ -91,8 +91,29 @@ test('D-248: logo ada di tengah layar (tagline & bar overlay absolut)', () => {
   assert.match(html, /#splash \.sp-tag\{position:absolute/);
   assert.match(html, /#splash \.sp-bar\{position:absolute/);
   // area media punya aspect ratio eksplisit + object-fit contain (logo utuh, tidak gepencet)
-  assert.match(html, /#splash \.sp-media\{[^}]*aspect-ratio:15\/16/);
+  assert.match(html, /#splash \.sp-media\{[^}]*aspect-ratio:36\/38/);
   assert.match(html, /#splash \.sp-media video[^{]*\{[^}]*object-fit:contain/);
+});
+
+test('D-248: background splash PERSIS sama dengan background app (kotak video hilang)', () => {
+  // body app: radial-gradient(ellipse at 56% -20%,#24142a 0,transparent 38%),var(--bg)
+  // splash harus memakai gradient yang sama + #070b14 (= --bg) supaya video
+  // (yang di-bake ke #070b14) menyatu tanpa kotak.
+  assert.match(html, /#splash\{[^}]*background:radial-gradient\(ellipse at 56% -20%,#24142a 0,transparent 38%\),#070b14/);
+  const bodyBg = html.match(/body\{margin:0;background:([^;]+);/);
+  assert.ok(bodyBg, 'body harus punya background');
+  assert.match(bodyBg[1], /radial-gradient\(ellipse at 56% -20%,#24142a 0,transparent 38%\)/);
+  assert.match(bodyBg[1], /var\(--bg\)/);
+});
+
+test('D-248: tagline & bar jauh di bawah logo (tidak kena logo)', () => {
+  // offset harus positif (turun) dan cukup besar dari titik tengah
+  const tag = html.match(/#splash \.sp-tag\{position:absolute;top:calc\(50% \+ min\(42vw,180px\) \+ (\d+)px\)/);
+  assert.ok(tag, 'tagline harus positioned absolut dengan offset positif');
+  assert.ok(Number(tag[1]) >= 40, `offset tagline ${tag[1]}px harus >= 40px (tidak kena logo)`);
+  const bar = html.match(/#splash \.sp-bar\{position:absolute;top:calc\(50% \+ min\(42vw,180px\) \+ (\d+)px\)/);
+  assert.ok(bar);
+  assert.ok(Number(bar[1]) > Number(tag[1]), 'progress bar harus di bawah tagline');
 });
 
 test('D-248: durasi splash >= durasi video (3,4 dtk) supaya animasi penuh', () => {
