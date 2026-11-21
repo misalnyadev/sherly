@@ -30,19 +30,21 @@
    Video MP4 neon logo + fallback WebM/GIF, poster PNG untuk yang reduced-motion. */
 #splash{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 56% -20%,#24142a 0,transparent 38%),#070b14;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity .45s ease,visibility .45s}
 #splash.done{opacity:0;visibility:hidden;pointer-events:none}
-/* D-248: video 360x540 (rasio 2:3) di-upscale ke 720x1080 -> tajam di layar HP.
-   Area media = LAYAR PENUH (100vw x 100vh) + object-fit:cover supaya video
-   diputar fullscreen: background video (#070b14) PERSIS sama dengan background
-   splash & app -> kotak video MUSTAHIL terlihat, dan tidak ada bagian atas
-   logo yang terpotong karena seluruh frame video ditampilkan. */
-#splash .sp-media{position:relative;width:100vw;height:100vh;max-height:none;display:flex;align-items:center;justify-content:center;flex:0 0 auto;overflow:hidden}
+/* D-248: video 360x640 (9:16) di-upscale ke 720x1280 -> tajam di layar HP.
+   Area media = 9:16 dengan tinggi dibatasi (max 62vh) + object-fit:contain:
+   - contain => SELURUH frame video tampil, logo TIDAK PERNAH terpotong
+     (sebelumnya object-fit:cover zoom-in 1,28x -> 30% terpotong per sisi)
+   - background video (#070b14) PERSIS sama dengan background splash & app
+     => kotak video MUSTAHIL terlihat
+   - tinggi dibatasi supaya logo tidak terlalu besar di layar HP. */
+#splash .sp-media{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;flex:0 0 auto;overflow:hidden}
 #splash .sp-media video,#splash .sp-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center}
 #splash .sp-media video{display:none}
 #splash .sp-media img{display:none}
 #splash .sp-media #splashGif{display:none}
 /* tagline & bar = overlay absolut DI BAWAH logo, jadi logo tetap pas di tengah layar */
-#splash .sp-tag{position:absolute;top:calc(50% + 24vh + 50px);font-size:9.5px;letter-spacing:.34em;color:#a9b8cd;font-weight:600;padding-left:.34em;opacity:0;animation:spFade .7s .35s ease forwards;white-space:nowrap}
-#splash .sp-bar{position:absolute;top:calc(50% + 24vh + 72px);width:96px;height:2px;border-radius:2px;background:#f044a833;overflow:hidden;opacity:0;animation:spFade .7s .5s ease forwards}
+#splash .sp-tag{position:absolute;top:calc(50% + 30vh + 40px);font-size:9.5px;letter-spacing:.34em;color:#a9b8cd;font-weight:600;padding-left:.34em;opacity:0;animation:spFade .7s .35s ease forwards;white-space:nowrap}
+#splash .sp-bar{position:absolute;top:calc(50% + 30vh + 62px);width:96px;height:2px;border-radius:2px;background:#f044a833;overflow:hidden;opacity:0;animation:spFade .7s .5s ease forwards}
 #splash .sp-bar i{display:block;height:100%;width:40%;border-radius:2px;background:linear-gradient(90deg,#ff72c5,#f044a8);animation:spSlide 1.15s ease-in-out infinite}
 @keyframes spSlide{0%{transform:translateX(-105%)}100%{transform:translateX(255%)}}
 @keyframes spFade{to{opacity:1}}
