@@ -823,6 +823,7 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       characterId: rawCharId, script: rawScript, prompt: rawPrompt,
       model: rawModel, resolution: rawResolution, aspect: rawAspect,
       voice: rawVoice, style: rawStyle, audioUrl: rawAudioUrl,
+      referenceImage: rawRefImage,
     } = req.body || {};
     const script = typeof rawScript === 'string' ? rawScript.trim() : '';
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
@@ -834,16 +835,16 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
     const { model: lipsyncModel, resolution, aspect } = spec;
 
-    // --- 2) Karakter (potret + profil suara) ---
+    // --- 2) Karakter (profil suara + nama untuk prompt) ---
+    // D-244: karakter TIDAK wajib punya potret — di mode Karakter Bicara
+    // gambar utama datang dari @mention (gambar karakter di lokasi tertentu).
+    // Karakter tetap dipakai untuk profil suara (TTS) + nama di prompt.
     if (!validUuid(rawCharId)) return res.status(400).json({ ok: false, error: 'Pilih karakter yang akan dibuat bicara.' });
     const { data: character } = await req.supabase
       .from('characters').select('id,name,voice,reference_image_path,board_path,user_id')
       .eq('id', rawCharId).maybeSingle();
     if (!character || character.user_id !== req.user.id) {
       return res.status(404).json({ ok: false, error: 'Karakter tidak ditemukan.' });
-    }
-    if (!character.reference_image_path) {
-      return res.status(400).json({ ok: false, error: 'Karakter belum punya foto potret. Upload potret dulu di menu Karakter.' });
     }
 
     // --- 3) Audio: rekaman user (audioUrl) ATAU TTS dari script ---
@@ -902,17 +903,40 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY.'), { status: 503 });
     }
     const kieKey = kieKeys[0];
-    const { data: potretBlob, error: potretErr } = await req.supabase.storage.from(bucket).download(character.reference_image_path);
-    if (potretErr || !potretBlob) {
-      return res.status(400).json({ ok: false, error: 'Gagal membaca foto potret karakter: ' + (potretErr?.message || 'file tidak ditemukan.') });
+    // D-244: gambar utama = gambar @mention (karakter di lokasi tertentu).
+    // Kalau tidak ada mention -> pakai potret karakter sebagai cadangan.
+    let imageMime = 'image/jpeg';
+    let imageBase64 = '';
+    let imageLabel = 'potret karakter';
+    let imageFrom = 'character';
+    const refImg = rawRefImage && typeof rawRefImage === 'object' ? rawRefImage : null;
+    if (refImg && typeof refImg.data === 'string' && refImg.data.length > 8) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(refImg.mime)) {
+        return res.status(400).json({ ok: false, error: 'Gambar referensi harus JPG, PNG, atau WebP.' });
+      }
+      if (refImg.data.length > 3_500_000) {
+        return res.status(400).json({ ok: false, error: 'Gambar referensi terlalu besar (maks ±2.5 MB setelah dikompres).' });
+      }
+      imageMime = refImg.mime;
+      imageBase64 = refImg.data;
+      imageLabel = 'gambar referensi';
+      imageFrom = 'mention';
+    } else if (character.reference_image_path) {
+      const { data: potretBlob, error: potretErr } = await req.supabase.storage.from(bucket).download(character.reference_image_path);
+      if (potretErr || !potretBlob) {
+        return res.status(400).json({ ok: false, error: 'Gagal membaca foto potret karakter: ' + (potretErr?.message || 'file tidak ditemukan.') });
+      }
+      const potretBuf = Buffer.from(await potretBlob.arrayBuffer());
+      imageMime = /\.jpe?g$/i.test(character.reference_image_path) ? 'image/jpeg'
+        : /\.webp$/i.test(character.reference_image_path) ? 'image/webp' : 'image/png';
+      imageBase64 = potretBuf.toString('base64');
+    } else {
+      return res.status(400).json({ ok: false, error: 'Belum ada gambar untuk karakter bicara. Mention gambar (karakter di lokasi tertentu) atau upload potret karakter dulu.' });
     }
-    const potretBuf = Buffer.from(await potretBlob.arrayBuffer());
-    const potretMime = /\.jpe?g$/i.test(character.reference_image_path) ? 'image/jpeg'
-      : /\.webp$/i.test(character.reference_image_path) ? 'image/webp' : 'image/png';
-    const imageUrl = await kieUploadBase64(kieKey, potretMime, potretBuf.toString('base64'), {
+    const imageUrl = await kieUploadBase64(kieKey, imageMime, imageBase64, {
       uploadPath: 'images/base64',
       fileName: 'lipsync-' + Date.now() + '.jpg',
-      label: 'potret karakter',
+      label: imageLabel,
     });
     const audioUrl = await kieUploadBase64(kieKey, audioMime, audioBase64, {
       uploadPath: 'audio/base64',
@@ -920,11 +944,18 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       label: 'audio karakter',
     });
 
-    // --- 5) Prompt: default friendly + arahan user ---
-    const lipPrompt = prompt || (
-      character.name + ' berbicara natural ke kamera, ekspresi wajah dan gerak kepala mengikuti nada suara, '
-      + 'bibir ter-sync dengan audio, pencahayaan studio lembut, kualitas tinggi.'
-    );
+    // --- 5) Prompt: arahan adegan user (lokasi/kamera/aksi) + default ---
+    // D-244: prompt = arahan adegan user digabung dengan default qualities.
+    // Contoh arahan: "di studio podcast, kamera close-up, dia tersenyum dan gestur".
+    const sceneHint = prompt
+      ? prompt.replace(/\s+/g, ' ').trim().slice(0, 2000)
+      : '';
+    const lipPrompt = [
+      character.name + ' berbicara natural',
+      sceneHint,
+      'ekspresi wajah dan gerak kepala mengikuti nada suara, '
+      + 'bibir ter-sync dengan audio, pencahayaan studio lembut, kualitas tinggi.',
+    ].filter(Boolean).join('. ').slice(0, 5000);
 
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
     const created = await generateLipsyncWithKie(auth, {
@@ -936,6 +967,7 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       meta: {
         kind: 'lipsync', aspect, resolution, modelLabel: lipsyncModel.label,
         characterId: character.id, characterName: character.name, audioSource,
+        imageFrom, sceneHint,
         duration: Math.min(approxSeconds, LIPSYNC_MAX_SECONDS),
       },
     });

@@ -62,6 +62,12 @@ Model Kie yang relevan:
 > galeri aset Studio. Sisa backlog Kie: `bytedance/omni-human`, `kwaivgi/kling-lip-sync`,
 > `zsxkib/multitalk` (multi-orang).
 >
+> **Alur input (D-244):** pilih karakter (**hanya untuk profil suara**) → **mention 1 gambar**
+> berisi karakter **di lokasi tertentu** (gambar itu jadi `image_url` — InfiniteTalk cuma punya
+> satu slot gambar, jadi wajah + lokasi harus dari satu gambar yang sama) → **Arahan adegan**
+> (lokasi/kamera/aksi/suasana → prompt Kie, maks 5.000 karakter) → **naskah** (→ TTS).
+> Kalau tidak ada mention, potret karakter dipakai sebagai cadangan.
+>
 > **Durasi lipsync = OTOMATIS (D-243).** InfiniteTalk tidak punya parameter durasi;
 > durasi video mengikuti **panjang naskah** (TTS membacakan naskah → audio), batas keras
 > **15 detik** (≈ 195 karakter bahasa Indonesia). UI menampilkan estimasi realtime

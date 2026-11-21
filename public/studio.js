@@ -374,7 +374,11 @@
       } catch { /* gagal muat -> lewati */ }
     }
     if (sceneRefs.length > 4) { sceneRefs = sceneRefs.slice(sceneRefs.length - 4); changed = true; }
-    if (changed) { syncSceneRef(); renderAssetHeader(); }
+    if (changed) {
+      syncSceneRef(); renderAssetHeader();
+      // D-244: bar karakter menampilkan sumber gambar utama lipsync.
+      renderLipsyncBar();
+    }
   }
 
   // ===== D-198: Galeri aset =====
@@ -870,8 +874,10 @@
     const ta = $('stPrompt');
     if (ta) {
       ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.'
-        : isLip ? 'Naskah yang dibacakan karakter…'
+        // D-244: di mode Karakter Bicara, mention gambar = karakter di lokasi tertentu.
+        : isLip ? 'Naskah… mention @ gambar karakter di lokasi tertentu'
         : 'Prompt… mention @ karakter/aset dll.';
+    // D-244: di mode lipsync, textarea utama = naskah (bukan prompt adegan).
     }
     $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
@@ -896,6 +902,8 @@
     $('stLipsyncBtn')?.classList.toggle('st-hidden', !isLip);
     // D-242: Bank Prompt (template foto/video) tidak relevan untuk naskah lipsync.
     document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip);
+    // D-244: input "Arahan adegan" hanya untuk mode Karakter Bicara.
+    $('stSceneHintBox')?.classList.toggle('st-hidden', !isLip);
     renderLipsyncBar();
     updatePillLabels();
   }
@@ -1850,6 +1858,11 @@
   function lipsyncCharacterById(id) {
     return lipsyncCharacters().find((c) => c.id === id) || null;
   }
+  // D-244: karakter punya potret (dipakai sebagai gambar cadangan).
+  function lipsyncCharacterHasPortrait() {
+    const c = lipsyncCharacterById(state.lipsyncCharacterId);
+    return !!(c && (c.reference_image_path || c.referenceImagePath));
+  }
   // D-243: durasi lipsync TIDAK bisa diset di awal — dia mengikuti panjang naskah
   // (TTS membacakan naskah, InfiniteTalk maksimal 15 detik audio).
   // Estimasi kasar: ~13 karakter/detik untuk bahasa Indonesia (naskah 15 detik
@@ -1872,10 +1885,13 @@
       const model = lipsyncModel();
       const max = model?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
       const est = estimateLipsyncSeconds(($('stPrompt') || {}).value);
+      // D-244: sumber gambar utama = mention gambar (karakter di lokasi
+      // tertentu) atau potret karakter sebagai cadangan.
+      const src = sceneRefs.length ? 'gambar mention' : (lipsyncCharacterHasPortrait() ? 'potret karakter' : 'belum ada gambar');
       // Durasi lipsync mengikuti naskah, bukan diset di awal.
       meta.textContent = est
-        ? '±' + est + ' dtk (maks ' + max + ')'
-        : (model ? model.label + ' · ' : '') + 'maks ' + max + ' dtk';
+        ? '±' + est + ' dtk (maks ' + max + ') · ' + src
+        : (model ? model.label + ' · ' : '') + 'maks ' + max + ' dtk · ' + src;
       meta.classList.toggle('st-lipsync-meta-warn', est > max);
     }
   }
@@ -1911,20 +1927,34 @@
       ta?.focus();
       return;
     }
+    // D-244: wajib ada gambar referensi (gambar karakter di lokasi tertentu).
+    // Kalau karakter punya potret, potret itu dipakai sebagai cadangan.
+    if (!sceneRefs.length && !lipsyncCharacterHasPortrait()) {
+      window.toast?.('Mention gambar karakter (lokasi tertentu) dulu ya, atau upload potret karakter.');
+      ta?.focus();
+      return;
+    }
     const btn = $('stLipsyncBtn');
     btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Menyiapkan…';
     try {
       const model = lipsyncModel();
+      // D-244: arahan adegan (lokasi/kamera/aksi) -> prompt Kie.
+      const sceneHint = ($('stSceneHint')?.value || '').trim();
+      // D-244: gambar @mention = karakter di lokasi tertentu -> image_url.
+      // Kalau tidak ada mention -> backend pakai potret karakter.
+      const refImg = sceneRefs.find((r) => r && r.mime && r.data) || null;
+      const body = {
+        characterId: state.lipsyncCharacterId,
+        script,
+        prompt: sceneHint,
+        model: model?.id || state.lipsyncModel,
+        resolution: model?.defaultResolution || '720p',
+        aspect: state.aspect,
+      };
+      if (refImg) body.referenceImage = { mime: refImg.mime, data: refImg.data };
       const r = await fetch('/api/ai/lipsync', {
         method: 'POST', headers: await authHeaders(),
-        body: JSON.stringify({
-          characterId: state.lipsyncCharacterId,
-          script,
-          prompt: '',
-          model: model?.id || state.lipsyncModel,
-          resolution: model?.defaultResolution || '720p',
-          aspect: state.aspect,
-        }),
+        body: JSON.stringify(body),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Generator karakter bicara gagal.');
@@ -2040,6 +2070,12 @@
       + '<div class="st-mention-box">'
       + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
+      + '</div>'
+      // D-244: mode "Karakter Bicara" — arahan adegan (lokasi/kamera/aksi)
+      // terpisah dari naskah yang dibacakan TTS.
+      + '<div class="st-scene-hint st-hidden" id="stSceneHintBox">'
+      + '<label for="stSceneHint">Arahan adegan</label>'
+      + '<textarea id="stSceneHint" rows="2" maxlength="1000" placeholder="mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan"></textarea>'
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
       // D-242: panel mode "Karakter Bicara" — pilih karakter yg akan bicara.
