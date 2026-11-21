@@ -2371,6 +2371,12 @@ const LIP_CATALOG = {
     { id: 'ltx/2-5-fast-audio-to-video', provider: 'kie', label: 'LTX 2.5 Fast A2V', maker: 'Lightricks',
       resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
       note: 'n', defaultResolution: '1080p', defaultAspect: '9:16' },
+    { id: 'omnihuman-1-5', provider: 'kie', label: 'OmniHuman 1.5', maker: 'ByteDance',
+      resolutions: ['720P', '1080P'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 60,
+      note: 'n', defaultResolution: '1080P', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 1 },
+    { id: 'omnihuman-2-0', provider: 'kie', label: 'OmniHuman 2.0', maker: 'ByteDance',
+      resolutions: ['720p'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 300,
+      note: 'n', defaultResolution: '720p', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 4 },
   ],
 };
 
@@ -2435,9 +2441,10 @@ test('D-245: panel Pengaturan Konten punya grup Provider, Model, Resolusi untuk 
   // Pilihan provider lipsync hanya Kie AI.
   const provs = [...panel.querySelectorAll('[data-set-key="engine"]')].map((b) => b.dataset.setV);
   assert.deepEqual(provs, ['kie'], 'provider lipsync hanya Kie AI');
-  // Ada 2 model lipsync.
+  // Ada 4 model lipsync (D-246: + OmniHuman 1.5 & 2.0).
   const models = [...panel.querySelectorAll('[data-set-key="lipmodel"]')].map((b) => b.dataset.setV);
-  assert.deepEqual(models, ['infinitalk/from-audio', 'ltx/2-5-fast-audio-to-video']);
+  assert.deepEqual(models, [
+    'infinitalk/from-audio', 'ltx/2-5-fast-audio-to-video', 'omnihuman-1-5', 'omnihuman-2-0']);
 });
 
 test('D-245: ganti model lipsync -> resolusi ikut ke default model baru & tersimpan', async () => {
@@ -2498,4 +2505,95 @@ test('D-245: request lipsync mengirim provider & resolusi terpilih', async () =>
   assert.equal(capture.body.model, 'ltx/2-5-fast-audio-to-video');
   assert.equal(capture.body.provider, 'kie');
   assert.equal(capture.body.resolution, '1440p');
+});
+
+// ===== D-246: OmniHuman 1.5 & 2.0 sebagai model Karakter Bicara =====
+
+test('D-246: panel model lipsync menampilkan 4 model (2 OmniHuman baru)', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  const models = [...panel.querySelectorAll('[data-set-key="lipmodel"]')].map((b) => b.dataset.setV);
+  assert.equal(models.length, 4, 'harus ada 4 model lipsync');
+  assert.ok(models.includes('omnihuman-1-5'), 'OmniHuman 1.5 harus bisa dipilih');
+  assert.ok(models.includes('omnihuman-2-0'), 'OmniHuman 2.0 harus bisa dipilih');
+});
+
+test('D-246: pilih OmniHuman 1.5 -> resolusi 1080P & batas 60 detik di meta', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="omnihuman-1-5"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(doc.querySelector('#stLipResPill b').textContent.trim(), '1080P');
+  const meta = doc.getElementById('stLipsyncMeta').textContent;
+  assert.match(meta, /OmniHuman 1\.5/, 'meta harus menyebut model: ' + meta);
+  assert.match(meta, /maks 60/, 'meta harus menyebut batas 60 detik: ' + meta);
+});
+
+test('D-246: pilih OmniHuman 2.0 -> hanya resolusi 720p & batas 300 detik', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="omnihuman-2-0"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(doc.querySelector('#stLipResPill b').textContent.trim(), '720p');
+  const meta = doc.getElementById('stLipsyncMeta').textContent;
+  assert.match(meta, /OmniHuman 2\.0/, 'meta harus menyebut model: ' + meta);
+  assert.match(meta, /maks 300/, 'meta harus menyebut batas 300 detik: ' + meta);
+});
+
+test('D-246: request lipsync OmniHuman 2.0 mengirim model & resolusi 720p', async () => {
+  const capture = {};
+  const { win, doc } = buildStudio(lipFetchCapture(capture));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  const realSetTimeout = win.setTimeout;
+  win.setTimeout = (fn, ms) => (ms >= 1000 ? 0 : realSetTimeout(fn, ms));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="omnihuman-2-0"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stLipsyncCharBtn'));
+  await new Promise((r) => setTimeout(r, 40));
+  click(doc.getElementById('stPop-lipsyncchar').querySelector('[data-lip-char]'));
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'Halo, aku Sherly. Ini perkenalan singkat hari ini.';
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  click(doc.getElementById('stLipsyncBtn'));
+  await new Promise((r) => setTimeout(r, 120));
+  assert.ok(capture.body, 'request lipsync tidak terkirim');
+  assert.equal(capture.body.model, 'omnihuman-2-0');
+  assert.equal(capture.body.resolution, '720p');
+});
+
+test('D-246: arahan adegan dibatasi 300 karakter untuk OmniHuman (5.000 untuk model lain)', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  const hint = doc.getElementById('stSceneHint');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="omnihuman-1-5"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(hint.getAttribute('maxlength'), '300', 'prompt OmniHuman dibatasi 300 karakter');
 });

@@ -129,7 +129,8 @@ test('D-244: prompt arahan adegan dipotong 5.000 karakter (batas Kie)', () => {
 // ===== D-245: provider lipsync + model LTX 2.5 Fast A2V =====
 
 test('D-245: katalog punya 2 model lipsync (InfiniteTalk + LTX 2.5 Fast A2V)', () => {
-  assert.equal(LIPSYNC_MODELS.length, 2);
+  // D-246: katalog bertambah menjadi 4 model (tambah OmniHuman 1.5 & 2.0).
+  assert.equal(LIPSYNC_MODELS.length, 4);
   const ltx = findLipsyncModel('ltx/2-5-fast-audio-to-video');
   assert.ok(ltx, 'LTX 2.5 A2V harus ada di katalog');
   assert.equal(ltx.label, 'LTX 2.5 Fast A2V');
@@ -197,4 +198,122 @@ test('D-245: normalizeLipsyncParams menerima fps & duration untuk LTX saja', () 
   const inf = normalizeLipsyncParams({ model: 'infinitalk/from-audio', resolution: '720p', fps: 48, duration: 10 });
   assert.equal(inf.fps, undefined);
   assert.equal(inf.duration, undefined);
+});
+
+// ===== D-246: OmniHuman 1.5 & 2.0 (digital human full-body) =====
+
+test('D-246: katalog punya 4 model lipsync (InfiniteTalk, LTX A2V, OmniHuman 1.5 & 2.0)', () => {
+  assert.equal(LIPSYNC_MODELS.length, 4);
+  const ids = LIPSYNC_MODELS.map((m) => m.id);
+  assert.deepEqual(ids, [
+    'infinitalk/from-audio',
+    'ltx/2-5-fast-audio-to-video',
+    'omnihuman-1-5',
+    'omnihuman-2-0',
+  ]);
+});
+
+test('D-246: OmniHuman 1.5 — resolusi 720P/1080P (format Kie) & maks 60 detik', () => {
+  const m = findLipsyncModel('omnihuman-1-5');
+  assert.ok(m);
+  assert.equal(m.label, 'OmniHuman 1.5');
+  assert.equal(m.maker, 'ByteDance');
+  assert.deepEqual(m.resolutions, ['720P', '1080P']);
+  assert.equal(m.maxSeconds, 60);
+  assert.equal(m.defaultResolution, '1080P');
+  assert.equal(m.schema, 'omnihuman15');
+});
+
+test('D-246: OmniHuman 2.0 — 720p, maks 300 detik (5 menit)', () => {
+  const m = findLipsyncModel('omnihuman-2-0');
+  assert.ok(m);
+  assert.equal(m.label, 'OmniHuman 2.0');
+  assert.deepEqual(m.resolutions, ['720p']);
+  assert.equal(m.maxSeconds, 300);
+  assert.equal(m.defaultResolution, '720p');
+  assert.equal(m.schema, 'omnihuman20');
+});
+
+test('D-246: buildLipsyncInput OmniHuman 1.5 — output_resolution (bukan resolution)', () => {
+  const input = buildLipsyncInput('omnihuman15',
+    { prompt: 'podcast host', resolution: '1080P' },
+    'https://img/potret.jpg', 'https://audio/a.wav');
+  assert.equal(input.output_resolution, '1080P');
+  assert.equal(input.resolution, undefined, 'OmniHuman 1.5 tidak pakai field "resolution"');
+  assert.equal(input.image_url, 'https://img/potret.jpg');
+  assert.equal(input.audio_url, 'https://audio/a.wav');
+  assert.equal(input.aspect_ratio, undefined, 'output mengikuti rasio gambar');
+  // Prompt dibatasi 300 karakter.
+  const long = buildLipsyncInput('omnihuman15', { prompt: 'a'.repeat(900), resolution: '720P' }, 'i', 'a');
+  assert.equal(long.prompt.length, 300);
+});
+
+test('D-246: buildLipsyncInput OmniHuman 2.0 — image_urls array 1 elemen', () => {
+  const input = buildLipsyncInput('omnihuman20',
+    { prompt: 'presenter', resolution: '720p' },
+    'https://img/potret.jpg', 'https://audio/a.wav');
+  assert.deepEqual(input.image_urls, ['https://img/potret.jpg']);
+  assert.equal(input.image_url, undefined, 'OmniHuman 2.0 pakai image_urls (array)');
+  assert.equal(input.resolution, undefined);
+  assert.equal(input.enable_watermark, undefined, 'watermark default true (tidak dikirim)');
+  const noWm = buildLipsyncInput('omnihuman20', { prompt: 'x', resolution: '720p', enableWatermark: false }, 'i', 'a');
+  assert.equal(noWm.enable_watermark, false);
+});
+
+test('D-246: normalizeLipsyncParams OmniHuman 1.5 menerima "1080P" huruf besar', () => {
+  const ok = normalizeLipsyncParams({ model: 'omnihuman-1-5', resolution: '1080P', aspect: '9:16' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.resolution, '1080P');
+  // Resolusi tak didukung ditolak.
+  const bad = normalizeLipsyncParams({ model: 'omnihuman-1-5', resolution: '1440p', aspect: '9:16' });
+  assert.equal(bad.ok, false);
+  // OmniHuman 2.0 hanya 720p.
+  const oh20 = normalizeLipsyncParams({ model: 'omnihuman-2-0', resolution: '1080p', aspect: '9:16' });
+  assert.equal(oh20.ok, false);
+});
+
+test('D-246: katalog kirim flag UI (promptMax, fullBody, minSeconds)', () => {
+  const cat = lipsyncCatalog();
+  const oh15 = cat.models.find((m) => m.id === 'omnihuman-1-5');
+  const oh20 = cat.models.find((m) => m.id === 'omnihuman-2-0');
+  const inf = cat.models.find((m) => m.id === 'infinitalk/from-audio');
+  assert.equal(oh15.promptMax, 300);
+  assert.equal(oh15.fullBody, true);
+  assert.equal(oh15.minSeconds, 1);
+  assert.equal(oh20.promptMax, 300);
+  assert.equal(oh20.fullBody, true);
+  assert.equal(oh20.minSeconds, 4);
+  assert.equal(inf.promptMax, 5000);
+  assert.equal(inf.fullBody, false);
+});
+
+test('D-246: findLipsyncModel mengembalikan promptMax & minSeconds (dipakai backend app.js)', () => {
+  const oh15 = findLipsyncModel('omnihuman-1-5');
+  const oh20 = findLipsyncModel('omnihuman-2-0');
+  const inf = findLipsyncModel('infinitalk/from-audio');
+  const ltx = findLipsyncModel('ltx/2-5-fast-audio-to-video');
+  assert.equal(oh15.promptMax, 300);
+  assert.equal(oh15.minSeconds, 1);
+  assert.equal(oh20.promptMax, 300);
+  assert.equal(oh20.minSeconds, 4);
+  assert.equal(inf.promptMax, 5000);
+  assert.equal(inf.minSeconds, 1);
+  assert.equal(ltx.promptMax, 5000);
+  assert.equal(ltx.minSeconds, 1);
+});
+
+test('D-246: OmniHuman 1.5 menerima resolution lowercase & uppercase (diformat ke 720P/1080P)', () => {
+  const lower = buildLipsyncInput('omnihuman15', { prompt: 'x', resolution: '1080p' }, 'i', 'a');
+  assert.equal(lower.output_resolution, '1080P');
+  const upper = buildLipsyncInput('omnihuman15', { prompt: 'x', resolution: '1080P' }, 'i', 'a');
+  assert.equal(upper.output_resolution, '1080P');
+  const low = buildLipsyncInput('omnihuman15', { prompt: 'x', resolution: '720p' }, 'i', 'a');
+  assert.equal(low.output_resolution, '720P');
+});
+
+test('D-246: seed tidak dikirim untuk OmniHuman (seed acak -1, tanpa rentang numerik)', () => {
+  const oh15 = buildLipsyncInput('omnihuman15', { prompt: 'x', resolution: '1080P', seed: 123456 }, 'i', 'a');
+  assert.equal(oh15.seed, undefined);
+  const inf = buildLipsyncInput('infinitalk', { prompt: 'x', resolution: '720p', seed: 123456 }, 'i', 'a');
+  assert.equal(inf.seed, 123456, 'InfiniteTalk tetap mengirim seed');
 });
