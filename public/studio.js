@@ -504,6 +504,9 @@
       parts.push(
         '<span class="st-asset st-asset-char' + outlineCls + outlineCls2 + '" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
         + '<span class="st-asset-face">' + characterThumb(c) + '</span>'
+        // D-225: badge user = PETAK di pojok kanan bawah, nempel di border
+        // avatar (jendela kecil). Berada di LUAR .st-asset-face supaya tidak
+        // terpotong overflow:hidden.
         + badges.join('')
         + '<button type="button" class="st-asset-x" data-mention-remove="' + esc(slugify(c.name)) + '" aria-label="Hapus ' + esc(c.name) + '">'
         + icon('x') + '</button>'
