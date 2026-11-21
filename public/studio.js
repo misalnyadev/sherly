@@ -503,11 +503,10 @@
       const outlineCls2 = hasSheet ? ' has-sheet' : '';
       parts.push(
         '<span class="st-asset st-asset-char' + outlineCls + outlineCls2 + '" tabindex="0" aria-label="' + esc(c.name) + '" data-asset-tip="' + esc(notes.join(' \u00b7 ')) + '">'
-        + '<span class="st-asset-face">' + characterThumb(c) + '</span>'
-        // D-225: badge user = PETAK di pojok kanan bawah, nempel di border
-        // avatar (jendela kecil). Berada di LUAR .st-asset-face supaya tidak
-        // terpotong overflow:hidden.
-        + badges.join('')
+        // D-226: badge user = PETAK kecil di dalam kotak avatar, sudut kanan
+        // bawah. Badge adalah ANAK dari .st-asset-face (yang overflow:hidden)
+        // sehingga tidak ada bagian yang keluar/meluber dari kotak referensi.
+        + '<span class="st-asset-face">' + characterThumb(c) + badges.join('') + '</span>'
         + '<button type="button" class="st-asset-x" data-mention-remove="' + esc(slugify(c.name)) + '" aria-label="Hapus ' + esc(c.name) + '">'
         + icon('x') + '</button>'
         + '<span class="st-asset-tip" role="tooltip">' + esc(notes.join(' \u00b7 ')) + '</span>'
