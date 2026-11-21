@@ -1211,8 +1211,8 @@
       + '<span class="st-set-head-ico">' + icon('sliders') + '</span>'
       + '<div class="st-set-head-txt"><b>Pengaturan Konten</b>'
       + '<small>Atur semua dulu, lalu tekan Simpan</small></div>'
-      // D-235: tombol X di sudut KANAN header (flex item terakhir).
-      + '<button type="button" class="st-set-close" id="stSetClose" aria-label="Tutup">' + icon('x') + '</button>'
+      // D-236: tombol X header dihapus — sudah ada tombol "Batal" di footer.
+      // Judul + deskripsi jadi punya ruang penuh tanpa terpotong.
       + '</div>'
       + '<div class="st-set-body">'
       + '<div class="st-set-row"><div class="st-set-label">' + icon('image-plus') + '<b>Jenis Konten</b></div>'
@@ -1257,13 +1257,7 @@
       popOpen = null;
       syncBackdrop();
     });
-    // D-231: tombol X = batal (buang draft, panel ditutup tanpa menerapkan).
-    $('stSetClose')?.addEventListener('click', () => {
-      cancelSettingsDraft();
-      el.classList.remove('open');
-      popOpen = null;
-      syncBackdrop();
-    });
+    // D-236: tombol X header dihapus (tombol "Batal" di footer sudah cukup).
   }
   /** D-221: buka panel pengaturan (HP). */
   function openSettingsPanel() {
