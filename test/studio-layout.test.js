@@ -1313,12 +1313,33 @@ test('D-227: badge user = kertas hitam tanpa border, nempel tepi kanan+bawah', (
   // TANPA border -> kertas hitam polos, bukan kotak ber-border pink.
   assert.ok(/border:0(;|\s)/.test(rule), 'badge harus tanpa border');
   assert.ok(!rule.includes('#ff9bdc'), 'badge tidak boleh pakai warna border pink');
-  // Kertas hitam + menyatu (tanpa box-shadow pemisah yang bikin melayang).
-  assert.ok(rule.includes('background:#0c1422'), 'badge kertas hitam');
+  // Kertas hitam semi transparan + menyatu (tanpa box-shadow pemisah yang
+  // bikin melayang). D-230: alpha 99 -> foto avatar di belakang tetap terlihat.
+  assert.ok(/background:#0c1422[0-9a-f]{2}/.test(rule), 'badge kertas hitam semi transparan');
+  assert.ok(!rule.includes('background:#0c1422;'), 'badge harus punya alpha (transparan)');
   assert.ok(!rule.includes('box-shadow'), 'badge tidak boleh ada shadow (biar nyatu, bukan melayang)');
   // Ukuran + tidak menghalang klik.
   assert.ok(rule.includes('width:14px;height:14px'), 'badge 14x14');
   assert.ok(rule.includes('pointer-events:none'), 'badge tidak boleh menghalang klik');
+});
+
+test('D-230: background badge semi transparan, foto avatar tetap terlihat', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-asset-badge\{[^}]*\}/s)[0];
+  const bg = rule.match(/background:([^;]+)/)[1].trim();
+  // Format #RRGGBB + 2 digit alpha.
+  assert.ok(/^#0c1422[0-9a-fA-F]{2}$/.test(bg), 'background harus #0c1422 + alpha hex: ' + bg);
+  const alpha = parseInt(bg.slice(7), 16);
+  assert.ok(alpha > 0 && alpha < 255, 'alpha harus di antara 0 dan 255 (semi transparan), bukan penuh');
+  // Alpha cukup tinggi supaya ikon pink tetap kontras di atas foto terang.
+  assert.ok(alpha >= 0x80, 'alpha >= 0x80 agar ikon tetap terbaca');
+  // Tetap tanpa border & tanpa shadow (biar nyatu, bukan melayang).
+  assert.ok(/border:0(;|\s)/.test(rule), 'badge tanpa border');
+  assert.ok(!rule.includes('box-shadow'), 'badge tanpa shadow');
+  // Ikon tetap pink outline.
+  const svg = css.match(/\.st-asset-badge svg\{[^}]*\}/s)[0];
+  assert.ok(svg.includes('stroke:#ff9bdc'), 'ikon badge harus pink');
+  assert.ok(svg.includes('fill:none'), 'ikon badge harus outline');
 });
 
 test('D-229: hanya kiri ATAS badge yang melengkung, bawah tetap siku', () => {
