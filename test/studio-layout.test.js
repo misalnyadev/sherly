@@ -1082,6 +1082,64 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
     + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
 
+// ===== D-233: Panel Pengaturan Konten = GRID tombol, bukan daftar ke bawah =====
+
+test('D-233: pilihan pengaturan jadi GRID (bukan wrap ke bawah)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const chips = css.match(/\.st-set-chips\{[^}]*\}/s);
+  assert.ok(chips, 'aturan .st-set-chips tidak ada');
+  // Container pilihan harus GRID, bukan flex-wrap.
+  assert.ok(chips[0].includes('display:grid'), 'container pilihan harus display:grid');
+  assert.ok(chips[0].includes('grid-template-columns'), 'harus ada grid-template-columns');
+  assert.ok(chips[0].includes('repeat(auto-fit'), 'kolom otomatis sesuai jumlah pilihan');
+  assert.ok(!chips[0].includes('flex-wrap:wrap'), 'tidak boleh wrap ke bawah (daftar)');
+  // Chip mengisi satu kolom grid.
+  const chip = css.match(/\.st-set-chip\{[^}]*\}/s);
+  assert.ok(chip[0].includes('width:100%'), 'chip harus mengisi kolom grid');
+  assert.ok(chip[0].includes('display:flex'), 'chip internal flex');
+  assert.ok(chip[0].includes('justify-content:flex-start'), 'ikon + teks rata kiri dalam chip');
+});
+
+test('D-233: header panel tidak menyempit & ada ikon badge', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const head = css.match(/\.st-set-head\{[^}]*\}/s);
+  assert.ok(head[0].includes('display:flex'), 'header harus flex');
+  assert.ok(head[0].includes('align-items:center'), 'header items center');
+  // Teks judul+subjudul boleh wrap tapi tetap pakai ruang lebar.
+  const txt = css.match(/\.st-set-head-txt\{[^}]*\}/s);
+  assert.ok(txt[0].includes('flex:1 1 auto'), 'blok teks harus mengisi sisa ruang');
+  assert.ok(txt[0].includes('min-width:0'), 'blok teks butuh min-width:0');
+  // Ikon judul dalam badge terpisah.
+  assert.ok(css.includes('.st-set-head-ico{'), 'harus ada badge ikon header');
+  // Judul tidak boleh flex:1 (bikin sempit).
+  const b = css.match(/\.st-set-head b\{[^}]*\}/s);
+  assert.ok(!b[0].includes('flex:1'), 'judul tidak boleh flex:1 (menyempit)');
+  assert.ok(b[0].includes('white-space:nowrap'), 'judul tidak boleh terpotong');
+});
+
+test('D-233 (runtime): tiap baris punya beberapa chip (bukan 1 per baris)', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  const panel = h.panel();
+  const rows = [...panel.querySelectorAll('.st-set-row')];
+  assert.ok(rows.length >= 3, 'panel harus punya beberapa baris pengaturan');
+  // Setiap baris punya >= 2 pilihan (bukan daftar 1 kolom).
+  for (const r of rows) {
+    const n = r.querySelectorAll('.st-set-chip').length;
+    assert.ok(n >= 2, 'tiap baris minimal 2 pilihan, dapat ' + n);
+  }
+  // Chip: ikon + teks dalam dua tingkat span (teks + keterangan baris kedua).
+  const chip = panel.querySelector('.st-set-chip');
+  assert.ok(chip.querySelector('svg'), 'chip harus punya ikon');
+  const spans = chip.querySelectorAll('span');
+  assert.ok(spans.length >= 2, 'chip harus punya span luar + span teks');
+  // Header: badge ikon + judul + subjudul.
+  assert.ok(panel.querySelector('.st-set-head-ico'), 'header harus punya badge ikon');
+  assert.ok(panel.querySelector('.st-set-head-txt b'), 'header harus punya judul');
+  assert.ok(panel.querySelector('.st-set-head-txt small'), 'header harus punya subjudul');
+});
+
 // ===== D-232: Panel Pengaturan Konten tampil "pro" (kartu + chip ikon + footer sticky) =====
 
 test('D-232: tiap pengaturan jadi kartu, bukan daftar teks polos', () => {

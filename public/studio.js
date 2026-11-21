@@ -1198,14 +1198,17 @@
         const on = String(o.v) === String(cur);
         // D-232: tiap pilihan punya ikon sendiri -> tampilannya lebih "pro",
         // bukan sekadar daftar teks.
+        // D-233: teks utama + keterangan (maker) jadi dua baris di dalam chip.
         const ico = setChipIcon(g.key, o.v);
         return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="' + esc(g.key) + '" data-set-v="' + esc(o.v) + '">'
-          + (ico ? icon(ico) : '') + '<span>' + esc(o.l) + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</span></button>';
+          + (ico ? icon(ico) : '')
+          + '<span><span>' + esc(o.l) + '</span>' + (o.note ? '<small>' + esc(o.note) + '</small>' : '') + '</span></button>';
       }).join('');
       return '<div class="st-set-row"><div class="st-set-label">' + icon(g.icon) + '<b>' + esc(g.label) + '</b></div>'
         + '<div class="st-set-chips">' + chips + '</div></div>';
     }).join('');
-    el.innerHTML = '<div class="st-set-head">' + icon('sliders')
+    el.innerHTML = '<div class="st-set-head">'
+      + '<span class="st-set-head-ico">' + icon('sliders') + '</span>'
       + '<div class="st-set-head-txt"><b>Pengaturan Konten</b>'
       + '<small>Atur semua dulu, lalu tekan Simpan</small></div>'
       + '<button type="button" class="st-set-close" id="stSetClose" aria-label="Tutup">' + icon('x') + '</button></div>'
