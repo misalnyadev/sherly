@@ -86,6 +86,30 @@
       note: 'Google Gemini Omni 1.2 Flash — 15 detik, audio native, referensi karakter paling konsisten.',
       tiers: [{ id: 'standard', label: 'Standard' }],
       defaultTier: 'standard', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+    // D-241: Seedance 2.5 — 30 detik, native 4K, 30 referensi, mode Draft (preview 480p).
+    { id: 'bytedance/seedance-2-5', provider: 'kie', label: 'Seedance 2.5', maker: 'ByteDance',
+      durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+      resolutions: ['480p', '720p', '1080p', '4k'], aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'],
+      audio: true, firstLastFrame: true, maxReferences: 30, longForm: true,
+      note: 'ByteDance Seedance 2.5 — sampai 30 detik, native 4K, 30 referensi multimodal.',
+      tiers: [{ id: 'standard', label: 'Standard' }, { id: 'draft', label: 'Draft (preview 480p)' }],
+      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16' },
+    // D-241: Wan 3.0 — 2-30 detik, multimodal (dokumen/webpage/audio), paling hemat.
+    { id: 'wan/3-0-video', provider: 'kie', label: 'Wan 3.0', maker: 'Alibaba',
+      durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+      resolutions: ['480p', '720p', '1080p'], aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', 'adaptive'],
+      audio: true, firstLastFrame: true, maxReferences: 10, longForm: true,
+      note: 'Alibaba Wan 3.0 — 2-30 detik, multimodal (dokumen/webpage/audio), paling hemat.',
+      tiers: [{ id: 'standard', label: 'Standard' }],
+      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '720p', defaultAspect: '9:16' },
+    // D-241: Kling 4.0 — 30 detik, 4K HDR, stereo audio, 15 referensi.
+    { id: 'kling-4-0/reference-to-video', provider: 'kie', label: 'Kling 4.0', maker: 'Kuaishou',
+      durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+      resolutions: ['720p', '1080p', '4k'], aspects: ['auto', '16:9', '9:16', '1:1', '21:9', '4:3', '3:4'],
+      audio: true, firstLastFrame: true, maxReferences: 15, longForm: true,
+      note: 'Kuaishou Kling 4.0 — 30 detik, 4K HDR, stereo audio, 15 referensi.',
+      tiers: [{ id: 'std', label: 'Standar' }, { id: 'pro', label: 'Pro' }, { id: '4K', label: '4K' }, { id: 'hdr', label: '4K + HDR' }],
+      defaultTier: 'std', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16' },
   ];
   // D-203: katalog model gambar (Kie: Nano Banana / GPT Image / Seedream / FLUX).
   const FALLBACK_IMAGE_MODELS = [
@@ -107,6 +131,16 @@
     { id: 'flux-2-pro-text-to-image', provider: 'kie', label: 'FLUX 2 Pro', maker: 'Black Forest Labs', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 4, note: 'FLUX 2 Pro — komposisi & tipografi.',
       defaultResolution: '2K', defaultAspect: '4:5' },
+    // D-241: Seedream 5.5 — background transparan, edit chain panjang.
+    { id: 'bytedance/seedream-5-5', provider: 'kie', label: 'Seedream 5.5', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '4:5', '9:16', '16:9', '3:4', '4:3', '3:2', '2:3', '5:4', '21:9'], maxReferences: 10,
+      note: 'ByteDance Seedream 5.5 — background transparan, edit chain panjang, teks kecil rapi.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
+    // D-241: GPT Image 2.6 — poster & layout paling rapi, bisa SVG/GIF & transparan.
+    { id: 'gpt-image-2-6/flare-text-to-image', provider: 'kie', label: 'GPT Image 2.6', maker: 'OpenAI', resolutions: ['1K', '2K', '4K'],
+      aspects: ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9', '2:11', '1:2'], maxReferences: 16,
+      note: 'OpenAI GPT Image 2.6 — poster & layout paling rapi, bisa SVG/GIF & transparan.',
+      defaultResolution: '2K', defaultAspect: '4:5' },
   ];
   let imageCatalog = { defaultModel: 'nano-banana-2', models: FALLBACK_IMAGE_MODELS };
   const imageModel = () => imageCatalog.models.find((m) => m.id === state.imageModel) || imageCatalog.models[0] || null;
@@ -118,7 +152,14 @@
   const durationOptions = (ctx) => (videoModelOf(ctx)?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
   const resolutionOptions = (ctx) => (videoModelOf(ctx)?.resolutions || ['720p']).map((r) => [r, r === '4k' ? '4K' : r]);
   const tierOptions = (ctx) => (videoModelOf(ctx)?.tiers || []).map((t) => [t.id, t.label]);
-  const aspectOptions = (ctx) => (videoModelOf(ctx)?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a === 'auto' ? 'Otomatis (model)' : a]);
+  const ASPECT_LABELS = {
+    '16:9': 'Landscape (16:9)', '9:16': 'Vertikal (9:16)', '1:1': 'Persegi (1:1)',
+    '4:5': 'Potret feed (4:5)', '21:9': 'Ultrawide (21:9)', '4:3': 'Layar 4:3', '3:4': 'Potret 3:4',
+    '3:2': 'Layar 3:2', '2:3': 'Potret 2:3', '5:4': 'Layar 5:4', '2:11': 'Panorama 2:11', '1:2': 'Potret 1:2',
+    'auto': 'Otomatis (model)', 'adaptive': 'Adaptif (ikut media)',
+  };
+  const aspectOptions = (ctx) => (videoModelOf(ctx)?.aspects || ['16:9', '9:16'])
+    .map((a) => [a, ASPECT_LABELS[a] || a]);
   // D-200: samakan pilihan pengguna dengan kapabilitas model aktif.
   // resetToDefault=true -> pakai default model; false -> pertahankan nilai yang masih valid.
   function applyModelCaps(m, resetToDefault) {
@@ -1174,7 +1215,7 @@
    * dari server belum ada di peta).
    */
   const SET_CHIP_ICONS = {
-    aspect: { '16:9': 'monitor', '9:16': 'smartphone', '1:1': 'square', '4:5': 'smartphone', '4:3': 'monitor', '3:4': 'smartphone' },
+    aspect: { '16:9': 'monitor', '9:16': 'smartphone', '1:1': 'square', '4:5': 'smartphone', '4:3': 'monitor', '3:4': 'smartphone', '3:2': 'monitor', '2:3': 'smartphone', '5:4': 'monitor', '21:9': 'monitor', '2:11': 'monitor', '1:2': 'smartphone', 'auto': 'sparkles', 'adaptive': 'sparkles' },
     engine: { auto: 'sparkles', kie: 'cpu', gemini: 'sparkles' },
     dur: {},
     tier: {},

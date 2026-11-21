@@ -107,6 +107,77 @@ export const VIDEO_MODELS = [
     maxReferences: 6,
   },
   {
+    // D-241: ByteDance Seedance 2.5 — video sampai 30 DETIK, native 4K,
+    // s/d 30 referensi multimodal, ada mode `draft` (preview 480p murah).
+    id: 'bytedance/seedance-2-5',
+    provider: 'kie',
+    label: 'Seedance 2.5',
+    maker: 'ByteDance',
+    schema: 'seedance25',
+    durations: range(4, 30),
+    resolutions: ['480p', '720p', '1080p', '4k'],
+    aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'],
+    audio: true,
+    firstLastFrame: true,
+    note: 'ByteDance Seedance 2.5 — sampai 30 detik, native 4K, 30 referensi multimodal.',
+    tiers: [
+      { id: 'standard', label: 'Standard' },
+      { id: 'draft', label: 'Draft (preview 480p)' },
+    ],
+    defaultTier: 'standard',
+    defaultDuration: 10,
+    defaultResolution: '1080p',
+    defaultAspect: '9:16',
+    maxReferences: 30,
+  },
+  {
+    // D-241: Alibaba Wan 3.0 — 2-30 detik, multimodal (gambar + video + audio
+    // + dokumen/PDF + webpage), paling hemat kelas atas ($0.08/dtk @720p).
+    id: 'wan/3-0-video',
+    provider: 'kie',
+    label: 'Wan 3.0',
+    maker: 'Alibaba',
+    schema: 'wan3',
+    durations: range(2, 30),
+    resolutions: ['480p', '720p', '1080p'],
+    aspects: ['16:9', '4:3', '1:1', '3:4', '9:16', 'adaptive'],
+    audio: true,
+    firstLastFrame: true,
+    note: 'Alibaba Wan 3.0 — 2-30 detik, multimodal (dokumen/webpage/audio), paling hemat.',
+    tiers: [{ id: 'standard', label: 'Standard' }],
+    defaultTier: 'standard',
+    defaultDuration: 10,
+    defaultResolution: '720p',
+    defaultAspect: '9:16',
+    maxReferences: 10,
+  },
+  {
+    // D-241: Kuaishou Kling 4.0 — 30 detik, 4K HDR, stereo audio,
+    // s/d 15 referensi (gambar/video/voice/subject).
+    id: 'kling-4-0/reference-to-video',
+    provider: 'kie',
+    label: 'Kling 4.0',
+    maker: 'Kuaishou',
+    schema: 'kling4',
+    durations: range(3, 30),
+    resolutions: ['720p', '1080p', '4k'],
+    aspects: ['auto', '16:9', '9:16', '1:1', '21:9', '4:3', '3:4'],
+    audio: true,
+    firstLastFrame: true,
+    note: 'Kuaishou Kling 4.0 — 30 detik, 4K HDR, stereo audio, 15 referensi.',
+    tiers: [
+      { id: 'std', label: 'Standar' },
+      { id: 'pro', label: 'Pro' },
+      { id: '4K', label: '4K' },
+      { id: 'hdr', label: '4K + HDR' },
+    ],
+    defaultTier: 'std',
+    defaultDuration: 10,
+    defaultResolution: '1080p',
+    defaultAspect: '9:16',
+    maxReferences: 15,
+  },
+  {
     id: 'bytedance/seedance-2-fast',
     provider: 'kie',
     label: 'Seedance 2.0 Fast',
@@ -226,6 +297,60 @@ export function buildVideoInput(schema, params, images) {
     }
     return input;
   }
+  if (schema === 'seedance25') {
+    // D-241: ByteDance Seedance 2.5 (Kie).
+    // Field: prompt, duration (4-30), resolution, aspect_ratio, generate_audio,
+    //   reference_image_urls (s/d 30), first_frame_url + last_frame_url,
+    //   omni_reference_task_type (auto/reference/edit/extend), draft (preview 480p).
+    // `draft: true` -> preview 480p murah (task id valid 7 hari) buat iterasi.
+    const input = {
+      prompt,
+      duration,
+      resolution,
+      aspect_ratio: aspect,
+      generate_audio: Boolean(audio),
+      nsfw_checker: true,
+    };
+    if (urls.length) {
+      // S/d 30 referensi (potret karakter + master sheet + frame adegan).
+      input.reference_image_urls = urls.slice(0, 30);
+    }
+    if (tier === 'draft') {
+      // Mode draft Kie: hanya 480p, buat preview murah sebelum render final.
+      input.draft = true;
+      input.resolution = '480p';
+    }
+    return input;
+  }
+  if (schema === 'wan3') {
+    // D-241: Alibaba Wan 3.0 (Kie).
+    // Field: prompt (s/d 20.000 karakter, CN+EN), duration (2-30), resolution,
+    //   aspect_ratio (termasuk 'adaptive'), audio (bool), seed, nsfw_checker,
+    //   reference_image_urls (s/d 10), first_frame_url/last_frame_url.
+    const input = {
+      prompt,
+      duration,
+      resolution,
+      aspect_ratio: aspect,
+      audio: Boolean(audio),
+      nsfw_checker: true,
+    };
+    if (urls.length) input.reference_image_urls = urls.slice(0, 10);
+    return input;
+  }
+  if (schema === 'kling4') {
+    // D-241: Kuaishou Kling 4.0 (Kie) — reference-to-video.
+    // Field: prompt (s/d 8.000), duration (3-30), resolution, aspect_ratio,
+    //   image_urls (s/d 10), video_urls (s/d 5), keep_original_sound.
+    const input = {
+      prompt,
+      duration,
+      resolution,
+      aspect_ratio: aspect,
+    };
+    if (urls.length) input.image_urls = urls.slice(0, 10);
+    return input;
+  }
   if (schema === 'seedance') {
     const input = {
       prompt,
@@ -263,6 +388,7 @@ export function videoCatalog() {
       firstLastFrame: m.firstLastFrame,
       firstLastFrameExclusive: !!m.firstLastFrameExclusive,
       maxReferences: m.maxReferences || 3,
+      longForm: !!m.durations.find((d) => d > 15),
       note: m.note,
       tiers: m.tiers,
       defaultTier: m.defaultTier,
