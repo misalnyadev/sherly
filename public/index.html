@@ -739,8 +739,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-pop-settings.open{display:block}
 /* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
 .st-pop-settings.open{display:flex;flex-direction:column}
-/* D-233/D-234/D-235: header panel — judul + deskripsi (deskripsi DI BAWAH
-   judul), tombol X di sudut KANAN header sebagai flex item terakhir. */
+/* D-233/D-234/D-235/D-236: header panel — judul + deskripsi (deskripsi DI BAWAH
+   judul). D-236: tombol X header dihapus (sudah ada "Batal" di footer) supaya
+   judul + deskripsi dapat ruang penuh dan tidak terpotong. */
 .st-set-head{display:flex;align-items:center;gap:10px;padding:2px 2px 12px;
   border-bottom:1px solid #24344e;margin-bottom:12px}
 .st-set-head-ico{width:34px;height:34px;border-radius:10px;background:#24142a;border:1px solid #5b1f4e;
@@ -752,12 +753,6 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-set-head svg{width:16px;height:16px;stroke:#ff9bdc;fill:none;flex:none}
 .st-set-head-ico svg{width:17px;height:17px}
-/* D-235: X di sudut kanan header (item flex terakhir, tidak absolute). */
-.st-set-close{margin-left:auto;flex:none;
-  width:28px;height:28px;border-radius:9px;border:1px solid #24344e;background:#0f1828;color:#91a2b9;
-  cursor:pointer;display:grid;place-items:center;padding:0;transition:.18s}
-.st-set-close:hover{border-color:#74436c;color:#ffd0ec}
-.st-set-close svg{width:14px;height:14px;stroke:#91a2b9}
 /* D-232: body scroll -> footer sticky (tidak pernah terpotong). */
 .st-set-body{display:flex;flex-direction:column;gap:10px;flex:1 1 auto;min-height:0;overflow-y:auto;
   -webkit-overflow-scrolling:touch;padding-right:2px;margin-bottom:2px}

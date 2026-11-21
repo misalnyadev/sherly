@@ -1084,14 +1084,12 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
 
 // ===== D-234: tombol X di pojok kanan modal + deskripsi header 1 baris =====
 
-test('D-234: tombol X & deskripsi header (posisi diatur D-235)', () => {
+test('D-234: tombol X & deskripsi header (X dihapus di D-236)', () => {
   const css = readFileSync('public/index.html', 'utf8');
-  const close = css.match(/\.st-set-close\{[^}]*\}/s);
-  assert.ok(close, 'aturan .st-set-close tidak ada');
-  // D-235: X di sudut kanan HEADER sebagai flex item (bukan absolute panel).
-  assert.ok(!close[0].includes('position:absolute'), 'X tidak boleh absolute (harus di header)');
-  assert.ok(close[0].includes('margin-left:auto'), 'X harus terdorong ke kanan header');
-  assert.ok(close[0].includes('flex:none'), 'X tidak boleh melebar');
+  // D-236: tombol X header dihapus (sudah ada "Batal" di footer).
+  assert.ok(!css.includes('.st-set-close{'), 'aturan .st-set-close harus dihapus');
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(!studio.includes('stSetClose'), 'tombol X (stSetClose) harus dihapus');
   // Panel tetap positioned (aman untuk absolute lain).
   const panel = css.match(/\.st-pop-settings\{[^}]*\}/);
   assert.ok(panel[0].includes('position:relative') || panel[0].includes('position:fixed'),
@@ -1110,25 +1108,38 @@ test('D-234: deskripsi header satu baris (nowrap + ellipsis)', () => {
   assert.ok(txt[0].includes('overflow:hidden'), 'blok teks header harus overflow hidden');
 });
 
-test('D-234 (runtime): X di header (posisi diatur D-235)', async () => {
+test('D-234 (runtime): X dihapus (D-236), judul & deskripsi tetap ada', async () => {
   const h = d231Harness();
   await h.win.renderStudio();
   h.openPanel();
   const panel = h.panel();
-  const x = panel.querySelector('#stSetClose');
-  assert.ok(x, 'tombol X harus ada');
-  // D-235: X anak terakhir header (di sudut kanan header).
+  // D-236: tidak ada tombol X di header.
+  assert.ok(!panel.querySelector('#stSetClose'), 'tombol X tidak boleh ada');
+  assert.ok(!panel.querySelector('.st-set-close'), 'tombol X tidak boleh ada');
+  // Header tetap punya judul + subjudul (lengkap, tidak terpotong).
   const head = panel.querySelector('.st-set-head');
-  assert.equal(x.parentElement, head, 'X harus anak langsung header');
-  assert.equal(head.lastElementChild, x, 'X harus anak TERAKHIR header (sudut kanan)');
-  // Header tetap punya judul + subjudul.
-  assert.ok(panel.querySelector('.st-set-head b'), 'judul harus ada');
-  assert.ok(panel.querySelector('.st-set-head-txt small'), 'subjudul harus ada');
-  // X tetap berfungsi (menutup panel + membatalkan draft).
+  assert.ok(head, 'header harus ada');
+  assert.ok(head.querySelector('b'), 'judul harus ada');
+  assert.ok(head.querySelector('.st-set-head-txt small'), 'subjudul harus ada');
+  // Batal di footer tetap berfungsi (menutup panel, membuang draft).
+  assert.ok(panel.querySelector('#stSetCancel'), 'tombol Batal harus ada');
   h.clickChip('aspect', '16:9');
-  h.click(x);
-  assert.ok(!panel.classList.contains('open'), 'X harus menutup panel');
-  assert.equal(h.pill('stAspectPill'), '4:5', 'X = batal, draft dibuang');
+  h.click(panel.querySelector('#stSetCancel'));
+  assert.ok(!panel.classList.contains('open'), 'Batal harus menutup panel');
+  assert.equal(h.pill('stAspectPill'), '4:5', 'Batal = batal, draft dibuang');
+});
+
+test('D-236: judul & deskripsi header dapat ruang penuh (tanpa X)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Header tanpa ruang kosong sisa tombol X.
+  const head = css.match(/\.st-set-head\{[^}]*\}/s)[0];
+  assert.ok(!/padding:[^;]*\b40px/.test(head[0]), 'header tidak perlu ruang kosong untuk X');
+  // Blok teks mengisi sisa lebar header.
+  const txt = css.match(/\.st-set-head-txt\{[^}]*\}/s)[0];
+  assert.ok(txt.includes('flex:1 1 auto'), 'blok teks harus mengisi ruang header');
+  assert.ok(txt.includes('min-width:0'), 'blok teks butuh min-width:0');
+  // Tidak ada styling .st-set-close tersisa (tombol dihapus total).
+  assert.ok(!css.includes('.st-set-close'), 'CSS .st-set-close harus dihapus');
 });
 
 test('D-235: deskripsi DI BAWAH judul di header', async () => {
