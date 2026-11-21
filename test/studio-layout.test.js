@@ -951,14 +951,14 @@ test('D-217: kursor composer ikut naik sesuai baris yang diketik', () => {
 
 // ===== D-218: badge outline di DALAM kotak karakter + kursor pas di teks =====
 
-test('D-218: badge penanda = ikon outline (posisi diatur D-225)', () => {
+test('D-218: badge penanda = ikon outline (posisi diatur D-226)', () => {
   const css = readFileSync('public/index.html', 'utf8');
   const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
   assert.ok(badge, 'aturan .st-asset-badge tidak ada');
   const rule = badge[0];
-  // D-225 supersede posisi: sekarang PETAK di pojok kanan bawah, nempel
-  // border avatar (right:-5px; bottom:-5px). Yang diuji di sini: bentuk
-  // outline (bukan filled / kertas) & ikon kecil.
+  // D-226 supersede posisi: sekarang PETAK DI DALAM pojok kanan bawah
+  // (right:2px; bottom:2px). Yang diuji di sini: bentuk outline
+  // (bukan filled / kertas) & ikon kecil.
   // Bentuk outline, bukan filled / kertas.
   assert.ok(rule.includes('border:1px solid #ff9bdc'), 'badge harus border pink (outline)');
   assert.ok(/width:1[23]px/.test(rule), 'badge kecil (12-13px)');
@@ -1289,38 +1289,52 @@ test('D-224: kotak avatar hanya ikon user; daftar mention 2 ikon (suara + bible)
   assert.ok(hbody.includes("notes.push('Punya master sheet')"), 'detail sheet di tooltip');
 });
 
-// ===== D-225: badge user = petak di pojok kanan bawah, nempel border =====
+// ===== D-226: badge user = petak DI DALAM kotak avatar, sudut kanan bawah =====
+// D-225 (badge keluar setengah nempel border) dikoreksi: user minta badge
+// tetap DI DALAM kotak avatar, di sudut kanan bawah, tanpa ada yang keluar.
 
-test('D-225: badge user berbentuk petak di pojok kanan bawah', () => {
+test('D-226: badge user = petak di dalam kotak, sudut kanan bawah', () => {
   const css = readFileSync('public/index.html', 'utf8');
   const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
   assert.ok(badge, 'aturan .st-asset-badge tidak ada');
   const rule = badge[0];
-  // Pojok kanan bawah, nempel border (nilai negatif = keluar Setengah).
-  assert.ok(rule.includes('right:-5px'), 'badge harus di pojok kanan (right:-5px)');
-  assert.ok(rule.includes('bottom:-5px'), 'badge harus di pojok bawah (bottom:-5px)');
+  // Pojok kanan bawah, DI DALAM (nilai positif, bukan negatif/keluar).
+  assert.ok(rule.includes('right:2px'), 'badge harus di dalam kanan (right:2px)');
+  assert.ok(rule.includes('bottom:2px'), 'badge harus di dalam bawah (bottom:2px)');
+  assert.ok(!/right:-\d/.test(rule), 'badge tidak boleh keluar dari kanan');
+  assert.ok(!/bottom:-\d/.test(rule), 'badge tidak boleh keluar dari bawah');
   // Bentuk petak (bukan bulat).
   assert.ok(rule.includes('border-radius:3px'), 'badge harus petak (border-radius:3px)');
   assert.ok(!rule.includes('border-radius:50%'), 'badge tidak boleh bulat');
-  // Di atas avatar (z-index) + shadow pemisah dari avatar.
-  assert.ok(rule.includes('z-index:3'), 'badge harus di atas avatar');
-  assert.ok(rule.includes('box-shadow:0 0 0 2px #070b14'), 'badge harus punya separator dari avatar');
-  // Ukuran kecil.
-  assert.ok(rule.includes('width:13px;height:13px'), 'badge 13x13');
+  // Ukuran kecil + tidak menghalang klik.
+  assert.ok(rule.includes('width:12px;height:12px'), 'badge 12x12');
+  assert.ok(rule.includes('pointer-events:none'), 'badge tidak boleh menghalang klik');
 });
 
-test('D-225: badge berada DI LUAR .st-asset-face (tidak terpotong overflow)', () => {
+test('D-226: badge ada DI DALAM .st-asset-face (tidak ada yang keluar kotak)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
   const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
-  // Badge adalah sibling dari .st-asset-face, bukan anaknya.
+  // Badge harus DI DALAM face: '...face">' + characterThumb + badges.join
   const faceIdx = hbody.indexOf('<span class="st-asset-face">');
   const badgeIdx = hbody.indexOf("badges.join('')");
+  const faceClose = hbody.indexOf('</span>', badgeIdx);
   assert.ok(faceIdx > -1, 'avatar harus ada');
   assert.ok(badgeIdx > -1, 'badge harus ada');
-  assert.ok(badgeIdx > faceIdx, 'badge harus setelah avatar (sibling, bukan anak)');
-  // Avatar punya overflow:hidden -> badge tidak boleh di dalamnya.
+  assert.ok(faceIdx < badgeIdx, 'badge harus setelah avatar dibuka');
+  assert.ok(badgeIdx < faceClose, 'badge harus DI DALAM .st-asset-face (sebelum </span>)');
+  // Avatar punya overflow:hidden -> badge otomatis terpotong di dalam kotak.
   const css = readFileSync('public/index.html', 'utf8');
   const face = css.match(/\.st-asset-face\{[^}]*\}/s);
-  assert.ok(face[0].includes('overflow:hidden'), 'avatar overflow:hidden (badge harus di luar)');
+  assert.ok(face[0].includes('overflow:hidden'), 'avatar overflow:hidden (badge terpotong di dalam)');
+});
+
+test('D-226: badge user tetap pakai ikon user', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
+  const line = hbody.split('\n').find((l) => l.includes('badges.push'));
+  assert.ok(line, 'badge push tidak ditemukan');
+  assert.ok(line.includes('st-asset-badge'), 'badge harus kelas st-asset-badge');
+  assert.ok(line.includes("icon('user')"), 'badge harus ikon user');
 });
