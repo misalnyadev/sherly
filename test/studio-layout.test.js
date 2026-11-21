@@ -1082,6 +1082,197 @@ test('D-219: inline script index.html jalan (window.toast = function, ICONS terp
     + broken.slice(0, 5).map((e) => e.dataset.icon).join(', '));
 });
 
+// ===== D-231: Pengaturan Konten = draft -> Simpan (panel tidak nutup sendiri) =====
+
+/**
+ * Harness runtime D-231: buka panel Pengaturan Konten di layout HP,
+ * pilih beberapa setting, cek panel tetap terbuka & state belum berubah,
+ * lalu terapkan lewat Simpan / Batal.
+ */
+function d231Harness() {
+  const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'http://localhost/', pretendToBeVisual: true });
+  const win = dom.window;
+  win.fetch = async () => ({ ok: true, json: async () => ({ entries: [], characters: [] }) });
+  win.confirm = () => true;
+  win.alert = () => {};
+  win.scrollTo = () => {};
+  // Paksa layout HP -> tombol jenis konten membuka PANEL pengaturan.
+  Object.defineProperty(win, 'innerWidth', { value: 420, writable: true });
+  win.eval(readFileSync('public/studio.js', 'utf8'));
+  const doc = win.document;
+  win.__sherlyStudioMode = 'photo';
+  const panel = () => doc.getElementById('stPop-settings');
+  const pill = (id) => doc.getElementById(id)?.querySelector('b')?.textContent;
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const openPanel = () => {
+    const t = doc.getElementById('stTypePill');
+    click(t.querySelector('.st-pill') || t);
+  };
+  const clickChip = (key, val) => {
+    const b = panel()?.querySelector(`[data-set-key="${key}"][data-set-v="${val}"]`);
+    if (!b) return false;
+    click(b);
+    return true;
+  };
+  const rowLabels = () => [...(panel()?.querySelectorAll('.st-set-row') || [])]
+    .map((r) => r.querySelector('.st-set-label b')?.textContent);
+  return { win, doc, panel, pill, click, openPanel, clickChip, rowLabels };
+}
+
+test('D-231 (runtime): memilih setting tidak menutup panel & state belum berubah', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  assert.ok(h.panel()?.classList.contains('open'), 'panel harus terbuka');
+  assert.ok(h.doc.getElementById('stSetSave'), 'panel harus punya tombol Simpan');
+  assert.ok(h.doc.getElementById('stSetCancel'), 'panel harus punya tombol Batal');
+
+  // Pilih rasio -> panel TETAP terbuka.
+  assert.ok(h.clickChip('aspect', '16:9'), 'chip rasio harus ada');
+  assert.ok(h.panel()?.classList.contains('open'), 'panel harus tetap terbuka setelah memilih');
+  assert.ok(h.panel()?.querySelector('[data-set-key="aspect"][data-set-v="16:9"].on'),
+    'chip terpilih harus ditandai aktif');
+
+  // State aktif BELUM berubah (pill masih nilai awal).
+  assert.equal(h.pill('stAspectPill'), '4:5', 'pill rasio tidak boleh berubah sebelum Save');
+
+  // Pilih provider lain -> panel tetap terbuka, baris Model ikut berubah.
+  assert.ok(h.clickChip('engine', 'gemini'), 'chip provider harus ada');
+  assert.ok(h.panel()?.classList.contains('open'), 'panel tetap terbuka setelah pilih provider');
+  assert.ok(!h.rowLabels().includes('Model'), 'provider non-Kie -> baris Model tidak tampil');
+  assert.ok(h.clickChip('engine', 'kie'), 'chip Kie harus ada');
+  assert.ok(h.panel()?.classList.contains('open'), 'panel tetap terbuka setelah pilih Kie');
+  assert.ok(h.rowLabels().includes('Model'), 'provider Kie -> baris Model harus tampil');
+});
+
+test('D-231 (runtime): Simpan menerapkan draft lalu menutup panel', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  h.clickChip('aspect', '9:16');
+  h.clickChip('engine', 'kie');
+  assert.equal(h.pill('stAspectPill'), '4:5', 'sebelum Save pill tidak berubah');
+  h.click(h.doc.getElementById('stSetSave'));
+  assert.ok(!h.panel()?.classList.contains('open'), 'panel harus tertutup setelah Save');
+  assert.equal(h.pill('stAspectPill'), '9:16', 'Save harus menerapkan rasio');
+  assert.equal(h.pill('stEnginePill'), 'Kie AI', 'Save harus menerapkan provider');
+});
+
+test('D-231 (runtime): Batal & klik di luar membuang draft (tidak menerapkan)', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  // Batal.
+  h.openPanel();
+  h.clickChip('aspect', '16:9');
+  assert.ok(h.panel()?.classList.contains('open'), 'panel tetap terbuka saat memilih');
+  h.click(h.doc.getElementById('stSetCancel'));
+  assert.ok(!h.panel()?.classList.contains('open'), 'panel tertutup setelah Batal');
+  assert.equal(h.pill('stAspectPill'), '4:5', 'Batal tidak boleh menerapkan pilihan');
+  // Klik di luar panel -> batal juga.
+  h.openPanel();
+  h.clickChip('aspect', '9:16');
+  h.click(h.doc.body);
+  assert.ok(!h.panel()?.classList.contains('open'), 'panel tertutup setelah klik di luar');
+  assert.equal(h.pill('stAspectPill'), '4:5', 'klik di luar tidak boleh menerapkan pilihan');
+});
+
+test('D-231 (runtime): ganti jenis konten di draft lalu Save menerapkan', async () => {
+  const h = d231Harness();
+  await h.win.renderStudio();
+  h.openPanel();
+  assert.ok(h.clickChip('type', 'video'), 'chip Video harus ada');
+  assert.ok(h.panel()?.classList.contains('open'), 'panel tetap terbuka setelah ganti jenis konten');
+  const rows = h.rowLabels();
+  assert.ok(rows.includes('Durasi'), 'mode video -> baris Durasi harus tampil');
+  assert.ok(rows.includes('Resolusi'), 'mode video -> baris Resolusi harus tampil');
+  h.click(h.doc.getElementById('stSetSave'));
+  assert.ok(!h.panel()?.classList.contains('open'), 'panel tertutup setelah Save');
+  assert.equal(h.doc.getElementById('stTypePill')?.querySelector('b')?.textContent, 'Video',
+    'Save harus menerapkan jenis konten');
+});
+
+
+test('D-231: panel Pengaturan Konten punya draft + tombol Simpan', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Draft state terpisah dari state aktif.
+  assert.ok(studio.includes('let settingsDraft = null'), 'harus ada draft pengaturan');
+  assert.ok(studio.includes('function beginSettingsDraft()'), 'harus ada mulai draft');
+  assert.ok(studio.includes('function cancelSettingsDraft()'), 'harus ada batal draft');
+  assert.ok(studio.includes('function commitSettingsDraft()'), 'harus ada terapkan draft');
+  // Panel harus punya tombol Simpan + Batal.
+  const fn = studio.slice(studio.indexOf('function buildSettingsPanel'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('stSetSave'), 'panel harus punya tombol Simpan');
+  assert.ok(body.includes('stSetCancel'), 'panel harus punya tombol Batal');
+  assert.ok(body.includes('st-set-foot'), 'panel harus punya footer');
+  // Simpan -> commit (terapkan draft) lalu tutup.
+  assert.ok(body.includes("commitSettingsDraft();"), 'Simpan harus menerapkan draft');
+  assert.ok(body.includes("el.classList.remove('open')"), 'Simpan harus menutup panel');
+});
+
+test('D-231: memilih setting TIDAK menutup panel dan TIDAK mengubah state', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function buildSettingsPanel'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  const chipHandler = body.slice(body.indexOf('data-set-key]').addEventListener ? 0 : 0);
+  // Di handler chip: applySetting lalu buildSettingsPanel (re-render, tetap buka).
+  assert.ok(body.includes('applySetting(key, b.dataset.setV);'), 'chip harus memakai applySetting');
+  assert.ok(body.includes('buildSettingsPanel();'), 'chip harus re-render panel');
+  // applySetting menulis ke draft kalau panel terbuka.
+  const ap = studio.slice(studio.indexOf('function applySetting'));
+  const apBody = ap.slice(0, ap.indexOf('\n  }'));
+  assert.ok(apBody.includes('const target = settingsDraft || state;'), 'applySetting harus menulis ke draft bila ada');
+  assert.ok(apBody.includes('if (!draftMode) updatePillLabels();'),
+    'pill label tidak boleh berubah sebelum Save');
+  // Handler global klik-diluAR tidak boleh menutup panel saat klik di dalam.
+  const doc = studio.slice(studio.indexOf("document.addEventListener('click'"));
+  const docBody = doc.slice(0, doc.indexOf('\n  });'));
+  assert.ok(docBody.includes("popOpen === 'settings'"), 'handler harus aware panel settings');
+  assert.ok(docBody.includes("e.target.closest('#stPop-settings')"),
+    'klik di dalam panel settings tidak boleh menutup panel');
+  // Elemen yang sudah di-re-render (detached) juga tidak boleh menutup panel.
+  assert.ok(docBody.includes('isConnected === false'),
+    'klik pada elemen yang sudah di-re-render tidak boleh menutup panel');
+});
+
+test('D-231: Save menerapkan draft ke state, Batal membuang draft', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const commit = studio.slice(studio.indexOf('function commitSettingsDraft'));
+  const cBody = commit.slice(0, commit.indexOf('\n  }'));
+  // Semua field draft masuk ke state.
+  for (const f of ['engine', 'aspect', 'imageModel', 'videoModel', 'duration', 'tier', 'resolution']) {
+    assert.ok(cBody.includes('state.' + f + ' = d.' + f), 'Save harus menerapkan ' + f);
+  }
+  // Draft dibuang saat commit (tidak menggantung).
+  assert.ok(cBody.includes('settingsDraft = null;'), 'draft harus dibuang setelah commit');
+  // Batal -> cancel (buang draft), state tidak berubah.
+  const fn = studio.slice(studio.indexOf('function buildSettingsPanel'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('cancelSettingsDraft();'), 'Batal harus membuang draft');
+  // X (tutup) juga batal — tidak menerapkan.
+  assert.ok(body.includes('cancelSettingsDraft();'), 'tombol X harus membuang draft');
+});
+
+test('D-231: pilihan pengaturan membaca DRAFT, bukan state', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function settingCtx'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('return settingsDraft || state;'), 'settingCtx harus pakai draft bila ada');
+  // settingValue / settingChoices / activeSettings harus lewat ctx.
+  for (const fnName of ['function settingChoices(', 'function settingValue(', 'function activeSettings(']) {
+    const seg = studio.slice(studio.indexOf(fnName));
+    const segBody = seg.slice(0, seg.indexOf('\n  }'));
+    assert.ok(segBody.includes('settingCtx()'), fnName + ' harus membaca settingCtx()');
+  }
+});
+
+test('D-231: CSS footer Simpan/Batal ada', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-set-foot'), 'harus ada CSS .st-set-foot');
+  assert.ok(css.includes('.st-set-save'), 'harus ada CSS .st-set-save');
+  assert.ok(css.includes('.st-set-cancel'), 'harus ada CSS .st-set-cancel');
+});
+
 // ===== D-220: kursor tidak meloncat saat ada referensi aktif =====
 
 test('D-220: header referensi hanya re-render kalau isinya berubah', () => {

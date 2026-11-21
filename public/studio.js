@@ -105,10 +105,12 @@
   const imageResolutionOptions = () => (imageModel()?.resolutions || ['1K', '2K', '4K']).map((r) => [r, r]);
   let videoCatalog = { defaultModel: 'veo-3-1', models: FALLBACK_VIDEO_MODELS };
   const videoModel = () => videoCatalog.models.find((m) => m.id === state.videoModel) || videoCatalog.models[0] || null;
-  const durationOptions = () => (videoModel()?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
-  const resolutionOptions = () => (videoModel()?.resolutions || ['720p']).map((r) => [r, r === '4k' ? '4K' : r]);
-  const tierOptions = () => (videoModel()?.tiers || []).map((t) => [t.id, t.label]);
-  const aspectOptions = () => (videoModel()?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a]);
+  // D-231: ctx opsional -> pakai draft pengaturan (panel) bila diberikan.
+  const videoModelOf = (ctx) => videoCatalog.models.find((m) => m.id === (ctx || state).videoModel) || videoCatalog.models[0] || null;
+  const durationOptions = (ctx) => (videoModelOf(ctx)?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
+  const resolutionOptions = (ctx) => (videoModelOf(ctx)?.resolutions || ['720p']).map((r) => [r, r === '4k' ? '4K' : r]);
+  const tierOptions = (ctx) => (videoModelOf(ctx)?.tiers || []).map((t) => [t.id, t.label]);
+  const aspectOptions = (ctx) => (videoModelOf(ctx)?.aspects || ['16:9', '9:16']).map((a) => [a, a === '9:16' ? 'Vertikal (9:16)' : a === '16:9' ? 'Landscape (16:9)' : a]);
   // D-200: samakan pilihan pengguna dengan kapabilitas model aktif.
   // resetToDefault=true -> pakai default model; false -> pertahankan nilai yang masih valid.
   function applyModelCaps(m, resetToDefault) {
@@ -169,11 +171,23 @@
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
+    // D-231: panel pengaturan konten punya draft — klik di dalam panel
+    // (pilih setting / Simpan / Batal) TIDAK boleh menutupnya diam-diam.
+    if (popOpen === 'settings') {
+      // Elemen yang diklik masih di dalam panel? -> biarkan panel terbuka.
+      if (e.target.closest && e.target.closest('#stPop-settings')) return;
+      // Elemen sudah dilepas (mis. chip yang di-re-render saat dipilih):
+      // event ini datang dari interaksi DI DALAM panel -> jangan tutup.
+      if (e.target && e.target.isConnected === false) return;
+    }
     if (popOpen && !e.target.closest('.st-pill-wrap')) {
-      document.getElementById('stPop-' + popOpen)?.classList.remove('open');
-      document.getElementById('stPop-' + popOpen)?.classList.remove('st-pop-center');
+      const was = popOpen;
+      document.getElementById('stPop-' + was)?.classList.remove('open');
+      document.getElementById('stPop-' + was)?.classList.remove('st-pop-center');
       popOpen = null;
       syncBackdrop(null);
+      // D-231: panel pengaturan ditutup tanpa Save -> draft dibuang.
+      if (was === 'settings') cancelSettingsDraft();
     }
     if (mentionOpen && !e.target.closest('.st-mention-box')) closeMention();
   });
@@ -975,14 +989,66 @@
   }
 
   // ===== D-221: Panel pengaturan konten (dropdown di HP) =====
+  // ===== D-231: draft -> Save (panel TIDAK menutup saat memilih) =====
+
+  // D-231: draft pengaturan. Selama panel terbuka, semua pembacaan setting
+  // memakai draft — bukan state aktif. State baru berubah setelah Save.
+  let settingsDraft = null;
+
+  /** Konteks setting yang aktif: draft kalau panel terbuka, else state. */
+  function settingCtx() {
+    return settingsDraft || state;
+  }
+  /** Salin state -> draft (dipakai saat panel dibuka). */
+  function beginSettingsDraft() {
+    settingsDraft = {
+      mode: state.mode, aspect: state.aspect, duration: state.duration,
+      tier: state.tier, resolution: state.resolution, engine: state.engine,
+      videoModel: state.videoModel, imageModel: state.imageModel,
+      imageResolution: state.imageResolution,
+    };
+    return settingsDraft;
+  }
+  /** Buang draft (Batal / tutup tanpa save). */
+  function cancelSettingsDraft() { settingsDraft = null; }
+  /** Terapkan draft ke state (tombol Save). */
+  function commitSettingsDraft() {
+    if (!settingsDraft) return;
+    const d = settingsDraft;
+    settingsDraft = null;
+    // Assignment dulu (semua field dari draft), baru setMode — supaya
+    // setMode() membaca model/provider yang sudah benar.
+    state.engine = d.engine;
+    state.aspect = d.aspect;
+    state.imageModel = d.imageModel;
+    state.imageResolution = d.imageResolution;
+    state.videoModel = d.videoModel;
+    state.duration = d.duration;
+    state.tier = d.tier;
+    state.resolution = d.resolution;
+    if (d.mode !== state.mode) setMode(d.mode);
+    // Rasio & resolusi mengikuti kapabilitas model terpilih.
+    if (state.mode === 'photo') {
+      const im = imageCatalog.models.find((m) => m.id === state.imageModel);
+      if (im && !im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
+    } else {
+      const vm = videoCatalog.models.find((m) => m.id === state.videoModel);
+      if (vm) applyModelCaps(vm, true);
+    }
+    // Pill "Model gambar" (Kie) ikut mengikuti provider terpilih.
+    const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+    updatePillLabels();
+  }
 
   /** Daftar pilihan untuk satu jenis pengaturan (dipakai panel & popover). */
   function settingChoices(which) {
+    const ctx = settingCtx();
     if (which === 'aspect') {
-      const list = state.mode === 'video' ? aspectOptions() : ASPECTS;
+      const list = ctx.mode === 'video' ? aspectOptions(ctx) : ASPECTS;
       return list.map(([v, l]) => ({ v, l }));
     }
-    if (which === 'dur') return durationOptions().map(([v, l]) => ({ v, l }));
+    if (which === 'dur') return durationOptions(ctx).map(([v, l]) => ({ v, l }));
     if (which === 'engine') {
       const ENGINE_NOTES = {
         auto: 'Kie → Kustom → Gemini',
@@ -993,25 +1059,27 @@
     }
     if (which === 'imgmodel') return imageCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
     if (which === 'model') return videoCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
-    if (which === 'tier') return tierOptions().map(([v, l]) => ({ v, l }));
-    if (which === 'res') return resolutionOptions().map(([v, l]) => ({ v, l }));
+    if (which === 'tier') return tierOptions(ctx).map(([v, l]) => ({ v, l }));
+    if (which === 'res') return resolutionOptions(ctx).map(([v, l]) => ({ v, l }));
     return [];
   }
   /** Nilai terpilih untuk satu jenis pengaturan. */
   function settingValue(which) {
-    if (which === 'aspect') return state.aspect;
-    if (which === 'dur') return state.duration;
-    if (which === 'engine') return state.engine;
-    if (which === 'imgmodel') return state.imageModel;
-    if (which === 'model') return state.videoModel;
-    if (which === 'tier') return state.tier;
-    if (which === 'res') return state.resolution;
+    const ctx = settingCtx();
+    if (which === 'aspect') return ctx.aspect;
+    if (which === 'dur') return ctx.duration;
+    if (which === 'engine') return ctx.engine;
+    if (which === 'imgmodel') return ctx.imageModel;
+    if (which === 'model') return ctx.videoModel;
+    if (which === 'tier') return ctx.tier;
+    if (which === 'res') return ctx.resolution;
     return '';
   }
   /** Pengaturan mana yang relevan untuk mode konten saat ini. */
   function activeSettings() {
-    const isVideo = state.mode === 'video';
-    const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+    const ctx = settingCtx();
+    const isVideo = ctx.mode === 'video';
+    const kieEngine = ctx.engine === 'kie' || ctx.engine === 'auto' || ctx.engine.startsWith('custom:');
     const list = [
       { key: 'aspect', label: 'Rasio', icon: 'smartphone' },
       { key: 'engine', label: 'Provider', icon: 'cpu' },
@@ -1026,42 +1094,75 @@
     }
     return list;
   }
-  /** Terapkan pilihan pengaturan (sama seperti handler popover biasa). */
+  /**
+   * Terapkan pilihan pengaturan.
+   * D-231: kalau panel sedang buka -> tulis ke DRAFT (state belum berubah,
+   * panel tetap terbuka). Kalau tidak -> langsung ke state (popover biasa).
+   */
   function applySetting(which, v) {
-    if (which === 'aspect') state.aspect = v;
-    if (which === 'dur') state.duration = v;
+    const target = settingsDraft || state;
+    const draftMode = !!settingsDraft;
+    if (which === 'aspect') target.aspect = v;
+    if (which === 'dur') target.duration = v;
     if (which === 'engine') {
-      state.engine = v;
-      const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-      $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+      target.engine = v;
+      if (!draftMode) {
+        const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
+        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+      }
     }
-    if (which === 'tier') state.tier = v;
-    if (which === 'res') state.resolution = v;
+    if (which === 'tier') target.tier = v;
+    if (which === 'res') target.resolution = v;
     if (which === 'imgmodel') {
-      state.imageModel = v;
-      const im = imageModel();
+      target.imageModel = v;
+      const im = imageCatalog.models.find((m) => m.id === v);
       if (im) {
-        if (!im.resolutions.includes(state.imageResolution)) state.imageResolution = im.defaultResolution || im.resolutions[0];
-        if (!im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
+        if (!im.resolutions.includes(target.imageResolution)) target.imageResolution = im.defaultResolution || im.resolutions[0];
+        if (!im.aspects.includes(target.aspect)) target.aspect = im.defaultAspect || im.aspects[0];
       }
     }
     if (which === 'model') {
-      state.videoModel = v;
-      const m = videoModel();
-      if (m) applyModelCaps(m, true);
+      target.videoModel = v;
+      const m = videoCatalog.models.find((x) => x.id === v);
+      // Kapabilitas model ikut draft: tier/durasi/resolusi/aspek disesuaikan.
+      if (m) {
+        target.tier = m.defaultTier;
+        const dur = Number(target.duration);
+        if (m.defaultDuration && m.durations.includes(Number(m.defaultDuration))) {
+          target.duration = String(m.defaultDuration);
+        } else if (!m.durations.includes(dur)) {
+          target.duration = String(m.durations[m.durations.length - 1]);
+        }
+        if (m.defaultResolution && m.resolutions.includes(m.defaultResolution)) {
+          target.resolution = m.defaultResolution;
+        } else if (!m.resolutions.includes(target.resolution)) {
+          target.resolution = m.resolutions[0];
+        }
+        if (m.defaultAspect && m.aspects.includes(m.defaultAspect)) {
+          target.aspect = m.defaultAspect;
+        } else if (!m.aspects.includes(target.aspect)) {
+          target.aspect = m.aspects.includes('9:16') ? '9:16' : m.aspects[0];
+        }
+      }
     }
-    updatePillLabels();
+    if (!draftMode) updatePillLabels();
   }
   /**
    * D-221: bangun panel pengaturan konten (dipakai di HP).
    * Panel berisi baris: nama pengaturan -> daftar pilihan (inline chip).
+   * D-231: panel TIDAK menutup saat memilih. Semua pilihan ditulis ke draft;
+   * hanya tombol "Simpan" yang menerapkan draft ke state lalu menutup panel.
    */
   function buildSettingsPanel() {
     const el = $('stPop-settings'); if (!el) return;
+    // D-231: kalau panel dibangun tanpa draft (mis. dipanggil langsung),
+    // mulai draft dari state saat ini.
+    if (!settingsDraft) beginSettingsDraft();
+    const ctx = settingCtx();
     // D-221: panel juga memuat pilihan jenis konten (Foto / Video) supaya
     // di HP semua pengaturan konten ada di satu panel.
     const typeChips = CONTENT_TYPES.map(([v, l, ico]) => {
-      const on = state.mode === v;
+      const on = ctx.mode === v;
       return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="type" data-set-v="' + esc(v) + '">'
         + icon(ico) + esc(l) + '</button>';
     }).join('');
@@ -1082,21 +1183,57 @@
       + '<div class="st-set-row"><div class="st-set-label">' + icon('image-plus') + '<b>Jenis Konten</b></div>'
       + '<div class="st-set-chips">' + typeChips + '</div></div>'
       + groups
+      + '</div>'
+      // D-231: footer Save -> terapkan draft + tutup panel.
+      + '<div class="st-set-foot">'
+      + '<button type="button" class="st-set-cancel" id="stSetCancel">Batal</button>'
+      + '<button type="button" class="st-set-save" id="stSetSave">' + icon('check') + 'Simpan</button>'
       + '</div>';
     el.querySelectorAll('[data-set-key]').forEach((b) => b.addEventListener('click', () => {
       const key = b.dataset.setKey;
       if (key === 'type') {
         const next = b.dataset.setV;
-        if (next !== state.mode) { setMode(next); buildSettingsPanel(); }
+        // D-231: ganti jenis konten di draft (state belum berubah).
+        if (next !== settingCtx().mode) {
+          settingsDraft.mode = next;
+          settingsDraft.contentType = next;
+          // Rasio & durasi mengikuti mode baru (dari state mode lama).
+          if (next === 'video') {
+            const aspects = videoModelOf(settingsDraft)?.aspects || ['16:9', '9:16'];
+            if (!aspects.includes(settingsDraft.aspect)) settingsDraft.aspect = aspects.includes('9:16') ? '9:16' : aspects[0];
+          } else if (!ASPECTS.some((v) => v[0] === settingsDraft.aspect)) settingsDraft.aspect = '4:5';
+        }
+        buildSettingsPanel();
         return;
       }
+      // D-231: tulis ke draft, panel TETAP terbuka.
       applySetting(key, b.dataset.setV);
       buildSettingsPanel();
     }));
-    $('stSetClose')?.addEventListener('click', () => { el.classList.remove('open'); popOpen = null; syncBackdrop(); });
+    $('stSetSave')?.addEventListener('click', () => {
+      commitSettingsDraft();
+      el.classList.remove('open');
+      popOpen = null;
+      syncBackdrop();
+    });
+    $('stSetCancel')?.addEventListener('click', () => {
+      cancelSettingsDraft();
+      el.classList.remove('open');
+      popOpen = null;
+      syncBackdrop();
+    });
+    // D-231: tombol X = batal (buang draft, panel ditutup tanpa menerapkan).
+    $('stSetClose')?.addEventListener('click', () => {
+      cancelSettingsDraft();
+      el.classList.remove('open');
+      popOpen = null;
+      syncBackdrop();
+    });
   }
   /** D-221: buka panel pengaturan (HP). */
   function openSettingsPanel() {
+    // D-231: mulai draft baru dari state saat panel dibuka.
+    beginSettingsDraft();
     buildSettingsPanel();
     const el = $('stPop-settings');
     if (!el) return;

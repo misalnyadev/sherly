@@ -752,6 +752,17 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-set-chip small{font-size:10px;color:var(--muted)}
 .st-set-chip.on{border-color:#f044a8;background:#24142a;color:#ffd0ec}
 .st-set-chip.on small{color:#ffd0ec}
+/* D-231: footer panel pengaturan — Batal + Simpan. Simpan yang menerapkan
+   draft setting lalu menutup panel. */
+.st-set-foot{display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #24344e}
+.st-set-foot button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 12px;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer;
+  border:1px solid #24344e;background:#0f1828;color:#cfd6e4;font-family:inherit}
+.st-set-foot button svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.st-set-cancel:hover{border-color:#74436c;color:#ffd0ec}
+.st-set-save{border-color:#f044a8!important;background:#f044a8!important;color:#fff!important}
+.st-set-save:hover{background:#d82d91!important;border-color:#d82d91!important}
+.st-set-save svg{stroke:#fff!important}
 /* ===== D-221 mobile: hanya tombol jenis konten + tombol buat ===== */
 @media(max-width:560px){
   .st-settings-pills{display:none!important}
