@@ -20,6 +20,13 @@ echo "▸ Menginstal dependency Motion Graphics (Remotion)…"
 cd "$MG_DIR"
 npm install --no-audit --no-fund
 
+# dependency root ikut reinstall — `npm install` di sub-project bisa mengosongkan
+# node_modules root kalau keduanya berbagi cache workspace.
+echo ""
+echo "▸ Memastikan dependency repo utama terpasang…"
+cd "$ROOT"
+npm install --no-audit --no-fund
+
 echo ""
 echo "✓ Selesai. Sub-project Remotion siap di $MG_DIR"
 echo ""

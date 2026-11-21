@@ -986,7 +986,9 @@
         // D-244: di mode Karakter Bicara, mention gambar = karakter di lokasi tertentu.
         : isLip ? 'Naskah… mention @ gambar karakter di lokasi tertentu'
         // D-249: di mode Motion Graphics, isi = teks yang akan dirender.
-        : isMotion ? (motionTemplate()?.fields?.[0]?.placeholder || 'Isi yang mau dirender…')
+        // Kolom pertama template punya input sendiri di bar Motion Graphics,
+        // jadi composer cukup generik (bukan mengulang placeholder yg sama).
+        : isMotion ? 'Isi tambahan… (opsional)'
         : 'Prompt… mention @ karakter/aset dll.';
     // D-244: di mode lipsync, textarea utama = naskah (bukan prompt adegan).
     }
