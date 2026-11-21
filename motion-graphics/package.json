@@ -1,0 +1,27 @@
+{
+  "name": "sherly-motion-graphics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remotion compositions untuk mode Motion Graphics SherlyStudio (render lokal/server sendiri, $0).",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render",
+    "compositions": "remotion compositions"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.545",
+    "@remotion/cli": "4.0.545",
+    "@remotion/renderer": "4.0.545",
+    "@sparticuz/chromium": "^153.0.0",
+    "puppeteer-core": "^25.18.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.545"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "typescript": "5.7.2"
+  }
+}

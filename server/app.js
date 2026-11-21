@@ -23,6 +23,11 @@ import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUplo
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
+// D-249: Mode "Motion Graphics" — render video programatik (Remotion, lokal/server sendiri).
+import {
+  MOTION_GRAPHICS_PROVIDER, MG_TEMPLATES, motionGraphicsAvailable,
+  normalizeRenderRequest, renderMotionGraphic,
+} from './motion-graphics.js';
 // D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
 import {
   PROMPT_KINDS, PROMPT_CATEGORIES, PROMPT_MODES, PROMPT_GROUPS, SEED_PROMPT_BANK,
@@ -659,6 +664,117 @@ app.delete('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res)
     res.json(result);
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menghapus aset.' });
+  }
+});
+
+// ===== D-249: Runner render Motion Graphics =====
+//
+// Render dijalankan di background (tidak awaited di dalam request HTTP)
+// supaya:
+//   - request POST langsung balas (user tidak menunggu render selesai),
+//   - batas maxDuration server (60 dtk) tidak kills proses render.
+//
+// Status task: queued -> rendering -> done / error. Progres 0-100.
+
+async function runMotionGraphicsRender(req, task, spec) {
+  const supabase = req.supabase;
+  const userId = req.user.id;
+  try {
+    await updateVideoTask(supabase, userId, task.id, { status: 'rendering', progress: 1 });
+    const result = await renderMotionGraphic(spec, {
+      onProgress: ({progress}) => {
+        // Progres render Remotion 0-100; skala ke 5-95 supaya ada ruang
+        // untuk tahap simpan aset di ujung.
+        updateVideoTask(supabase, userId, task.id, { progress: 5 + Math.round(progress * 0.9) })
+          .catch(() => {});
+      },
+    });
+    const asset = await saveAsset(supabase, userId, {
+      buffer: result.buffer,
+      mimetype: 'video/mp4',
+      originalname: `motion-graphics-${spec.template.id}.mp4`,
+    }, {
+      kind: 'generate',
+      prompt: task.prompt || '',
+      meta: {
+        kind: 'motion-graphics',
+        template: spec.template.id,
+        templateLabel: spec.template.label,
+        composition: spec.compositionId,
+        aspect: spec.aspect,
+        width: result.width,
+        height: result.height,
+      },
+      width: result.width,
+      height: result.height,
+      durationMs: result.durationMs,
+    });
+    await updateVideoTask(supabase, userId, task.id, {
+      status: 'done',
+      progress: 100,
+      asset_id: asset.id,
+    });
+  } catch (error) {
+    await updateVideoTask(supabase, userId, task.id, {
+      status: 'error',
+      error: String(error?.message || error || 'Render gagal.').slice(0, 500),
+    }).catch(() => {});
+  }
+}
+
+// ===== D-249: Mode "Motion Graphics" (render video programatik, Remotion) =====
+//
+// Render berjalan lokal di server (BUKAN AWS Lambda) -> biaya $0.
+// Karena proses render + encode bisa melebihi batas maxDuration server (60 dtk),
+// render dibuat sebagai TASK di tabel public.sherly_video_tasks
+// (provider='remotion'), lalu UI poll progresnya.
+
+app.get('/api/studio/motion-graphics/templates', requireUser, requireAdmin, async (_req, res) => {
+  try {
+    const availability = await motionGraphicsAvailable();
+    res.json({
+      ok: true,
+      available: availability.ok,
+      reason: availability.ok ? null : availability.reason,
+      templates: MG_TEMPLATES,
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || 'Gagal memuat template Motion Graphics.' });
+  }
+});
+
+app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const spec = normalizeRenderRequest(req.body || {});
+    const task = await createVideoTask(req.supabase, req.user.id, {
+      provider: MOTION_GRAPHICS_PROVIDER,
+      model: spec.compositionId,
+      prompt: String(spec.inputProps.title || spec.inputProps.value || spec.inputProps.captionsText || '').slice(0, 2000),
+      meta: {
+        kind: 'motion-graphics',
+        template: spec.template.id,
+        templateLabel: spec.template.label,
+        aspect: spec.aspect,
+        duration: spec.durationInSeconds,
+        width: spec.width,
+        height: spec.height,
+      },
+    });
+    // Render berjalan di background supaya request HTTP tidak menunggu lama.
+    runMotionGraphicsRender(req, task, spec).catch(() => {});
+    res.json({ ok: true, task });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal membuat render Motion Graphics.' });
+  }
+});
+
+app.get('/api/studio/motion-graphics/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const task = await getVideoTask(req.supabase, req.user.id, req.params.id);
+    if (!task) return res.status(404).json({ ok: false, error: 'Render tidak ditemukan.' });
+    res.json({ ok: true, task });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat status render.' });
   }
 });
 

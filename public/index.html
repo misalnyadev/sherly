@@ -736,6 +736,20 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-lipsync-meta{font-size:10.5px;color:#5d6f88;flex:none;text-align:right;line-height:1.35;max-width:52%}
 /* D-243: estimasi durasi naskah melebihi batas 15 detik -> beri peringatan. */
 .st-lipsync-meta-warn{color:#ff9bdc;font-weight:600}
+/* D-249: mode "Motion Graphics" — baris template + isi yang akan dirender. */
+.st-motion-bar{margin-top:10px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:10px 11px}
+.st-motion-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+.st-motion-head svg{width:14px;height:14px;stroke:#ff72c5;fill:none;stroke-width:2;flex:none}
+.st-motion-head b{font-size:12.5px;font-weight:700;color:#f4f5fb}
+.st-motion-head small{font-size:10.5px;color:#5d6f88;flex:1 1 100%;line-height:1.4}
+.st-motion-fields{display:flex;flex-direction:column;gap:8px}
+.st-motion-field{display:block}
+.st-motion-field>span{display:block;font-size:10.5px;color:#91a2b9;margin-bottom:4px}
+.st-motion-field input,.st-motion-field textarea{width:100%;background:#0f1828;color:#fff;
+  border:1px solid #24344e;border-radius:10px;padding:8px 10px;font:inherit;font-size:12.5px}
+.st-motion-field textarea{resize:vertical;min-height:44px;line-height:1.4}
+.st-motion-field input::placeholder,.st-motion-field textarea::placeholder{color:#5d6f88}
+.st-motion-field input:focus,.st-motion-field textarea:focus{outline:none;border-color:#f044a8}
 /* D-244: input "Arahan adegan" (lokasi/kamera/aksi) untuk mode Karakter Bicara. */
 .st-scene-hint{margin-top:8px}
 .st-scene-hint label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}
