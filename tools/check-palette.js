@@ -22,6 +22,7 @@ const HEX_ALLOW = new Set([
   '#f044a8', '#ff72c5', '#ff9bdc', '#ffd0ec', '#d82d91', '#b02d80', '#9b1c67',
   '#f044a810', '#f044a814', '#f044a81f', '#f044a820', '#f044a825', '#f044a826', '#f044a82a',
   '#f044a833', '#f044a840', '#f044a844', '#f044a845', '#f044a866', '#f044a877', '#f044a880',
+  '#f044a855', // D-232: ring tipis pada chip pengaturan yang aktif
   '#ff72c533', '#ff72c536', '#ff72c552', '#ff72c580', '#ff72c599', '#ff72c5b3',
   '#d82d9126', '#d82d91aa', '#d82d91cc', '#b02d8026',
   // teks
