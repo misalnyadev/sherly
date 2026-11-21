@@ -1491,7 +1491,8 @@
     ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'prompt', 'actions', 'lipsyncchar']
       .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
     el.classList.add('open');
-    el.classList.add('st-pop-center');
+    // D-247: HP = modal tengah; PC = dropdown di atas pemicu (gaya flow).
+    el.classList.toggle('st-pop-center', isMobileLayout());
     popOpen = 'settings';
     syncBackdrop();
   }
@@ -2213,7 +2214,7 @@
       + '</div>'
       + '</div>'
       + '<div class="st-mention-box">'
-      + '<textarea id="stPrompt" rows="3" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
+      + '<textarea id="stPrompt" rows="1" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
       // D-244: mode "Karakter Bicara" — arahan adegan (lokasi/kamera/aksi)
@@ -2252,8 +2253,6 @@
       // D-245: resolusi lipsync (dipakai model InfiniteTalk / LTX 2.5 A2V).
       + '<div class="st-pill-wrap st-hidden" id="stLipResPillWrap"><button type="button" class="st-pill" id="stLipResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-lipres"></div></div>'
       + '</div>'
-      // D-221: panel pengaturan konten (dropdown/modal di HP).
-      + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
       // D-243: semua tombol generate pakai label seragam "Buat" + ikon per mode,
       // supaya tombol tidak melebar dan tidak turun baris di HP.
@@ -2262,6 +2261,9 @@
       // D-242: mode "Karakter Bicara" (lipsync) -> potret + audio -> video bicara.
       + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn" title="Buat Video Bicara">' + icon('mic') + ' Buat</button>'
       + '</div>'
+      // D-221/D-247: panel pengaturan konten — dipakai HP (modal tengah) & PC
+      // (dropdown di atas pemicu). Anak langsung composer supaya posisinya stabil.
+      + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
       + '<div class="st-lightbox" id="stLightbox"></div>';
@@ -2306,12 +2308,11 @@
     $('stDurPill')?.querySelector('.st-pill').addEventListener('click', () => { buildPop('dur'); togglePop('dur'); });
     $('stModelPill')?.addEventListener('click', () => { buildPop('model'); togglePop('model'); });
     // D-203: pill jenis konten (satu kotak) & pill model gambar.
-    // D-221: di HP tombol jenis konten membuka PANEL PENGATURAN (semua setelan
-    // konten di satu tempat); di PC tetap dropdown Foto/Video biasa.
-    $('stTypePill')?.addEventListener('click', () => {
-      if (isMobileLayout()) { openSettingsPanel(); return; }
-      buildPop('type'); togglePop('type');
-    });
+    // D-221: di HP tombol jenis konten membuka PANEL PENGATURAN.
+    // D-247: SEKARANG PC juga pakai PANEL PENGATURAN yang sama (satu tampilan
+    // untuk HP & PC). Pill baris (Rasio/Mesin/Model/Duration/...) disembunyikan
+    // di semua device supaya composer tetap ringkas & transparan.
+    $('stTypePill')?.addEventListener('click', () => { openSettingsPanel(); });
     $('stImgModelPill')?.addEventListener('click', () => { buildPop('imgmodel'); togglePop('imgmodel'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });

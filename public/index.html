@@ -577,18 +577,30 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    tinggi 100vh-96px membuat komposer justru terangkat ~45px dari bawah. */
 #studioView.active{display:flex;flex-direction:column;height:calc(100vh - 91px);min-height:420px;padding:0;margin-bottom:-28px}
 #studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:0}
-.st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
+/* D-247: ruang atas untuk tombol Unggah (pojok kanan) — composer jadi flow
+   sehingga grid aset boleh penuh lebar, tapi tombol Unggah tidak boleh ketiban. */
+.st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px;padding-top:46px}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
 .st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
 .st-stage-empty b{color:#fff;font-size:13.5px;font-weight:600}
 .st-stage-empty p{margin:0;font-size:12px;max-width:420px;line-height:1.6}
 .st-stage-empty b+p b{color:#ffd0ec}
-.st-composer{position:sticky;bottom:0;z-index:30;flex-shrink:0;background:linear-gradient(180deg,rgba(4,7,15,0),#070b14 26%),linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:16px;padding:14px;box-shadow:0 -10px 30px #04070fcc}
+/* D-247: composer jadi "flow" — TRANSPARAN, COMPACT, di TENGAH horizontal,
+   tetap menempel di BAWAH halaman. Tidak lagi kotak besar melintang full
+   width yang memakan ruang grid aset. PC & HP satu tampilan. */
+.st-composer{position:sticky;bottom:0;z-index:30;flex-shrink:0;align-self:center;
+  width:100%;max-width:760px;box-sizing:border-box;
+  background:linear-gradient(180deg,rgba(4,7,15,0),rgba(4,7,15,.72) 34%,rgba(4,7,15,.86));
+  border:1px solid #24344e;border-radius:18px;padding:9px 12px;
+  box-shadow:0 8px 26px #04070fcc}
+  /* Catatan: TIDAK pakai backdrop-filter/transform di .st-composer — filter itu
+     membuat containing block baru sehingga `position:fixed` panel pengaturan
+     (HP) jadi relatif ke composer, bukan viewport. */
 /* D-196: Header Aset ala Google Flow — penanda karakter & gambar referensi */
 /* D-197: header aset disembunyikan saat kosong — hanya muncul bila ada aset aktif */
 /* D-214: baris atas composer = referensi (karakter/gambar) + menu prompt SEBARIS.
    Supaya composer cuma naik 1 baris, bukan 2x lipat. */
-.st-composer-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;min-width:0}
+.st-composer-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;min-width:0}
 .st-composer-top .st-asset-header{flex:1 1 auto;min-width:0;margin-bottom:0}
 .st-composer-top .st-tools-menu-row{flex-shrink:0;margin-bottom:0}
 /* D-215: header referensi = kumpulan ICON foto saja (tanpa nama, tanpa kapsul).
@@ -713,12 +725,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-composer label{display:block;font-size:11px;color:#91a2b9;margin-bottom:5px;letter-spacing:.02em}
 /* D-222: area tulis prompt MENYATU dengan kotak form — background & border
    sama, tanpa pembeda warna -> area tulis terlihat lebih luas. */
+/* D-247: area ketik composer ringkas (2 baris) — hemat tinggi grid aset. */
 .st-composer textarea{width:100%;box-sizing:border-box;background:transparent;border:0;border-radius:0;
+  min-height:44px;resize:none;
   color:#fff;font:inherit;font-size:13.5px;line-height:1.55;padding:2px 0 6px;resize:none;
   height:44px;min-height:44px;max-height:150px;overflow-y:auto;outline:0}
 .st-composer textarea:focus{border:0;outline:0;box-shadow:none}
 .st-composer textarea::placeholder{color:#91a2b9;opacity:1}
-.st-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.st-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 .st-pill-wrap{position:relative}
 .st-pill{height:38px;padding:0 12px;border-radius:10px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;font-size:12px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
 .st-pill:hover{border-color:#49334e;box-shadow:0 0 0 3px #f044a814}
@@ -753,12 +767,18 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* Tombol jenis konten jadi pemicu panel pengaturan di HP. */
 .st-type-btn{gap:6px}
 .st-type-btn [data-icon]:last-child{opacity:.75}
-.st-settings-pills{display:contents}
-/* Panel pengaturan (dipakai di HP, tersembunyi di desktop). */
-.st-pop-settings{display:none;position:relative}
-.st-pop-settings.open{display:block}
-/* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
+/* D-247: pill baris (Rasio/Mesin/Model/Duration/...) disembunyikan di SEMUA
+   device — semua setelan hidup di panel Pengaturan (satu panel HP & PC). */
+.st-settings-pills{display:none!important}
+/* Panel pengaturan — D-247: dipakai di HP & PC (satu tampilan).
+   Di PC jadi dropdown yang menempel di atas pemicu (bukan modal tengah),
+   di HP tetap modal tengah (lihat media query di bawah). */
+.st-pop-settings{display:none;position:absolute;left:0;right:0;bottom:calc(100% + 8px);
+  width:auto;max-width:none;max-height:min(70vh,560px);
+  background:#0c1422f7;border:1px solid #24344e;border-radius:16px;padding:14px;
+  box-shadow:0 18px 50px #000c;z-index:120;overflow:hidden}
 .st-pop-settings.open{display:flex;flex-direction:column}
+/* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
 /* D-233/D-234/D-235/D-236: header panel — judul + deskripsi (deskripsi DI BAWAH
    judul). D-236: tombol X header dihapus (sudah ada "Batal" di footer) supaya
    judul + deskripsi dapat ruang penuh dan tidak terpotong. */
@@ -820,8 +840,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   .st-type-wrap{flex:none}
   .st-controls{gap:8px}
   .st-count{margin-left:auto}
-  .st-pop-settings{position:fixed;left:50%;top:50%;bottom:auto;right:auto;transform:translate(-50%,-50%);
-    width:94vw;max-width:94vw;max-height:min(86vh,620px);background:#0c1422f7;border:1px solid #24344e;
+  /* D-247: di HP panel = modal tengah (fixed) — menang atas .st-pop-settings desktop. */
+  .st-pop.st-pop-settings{position:fixed!important;left:50%!important;top:50%!important;bottom:auto!important;right:auto!important;transform:translate(-50%,-50%)!important;
+    width:94vw;max-width:94vw;max-height:min(80vh,560px);background:#0c1422f7;border:1px solid #24344e;
     border-radius:18px;padding:14px;box-shadow:0 24px 70px #000d;z-index:120;overflow:hidden;
     display:none;flex-direction:column}
   .st-pop-settings.open{display:flex}
@@ -949,7 +970,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#111a2e 30%,#1c2b40 50%,#111a2e 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
 
 /* ===== D-198: Galeri Aset Studio (flat grid di atas komposer) ===== */
+/* D-247: grid aset lebih luas di PC (thumbnail lebih besar) — HP tetap 2 kolom. */
 .st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:0 0 10px;align-content:start}
+@media(min-width:900px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}}
 .st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:12px;background:#101b2c;overflow:hidden;cursor:pointer;aspect-ratio:1/1;transition:border-color .18s,box-shadow .18s}
 .st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
 .st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
@@ -990,7 +1013,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-vp-cancel{margin-left:auto;padding:4px 10px;border-radius:8px;border:1px solid #24344e;background:transparent;color:var(--muted);font:inherit;font-size:10.5px;cursor:pointer}
 .st-vp-cancel:hover{border-color:#f044a8;color:#ff9bdc}
 @keyframes stShimmer{to{background-position:-200% 0}}
-@media(max-width:560px){.st-composer{padding:14px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.st-stage{padding-top:44px}.st-tabs-inline{width:100%}.st-tab{flex:1;justify-content:center;padding:9px 12px}}
+@media(max-width:560px){.st-composer{padding:10px 12px}.st-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.st-stage{padding-top:44px}.st-tabs-inline{width:100%}.st-tab{flex:1;justify-content:center;padding:9px 12px}}
 .pl-actions{display:flex;gap:6px}
 .pl-actions button{background:transparent;border:1px solid #24344e;color:#91a2b9;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;transition:.18s}
 .pl-actions button:hover{border-color:#f044a8;color:#ffd0ec}
