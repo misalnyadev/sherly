@@ -231,12 +231,12 @@ test('D-213: aksi prompt jadi menu dropdown di dalam kotak composer (1 baris)', 
   const btn = doc.getElementById('stPromptMenuBtn');
   assert.ok(btn, 'tombol menu utama tidak ada');
   assert.ok(btn.classList.contains('st-menu-btn'), 'tombol menu harus pakai .st-menu-btn');
-  // 4 aksi ada sebagai item menu, urut Reset - Prompt - Optimalkan - Copy.
+  // 4 aksi ada sebagai item menu, urut Reset - Prompt - Optimasi - Copy.
   const items = [...doc.querySelectorAll('#stPop-actions .st-menu-item')];
   assert.equal(items.length, 4, 'harus ada 4 item menu');
   assert.deepEqual(items.map((i) => i.id),
     ['stResetPromptBtn', 'stPromptPill', 'stOptimizeBtn', 'stCopyPromptBtn'],
-    'urutan item menu harus Reset - Prompt - Optimalkan - Copy');
+    'urutan item menu harus Reset - Prompt - Optimasi - Copy');
   // Tiap item punya ikon (data-icon, sesuai pola ICONS app) + tulisan.
   for (const it of items) {
     const ic = it.querySelector('[data-icon]');
@@ -736,7 +736,7 @@ test('D-214: item menu prompt tidak punya keterangan (hanya ikon + judul)', asyn
   await new Promise((r) => setTimeout(r, 50));
   const items = [...doc.querySelectorAll('#stPop-actions .st-menu-item')];
   assert.equal(items.length, 4, 'harus ada 4 item menu');
-  const expected = ['Reset', 'Prompt', 'Optimalkan', 'Copy'];
+  const expected = ['Reset', 'Prompt', 'Optimasi', 'Copy'];
   items.forEach((it, i) => {
     assert.equal(it.querySelectorAll('small').length, 0, 'item ' + it.id + ' tidak boleh punya keterangan');
     assert.ok(it.querySelector('[data-icon]'), 'item ' + it.id + ' harus punya ikon');
@@ -1156,6 +1156,100 @@ test('D-235: deskripsi DI BAWAH judul di header', async () => {
   const rule = css.match(/\.st-set-head-txt\{[^}]*\}/s)[0];
   assert.ok(rule.includes('flex-direction:column'), 'blok teks harus column (deskripsi di bawah)');
   assert.ok(!rule.includes('flex-direction:row'), 'blok teks tidak boleh row (deskripsi sebaris)');
+});
+
+// ===== D-237: label "Optimasi" + kotak search Bank Prompt =====
+
+test('D-237: aksi.optimasi ditulis "Optimasi" (bukan "Optimalkan")', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Label di menu item.
+  assert.ok(studio.includes("id=\"stOptimizeBtn\" data-action=\"optimize\">' + icon('sparkles') + ' <span>Optimasi</span>"),
+    'item menu harus berlabel "Optimasi"');
+  // Label tombol saat proses.
+  assert.ok(studio.includes("icon('sparkles') + ' Optimasi'"), 'label tombol harus "Optimasi"');
+  // Tidak boleh ada label lama di UI.
+  assert.ok(!studio.includes('>Optimalkan<'), 'label "Optimalkan" tidak boleh dipakai di UI');
+  assert.ok(!studio.includes("' Optimalkan'"), 'label "Optimalkan" tidak boleh dipakai di UI');
+  // Toast juga ringkas.
+  assert.ok(studio.includes('Prompt sudah dioptimasi & diurutkan.'), 'toast harus pakai "dioptimasi"');
+});
+
+test('D-237: Bank Prompt punya kotak search DI BAWAH tag Template/Blok', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function buildPromptPop'));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Search ada & dirender setelah tabs.
+  assert.ok(body.includes('st-pb-search'), 'harus ada search box');
+  assert.ok(body.includes('id="stPbSearch"'), 'harus ada input search');
+  assert.ok(body.includes('Cari prompt'), 'input harus punya placeholder');
+  // Urutan render: tabs -> search -> body.
+  const render = body.slice(body.indexOf('el.innerHTML = tabs'));
+  assert.ok(render.includes('tabs + search +'), 'search harus dirender setelah tabs');
+  // Penyaringan lewat visibility (bukan re-render) -> fokus input aman.
+  assert.ok(studio.includes('function applyPromptBankFilter'), 'harus ada fungsi filter');
+  const f = studio.slice(studio.indexOf('function applyPromptBankFilter'));
+  const fBody = f.slice(0, f.indexOf('\n  }'));
+  assert.ok(fBody.includes("classList.toggle('st-hidden', !ok)"), 'filter harus toggle visibility item');
+  assert.ok(fBody.includes('dataset.pbSearch'), 'filter harus baca dataset.pbSearch');
+  // Item punya data-pb-search (isi penuh untuk pencarian).
+  assert.ok(body.includes('data-pb-search="'), 'item harus punya data-pb-search');
+  // Tombol hapus pencarian.
+  assert.ok(body.includes('stPbSearchClear'), 'harus ada tombol hapus pencarian');
+  // CSS search box.
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-pb-search{'), 'harus ada CSS .st-pb-search');
+  assert.ok(css.includes('.st-pb-search input{'), 'harus ada styling input search');
+});
+
+test('D-237 (runtime): search Bank Prompt menyaring item & tombol clear berfungsi', async () => {
+  const BANK = {
+    entries: [
+      { id: 't1', kind: 'template', label: 'Neon Cyberpunk', content: 'neon cyberpunk city', group: 'style', slots: [] },
+      { id: 't2', kind: 'template', label: 'Product Studio', content: 'clean product photo', group: 'umum', slots: [] },
+      { id: 'b1', kind: 'block', label: 'Kamera 85mm', content: 'shot on 85mm lens', category: 'kamera' },
+    ],
+  };
+  const fetchStub = async (url) => {
+    if (String(url).includes('/api/prompt-bank')) return { ok: true, json: async () => BANK };
+    return { ok: true, json: async () => ({ entries: [], characters: [] }) };
+  };
+  const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'http://localhost/', pretendToBeVisual: true });
+  const win = dom.window;
+  win.fetch = fetchStub;
+  win.confirm = () => true; win.alert = () => {}; win.scrollTo = () => {};
+  win.eval(readFileSync('public/studio.js', 'utf8'));
+  const doc = win.document;
+  win.__sherlyStudioMode = 'photo';
+  await win.renderStudio();
+  // Buka popover Bank Prompt lewat tombol Prompt.
+  const pill = doc.getElementById('stPromptPill');
+  (pill?.querySelector('.st-pill') || pill)?.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const pop = doc.getElementById('stPop-prompt');
+  assert.ok(pop.classList.contains('open'), 'popover prompt harus terbuka');
+  // Search ada DI BAWAH tabs.
+  const kids = [...pop.children].map((e) => e.className);
+  assert.ok(kids[0].includes('st-pb-tabs'), 'anak pertama harus tabs');
+  assert.ok(kids[1].includes('st-pb-search'), 'anak kedua harus search');
+  // Ketik -> menyaring.
+  const inp = doc.getElementById('stPbSearch');
+  assert.ok(inp, 'input search harus ada');
+  inp.value = 'neon';
+  inp.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const items = [...pop.querySelectorAll('.st-pb-item')];
+  const visible = items.filter((i) => !i.classList.contains('st-hidden'));
+  assert.equal(visible.length, 1, 'hanya 1 item yang harus cocok');
+  assert.ok(visible[0].textContent.includes('Neon'), 'item yang cocok harus Neon');
+  // Group yang kosong ikut disembunyikan.
+  const groups = [...pop.querySelectorAll('.st-pb-group')];
+  assert.ok(groups.some((g) => g.classList.contains('st-hidden')), 'group kosong harus disembunyikan');
+  // Tombol clear muncul & mengembalikan semua item.
+  const clear = doc.getElementById('stPbSearchClear');
+  assert.ok(clear && !clear.classList.contains('st-hidden'), 'tombol clear harus tampil saat ada query');
+  clear.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const after = [...pop.querySelectorAll('.st-pb-item')];
+  assert.equal(after.filter((i) => !i.classList.contains('st-hidden')).length, items.length,
+    'clear harus menampilkan semua item lagi');
 });
 
 // ===== D-233: Panel Pengaturan Konten = GRID tombol, bukan daftar ke bawah =====
