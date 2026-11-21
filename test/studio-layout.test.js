@@ -1321,6 +1321,28 @@ test('D-227: badge user = kertas hitam tanpa border, nempel tepi kanan+bawah', (
   assert.ok(rule.includes('pointer-events:none'), 'badge tidak boleh menghalang klik');
 });
 
+test('D-228: sisi kiri badge melengkung (ujung daun), kanan tetap flush kotak', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-asset-badge\{[^}]*\}/s)[0];
+  // Radius hanya di sisi KIRI: kiri-atas + kiri-bawah bulat, kanan siku.
+  assert.ok(rule.includes('border-radius:8px 0 0 8px'), 'sisi kiri bulat, kanan siku (8px 0 0 8px)');
+  // Tidak boleh radius penuh (bulat) atau semua siku (tajam).
+  assert.ok(!rule.includes('border-radius:50%'), 'badge tidak boleh bulat');
+  // Hanya 4 nilai radius: kiri-atas, kanan-atas, kanan-bawah, kiri-bawah.
+  const radius = rule.match(/border-radius:([^;]+)/)[1].trim().split(/\s+/);
+  assert.equal(radius.length, 4, 'radius harus 4 sudut');
+  assert.equal(radius[0], '8px', 'kiri-atas bulat');
+  assert.equal(radius[1], '0', 'kanan-atas siku (flush tepi kanan)');
+  assert.equal(radius[2], '0', 'kanan-bawah siku (flush tepi bawah)');
+  assert.equal(radius[3], '8px', 'kiri-bawah bulat');
+  // Tetap nempel tepi kanan + bawah (flush, bukan mengambang).
+  assert.ok(rule.includes('right:0'), 'badge flush tepi kanan');
+  assert.ok(rule.includes('bottom:0'), 'badge flush tepi bawah');
+  // Avatar punya radius 8px -> sudut kanan bawah avatar ikut melengkung.
+  const face = css.match(/\.st-asset-face\{[^}]*\}/s)[0];
+  assert.ok(face.includes('border-radius:8px'), 'avatar radius 8px');
+});
+
 test('D-227: badge ada DI DALAM .st-asset-face (tidak ada yang keluar kotak)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
