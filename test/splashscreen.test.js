@@ -86,6 +86,21 @@ test('D-248: aset brand video tersedia di disk', () => {
   }
 });
 
+test('D-248: logo ada di tengah layar (tagline & bar overlay absolut)', () => {
+  // tagline & bar harus position:absolute supaya tidak mendorong logo dari tengah
+  assert.match(html, /#splash \.sp-tag\{position:absolute/);
+  assert.match(html, /#splash \.sp-bar\{position:absolute/);
+  // area media punya aspect ratio eksplisit + object-fit contain (logo utuh, tidak gepencet)
+  assert.match(html, /#splash \.sp-media\{[^}]*aspect-ratio:15\/16/);
+  assert.match(html, /#splash \.sp-media video[^{]*\{[^}]*object-fit:contain/);
+});
+
+test('D-248: durasi splash >= durasi video (3,4 dtk) supaya animasi penuh', () => {
+  const m = html.match(/var MIN_MS=(\d+)/);
+  assert.ok(m);
+  assert.ok(Number(m[1]) >= 3400, `MIN_MS ${m[1]} harus >= 3400ms (video 3,4 dtk)`);
+});
+
 test('D-248: apple-touch-startup-image ada untuk iPhone (link + media query)', () => {
   const links = [...html.matchAll(/<link rel="apple-touch-startup-image"[^>]*>/g)];
   assert.ok(links.length >= 10, `harus ada link startup image, dapat ${links.length}`);
