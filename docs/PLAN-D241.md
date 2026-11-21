@@ -68,6 +68,12 @@ Model Kie yang relevan:
 > (lokasi/kamera/aksi/suasana → prompt Kie, maks 5.000 karakter) → **naskah** (→ TTS).
 > Kalau tidak ada mention, potret karakter dipakai sebagai cadangan.
 >
+> **Model & provider lipsync (D-245).** Semua model lip-sync Kie berada di **satu provider:
+> Kie AI**. Model tersedia: **InfiniteTalk** (`infinitalk/from-audio`, 480p/720p, maks 15 dtk,
+> ~$0.015/dtk) dan **LTX 2.5 Fast A2V** (`ltx/2-5-fast-audio-to-video`, 720p/1080p/1440p,
+> durasi **mengikuti audio** s/d 20 dtk, ~$0.054/dtk). Provider, model, dan resolusi bisa
+> dipilih di panel **Pengaturan Konten** mode Karakter Bicara.
+>
 > **Durasi lipsync = OTOMATIS (D-243).** InfiniteTalk tidak punya parameter durasi;
 > durasi video mengikuti **panjang naskah** (TTS membacakan naskah → audio), batas keras
 > **15 detik** (≈ 195 karakter bahasa Indonesia). UI menampilkan estimasi realtime

@@ -125,3 +125,76 @@ test('D-244: prompt arahan adegan dipotong 5.000 karakter (batas Kie)', () => {
   const input = buildLipsyncInput('infinitalk', { prompt: 'a'.repeat(9000), resolution: '720p' }, 'i', 'a');
   assert.equal(input.prompt.length, 5000);
 });
+
+// ===== D-245: provider lipsync + model LTX 2.5 Fast A2V =====
+
+test('D-245: katalog punya 2 model lipsync (InfiniteTalk + LTX 2.5 Fast A2V)', () => {
+  assert.equal(LIPSYNC_MODELS.length, 2);
+  const ltx = findLipsyncModel('ltx/2-5-fast-audio-to-video');
+  assert.ok(ltx, 'LTX 2.5 A2V harus ada di katalog');
+  assert.equal(ltx.label, 'LTX 2.5 Fast A2V');
+  assert.equal(ltx.maker, 'Lightricks');
+  assert.equal(ltx.provider, 'kie');
+  assert.deepEqual(ltx.resolutions, ['720p', '1080p', '1440p']);
+  assert.equal(ltx.maxSeconds, 20, 'LTX A2V durasi mengikuti audio s/d 20 detik');
+  assert.equal(ltx.defaultResolution, '1080p');
+});
+
+test('D-245: katalog kirim provider untuk frontend', () => {
+  const cat = lipsyncCatalog();
+  assert.ok(Array.isArray(cat.providers) && cat.providers.length >= 1);
+  assert.equal(cat.providers[0].id, 'kie');
+  assert.equal(cat.providers[0].label, 'Kie AI');
+  // Model LTX harus membawa info tambahan untuk UI.
+  const ltx = cat.models.find((m) => m.id === 'ltx/2-5-fast-audio-to-video');
+  assert.deepEqual(ltx.fps, [24, 25, 48, 50]);
+  assert.equal(ltx.supportsDuration, true);
+  assert.equal(ltx.aspectFromImage, true);
+});
+
+test('D-245: buildLipsyncInput schema LTX — fps, duration & aspect_ratio', () => {
+  const input = buildLipsyncInput('ltx25a2v',
+    { prompt: 'podcast host', resolution: '1080p', fps: 30, duration: 12 },
+    'https://img/potret.jpg', 'https://audio/a.wav');
+  // fps 30 TIDAK didukung (hanya 24/25/48/50).
+  assert.equal(input.fps, undefined, 'fps di luar daftar harus dibuang');
+  assert.equal(input.duration, 12);
+  // Dengan gambar -> aspect_ratio TIDAK dikirim (output mengikuti gambar).
+  assert.equal(input.aspect_ratio, undefined, 'aspect_ratio tak boleh dikirim bila ada gambar');
+  assert.equal(input.image_url, 'https://img/potret.jpg');
+  assert.equal(input.audio_url, 'https://audio/a.wav');
+});
+
+test('D-245: buildLipsyncInput schema LTX tanpa gambar -> aspect_ratio ikut', () => {
+  const input = buildLipsyncInput('ltx25a2v',
+    { prompt: 'x', resolution: '1080p', fps: 24, aspect: '9:16' },
+    '', 'https://audio/a.wav');
+  assert.equal(input.aspect_ratio, '9:16');
+  assert.equal(input.fps, 24);
+  assert.equal(input.image_url, undefined);
+});
+
+test('D-245: seed LTX boleh 0, InfiniteTalk tidak', () => {
+  const ltx = buildLipsyncInput('ltx25a2v', { prompt: 'x', resolution: '1080p', seed: 0 }, 'i', 'a');
+  assert.equal(ltx.seed, 0, 'LTX seed 0 valid');
+  const inf = buildLipsyncInput('infinitalk', { prompt: 'x', resolution: '720p', seed: 0 }, 'i', 'a');
+  assert.equal(inf.seed, undefined, 'InfiniteTalk seed 0 di luar rentang');
+});
+
+test('D-245: normalizeLipsyncParams menolak resolusi di luar kapabilitas model', () => {
+  const bad = normalizeLipsyncParams({ model: 'ltx/2-5-fast-audio-to-video', resolution: '480p', aspect: '9:16' });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /Resolusi/);
+  const ok = normalizeLipsyncParams({ model: 'ltx/2-5-fast-audio-to-video', resolution: '1440p', aspect: '9:16' });
+  assert.equal(ok.ok, true);
+});
+
+test('D-245: normalizeLipsyncParams menerima fps & duration untuk LTX saja', () => {
+  const ltx = normalizeLipsyncParams({ model: 'ltx/2-5-fast-audio-to-video', resolution: '1080p', fps: 48, duration: 10 });
+  assert.equal(ltx.fps, 48);
+  assert.equal(ltx.duration, 10);
+  // InfiniteTalk tidak punya fps/duration.
+  const inf = normalizeLipsyncParams({ model: 'infinitalk/from-audio', resolution: '720p', fps: 48, duration: 10 });
+  assert.equal(inf.fps, undefined);
+  assert.equal(inf.duration, undefined);
+});

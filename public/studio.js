@@ -153,8 +153,18 @@
       resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
       note: 'MeiGen-AI InfiniteTalk — potret + audio jadi karakter bicara (lip-sync akurat).',
       defaultResolution: '720p', defaultAspect: '9:16' },
+    { id: 'ltx/2-5-fast-audio-to-video', provider: 'kie', label: 'LTX 2.5 Fast A2V', maker: 'Lightricks',
+      resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
+      note: 'Lightricks LTX 2.5 Fast — durasi mengikuti audio (s/d 20 dtk), sampai 1440p.',
+      defaultResolution: '1080p', defaultAspect: '9:16' },
   ];
-  let lipsyncCatalog = { defaultModel: 'infinitalk/from-audio', maxSeconds: 15, models: FALLBACK_LIPSYNC_MODELS };
+  const FALLBACK_LIPSYNC_PROVIDERS = [
+    { id: 'kie', label: 'Kie AI', note: 'Semua model lipsync via satu kunci Kie' },
+  ];
+  let lipsyncCatalog = {
+    defaultModel: 'infinitalk/from-audio', maxSeconds: 15,
+    providers: FALLBACK_LIPSYNC_PROVIDERS, models: FALLBACK_LIPSYNC_MODELS,
+  };
   const lipsyncModel = () => lipsyncCatalog.models.find((m) => m.id === state.lipsyncModel) || lipsyncCatalog.models[0] || null;
   // D-231: ctx opsional -> pakai draft pengaturan (panel) bila diberikan.
   const videoModelOf = (ctx) => videoCatalog.models.find((m) => m.id === (ctx || state).videoModel) || videoCatalog.models[0] || null;
@@ -883,7 +893,11 @@
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
-    $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo || isLip);
+    // D-245: pill resolusi lipsync hanya di mode Karakter Bicara.
+    $('stLipResPillWrap')?.classList.toggle('st-hidden', !isLip);
+    // D-245: mode Karakter Bicara — Provider & Resolusi ditampilkan
+    // (semua model lipsync ada di Kie AI).
+    $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
     // D-208: pill Style dihapus — semua gaya jadi template transparan di Bank Prompt.
     // Bank prompt mengikuti jenis konten (foto <-> video) supaya tidak salah pilih.
     // mode konten di Studio: 'photo' | 'video' | 'lipsync'  ->  mode prompt: 'foto' | 'video'
@@ -909,10 +923,13 @@
   }
 
   function updatePillLabels() {
+    // D-245: pakai draft bila panel Pengaturan Konten sedang dibuka,
+    // supaya label pill ikut berubah saat pilihan di panel diubah.
+    const ctx = settingCtx();
     const a = $('stAspectPill'), d = $('stDurPill');
     if (a) a.querySelector('b').textContent = aspectLabel();
-    const durLabel = durationOptions().find((x) => x[0] === state.duration);
-    if (d) d.querySelector('b').textContent = durLabel ? durLabel[1] : state.duration + ' detik';
+    const durLabel = durationOptions().find((x) => x[0] === ctx.duration);
+    if (d) d.querySelector('b').textContent = durLabel ? durLabel[1] : ctx.duration + ' detik';
     const e = $('stEnginePill'); if (e) e.querySelector('b').textContent = (engines.find((x) => x[0] === state.engine) || engines[0])[1];
     const m = videoModel();
     const mp = $('stModelPill'); if (mp) mp.querySelector('b').textContent = m ? m.label : 'Model';
@@ -946,6 +963,17 @@
     const tierLabel = tierOptions().find((x) => x[0] === state.tier);
     const t = $('stTierPill'); if (t) t.querySelector('b').textContent = tierLabel ? tierLabel[1] : state.tier;
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
+    // D-245: label resolusi lipsync + label engine/provider di mode lipsync.
+    const lr = $('stLipResPill'); if (lr) lr.querySelector('b').textContent = ctx.lipsyncResolution;
+    const le = $('stEnginePill');
+    if (le) {
+      if (ctx.mode === 'lipsync') {
+        const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
+        le.querySelector('b').textContent = prov ? prov.label : 'Kie AI';
+      } else {
+        le.querySelector('b').textContent = (engines.find((x) => x[0] === ctx.engine) || engines[0])[1];
+      }
+    }
   }
 
   /** D-210: deteksi layout HP (lebar layar kecil). */
@@ -968,7 +996,7 @@
   function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -1024,8 +1052,14 @@
         gemini: 'Google Gemini',
         kie: 'Kie AI',
       };
-      items = engines.map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">'
-        + '<span class="st-pop-model">' + esc(l) + (ENGINE_NOTES[v] ? '<small>' + esc(ENGINE_NOTES[v]) + '</small>' : '') + '</span></button>').join('');
+      // D-245: mode Karakter Bicara — semua model lipsync ada di Kie AI,
+      // jadi Provider yang tersedia hanya "Kie AI" (bukan Otomatis/Gemini).
+      const engineList = state.mode === 'lipsync'
+        ? (lipsyncCatalog.providers || [{ id: 'kie', label: 'Kie AI', note: '' }])
+            .map((p) => [p.id, p.label, p.note || ''])
+        : engines;
+      items = engineList.map(([v, l, note]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">'
+        + '<span class="st-pop-model">' + esc(l) + (note || ENGINE_NOTES[v] ? '<small>' + esc(note || ENGINE_NOTES[v]) + '</small>' : '') + '</span></button>').join('');
     }
     else if (which === 'type') {
       // D-203: satu kotak pilihan jenis konten (Foto / Video).
@@ -1044,6 +1078,12 @@
     }
     else if (which === 'tier') items = tierOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.tier === v ? 'on' : '') + '">' + l + '</button>').join('');
     else if (which === 'res') items = resolutionOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.resolution === v ? 'on' : '') + '">' + l + '</button>').join('');
+    // D-245: resolusi lipsync (model InfiniteTalk / LTX 2.5 A2V).
+    else if (which === 'lipres') {
+      const m = lipsyncModel();
+      items = (m?.resolutions || ['720p']).map((v) => '<button type="button" data-v="' + esc(v) + '" class="'
+        + (state.lipsyncResolution === v ? 'on' : '') + '">' + esc(v) + '</button>').join('');
+    }
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
@@ -1056,6 +1096,11 @@
       }
       if (which === 'tier') state.tier = b.dataset.v;
       if (which === 'res') state.resolution = b.dataset.v;
+      // D-245: pilih resolusi lipsync.
+      if (which === 'lipres') {
+        state.lipsyncResolution = b.dataset.v;
+        updatePillLabels();
+      }
       if (which === 'type') {
         // D-203: pilih jenis konten -> pindah mode (pilihan jenis konten tunggal).
         const next = b.dataset.v;
@@ -1099,6 +1144,8 @@
       tier: state.tier, resolution: state.resolution, engine: state.engine,
       videoModel: state.videoModel, imageModel: state.imageModel,
       imageResolution: state.imageResolution,
+      // D-245: model & resolusi lipsync.
+      lipsyncModel: state.lipsyncModel, lipsyncResolution: state.lipsyncResolution,
     };
     return settingsDraft;
   }
@@ -1119,11 +1166,27 @@
     state.duration = d.duration;
     state.tier = d.tier;
     state.resolution = d.resolution;
+    // D-245: model & resolusi lipsync ikut tersimpan.
+    state.lipsyncModel = d.lipsyncModel;
+    state.lipsyncResolution = d.lipsyncResolution;
     if (d.mode !== state.mode) setMode(d.mode);
     // Rasio & resolusi mengikuti kapabilitas model terpilih.
     if (state.mode === 'photo') {
       const im = imageCatalog.models.find((m) => m.id === state.imageModel);
       if (im && !im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
+    } else if (state.mode === 'lipsync') {
+      // D-245: resolusi & rasio mengikuti model lipsync terpilih.
+      const lm = lipsyncCatalog.models.find((m) => m.id === state.lipsyncModel);
+      if (lm) {
+        if (!lm.resolutions.includes(state.lipsyncResolution)) {
+          state.lipsyncResolution = lm.defaultResolution && lm.resolutions.includes(lm.defaultResolution)
+            ? lm.defaultResolution : lm.resolutions[0];
+        }
+        if (!lm.aspects.includes(state.aspect)) {
+          state.aspect = lm.defaultAspect && lm.aspects.includes(lm.defaultAspect)
+            ? lm.defaultAspect : (lm.aspects.includes('9:16') ? '9:16' : lm.aspects[0]);
+        }
+      }
     } else {
       const vm = videoCatalog.models.find((m) => m.id === state.videoModel);
       // D-240: JANGAN reset ke default model saat menyimpan draft.
@@ -1135,8 +1198,10 @@
     }
     // Pill "Model gambar" (Kie) ikut mengikuti provider terpilih.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || !kieEngine);
     updatePillLabels();
+    // D-245: bar karakter menampilkan model/provider lipsync terbaru.
+    renderLipsyncBar();
   }
 
   /** Daftar pilihan untuk satu jenis pengaturan (dipakai panel & popover). */
@@ -1153,10 +1218,23 @@
         gemini: 'Google Gemini',
         kie: 'Kie AI',
       };
+      // D-245: mode Karakter Bicara — Provider hanya Kie AI.
+      if (ctx.mode === 'lipsync') {
+        return (lipsyncCatalog.providers || [{ id: 'kie', label: 'Kie AI', note: '' }])
+          .map((p) => ({ v: p.id, l: p.label, note: p.note || '' }));
+      }
       return engines.map(([v, l]) => ({ v, l, note: ENGINE_NOTES[v] || '' }));
     }
     if (which === 'imgmodel') return imageCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
     if (which === 'model') return videoCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
+    // D-245: model & resolusi lipsync.
+    if (which === 'lipmodel') {
+      return lipsyncCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
+    }
+    if (which === 'lipres') {
+      const m = lipsyncModel();
+      return (m?.resolutions || ['720p']).map((r) => ({ v: r, l: r }));
+    }
     if (which === 'tier') return tierOptions(ctx).map(([v, l]) => ({ v, l }));
     if (which === 'res') return resolutionOptions(ctx).map(([v, l]) => ({ v, l }));
     return [];
@@ -1169,6 +1247,9 @@
     if (which === 'engine') return ctx.engine;
     if (which === 'imgmodel') return ctx.imageModel;
     if (which === 'model') return ctx.videoModel;
+    // D-245: model & resolusi lipsync.
+    if (which === 'lipmodel') return ctx.lipsyncModel;
+    if (which === 'lipres') return ctx.lipsyncResolution;
     if (which === 'tier') return ctx.tier;
     if (which === 'res') return ctx.resolution;
     return '';
@@ -1177,6 +1258,7 @@
   function activeSettings() {
     const ctx = settingCtx();
     const isVideo = ctx.mode === 'video';
+    const isLip = ctx.mode === 'lipsync';
     const kieEngine = ctx.engine === 'kie' || ctx.engine === 'auto' || ctx.engine.startsWith('custom:');
     const list = [
       { key: 'aspect', label: 'Rasio', icon: 'smartphone' },
@@ -1187,6 +1269,10 @@
       list.push({ key: 'dur', label: 'Durasi', icon: 'clock' });
       list.push({ key: 'tier', label: 'Tier', icon: 'sliders' });
       list.push({ key: 'res', label: 'Resolusi', icon: 'sparkles' });
+    } else if (isLip) {
+      // D-245: mode Karakter Bicara — provider, model, dan resolusi.
+      list.push({ key: 'lipmodel', label: 'Model', icon: 'mic' });
+      list.push({ key: 'lipres', label: 'Resolusi', icon: 'sparkles' });
     } else if (kieEngine) {
       list.push({ key: 'imgmodel', label: 'Model', icon: 'sparkles' });
     }
@@ -1204,9 +1290,11 @@
     if (which === 'dur') target.duration = v;
     if (which === 'engine') {
       target.engine = v;
+      // D-245: mode Karakter Bicara -> provider selalu Kie AI.
+      if (settingCtx().mode === 'lipsync') target.engine = 'kie';
       if (!draftMode) {
         const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
+        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || !kieEngine);
       }
     }
     if (which === 'tier') target.tier = v;
@@ -1243,6 +1331,29 @@
         }
       }
     }
+    // D-245: model lipsync -> resolusi & rasio menyesuaikan kapabilitas model.
+    if (which === 'lipmodel') {
+      const prev = lipsyncCatalog.models.find((x) => x.id === target.lipsyncModel);
+      target.lipsyncModel = v;
+      const m = lipsyncCatalog.models.find((x) => x.id === v);
+      if (m) {
+        // Kalau resolusi sekarang masih sama dengan default model SEBELUM,
+        // ikut pindah ke default model baru (mis. InfiniteTalk 720p -> LTX 1080p).
+        // Kalau user sudah memilih sendiri, nilainya DIPERTAHANKAN (D-240).
+        const wasDefault = prev && target.lipsyncResolution === prev.defaultResolution;
+        if (wasDefault && m.defaultResolution && m.resolutions.includes(m.defaultResolution)) {
+          target.lipsyncResolution = m.defaultResolution;
+        } else if (!m.resolutions.includes(target.lipsyncResolution)) {
+          target.lipsyncResolution = m.defaultResolution && m.resolutions.includes(m.defaultResolution)
+            ? m.defaultResolution : m.resolutions[0];
+        }
+        if (!m.aspects.includes(target.aspect)) {
+          target.aspect = m.defaultAspect && m.aspects.includes(m.defaultAspect)
+            ? m.defaultAspect : (m.aspects.includes('9:16') ? '9:16' : m.aspects[0]);
+        }
+      }
+    }
+    if (which === 'lipres') target.lipsyncResolution = v;
     if (!draftMode) updatePillLabels();
   }
   /**
@@ -1342,6 +1453,9 @@
       // D-231: tulis ke draft, panel TETAP terbuka.
       applySetting(key, b.dataset.setV);
       buildSettingsPanel();
+      // D-245: label pill ikut diperbarui saat draft berubah (mis. resolusi
+      // lipsync ikut model lipsync terpilih).
+      updatePillLabels();
     }));
     $('stSetSave')?.addEventListener('click', () => {
       commitSettingsDraft();
@@ -1366,7 +1480,7 @@
     buildSettingsPanel();
     const el = $('stPop-settings');
     if (!el) return;
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions', 'lipsyncchar']
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'prompt', 'actions', 'lipsyncchar']
       .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
     el.classList.add('open');
     el.classList.add('st-pop-center');
@@ -1888,10 +2002,14 @@
       // D-244: sumber gambar utama = mention gambar (karakter di lokasi
       // tertentu) atau potret karakter sebagai cadangan.
       const src = sceneRefs.length ? 'gambar mention' : (lipsyncCharacterHasPortrait() ? 'potret karakter' : 'belum ada gambar');
+      // D-245: info provider + model ikut ditampilkan (ringkas, 2 baris).
+      const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
+      const provLabel = prov ? prov.label : 'Kie AI';
+      const modelLabel = model ? model.label : '';
       // Durasi lipsync mengikuti naskah, bukan diset di awal.
-      meta.textContent = est
-        ? '±' + est + ' dtk (maks ' + max + ') · ' + src
-        : (model ? model.label + ' · ' : '') + 'maks ' + max + ' dtk · ' + src;
+      // Baris 1: durasi (otomatis dari naskah). Baris 2: provider + model + sumber gambar.
+      meta.textContent = (est ? '±' + est + ' dtk (maks ' + max + ')' : 'maks ' + max + ' dtk')
+        + '\n' + provLabel + ' · ' + modelLabel.replace(' Fast A2V', '') + ' · ' + src;
       meta.classList.toggle('st-lipsync-meta-warn', est > max);
     }
   }
@@ -1948,7 +2066,9 @@
         script,
         prompt: sceneHint,
         model: model?.id || state.lipsyncModel,
-        resolution: model?.defaultResolution || '720p',
+        // D-245: resolusi & provider mengikuti pilihan user.
+        resolution: state.lipsyncResolution || model?.defaultResolution || '720p',
+        provider: 'kie',
         aspect: state.aspect,
       };
       if (refImg) body.referenceImage = { mime: refImg.mime, data: refImg.data };
@@ -2104,6 +2224,8 @@
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stResPillWrap"><button type="button" class="st-pill" id="stResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-res"></div></div>'
+      // D-245: resolusi lipsync (dipakai model InfiniteTalk / LTX 2.5 A2V).
+      + '<div class="st-pill-wrap st-hidden" id="stLipResPillWrap"><button type="button" class="st-pill" id="stLipResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-lipres"></div></div>'
       + '</div>'
       // D-221: panel pengaturan konten (dropdown/modal di HP).
       + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
@@ -2168,6 +2290,8 @@
     $('stImgModelPill')?.addEventListener('click', () => { buildPop('imgmodel'); togglePop('imgmodel'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
+    // D-245: pill resolusi lipsync.
+    $('stLipResPill')?.addEventListener('click', () => { buildPop('lipres'); togglePop('lipres'); });
     // D-203: katalog model gambar dari server (/api/ai/image/models).
     fetch('/api/ai/image/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
@@ -2196,6 +2320,7 @@
       lipsyncCatalog = {
         defaultModel: d.defaultModel || lipsyncCatalog.defaultModel,
         maxSeconds: d.maxSeconds || lipsyncCatalog.maxSeconds,
+        providers: Array.isArray(d.providers) && d.providers.length ? d.providers : lipsyncCatalog.providers,
         models: d.models,
       };
       const m = lipsyncModel();
