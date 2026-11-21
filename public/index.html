@@ -685,8 +685,13 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-chain-add svg{width:15px;height:15px;stroke:currentColor}
 .st-card-chars{font-size:10.5px;color:#ffd0ec;letter-spacing:.02em}
 .st-composer label{display:block;font-size:11px;color:#91a2b9;margin-bottom:5px;letter-spacing:.02em}
-.st-composer textarea{width:100%;box-sizing:border-box;background:#0f1828;border:1px solid #24344e;border-radius:11px;color:#fff;font:inherit;font-size:13.5px;line-height:1.55;padding:10px 12px;resize:none;height:44px;min-height:44px;max-height:150px;overflow-y:auto;outline:0}
-.st-composer textarea:focus{border-color:#f044a8}
+/* D-222: area tulis prompt MENYATU dengan kotak form — background & border
+   sama, tanpa pembeda warna -> area tulis terlihat lebih luas. */
+.st-composer textarea{width:100%;box-sizing:border-box;background:transparent;border:0;border-radius:0;
+  color:#fff;font:inherit;font-size:13.5px;line-height:1.55;padding:2px 0 6px;resize:none;
+  height:44px;min-height:44px;max-height:150px;overflow-y:auto;outline:0}
+.st-composer textarea:focus{border:0;outline:0;box-shadow:none}
+.st-composer textarea::placeholder{color:#91a2b9;opacity:1}
 .st-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
 .st-pill-wrap{position:relative}
 .st-pill{height:38px;padding:0 12px;border-radius:10px;border:1px solid #24344e;background:#0f1828;color:#cfd6e4;font-size:12px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .18s,box-shadow .18s}
