@@ -484,18 +484,17 @@
     // D-215: referensi hanya ICON foto (tanpa nama, tanpa kapsul) supaya 3 karakter
     // + 1 gambar muat 1 baris. Info aset muncul saat kursor di-hover (tooltip).
     for (const c of mentioned) {
-      // D-223: penanda karakter jadi SATU ikon user (bukan dua badge: user +
-      // layers). Ikon layers (diamond/lapis) terlihat seperti buku — diganti
-      // user profile. Detail lengkap tetap ada di tooltip saat hover.
+      // D-224: aset karakter punya 3 ikon: suara (mic), bible/naskah
+      // (book-open), dan user (avatar). Di KOTAK avatar hanya ikon terakhir
+      // (user) yang tampil; ikon suara & bible tampil di DAFTAR mention.
+      // Detail lengkap tetap ada di tooltip saat hover.
       const badges = [];
       const v = c.voice || {};
       const notes = [];
       notes.push(c.name);
       const hasVoice = !!(v.name || v.style);
       const hasSheet = !!c.board_image_url;
-      if (hasVoice || hasSheet) {
-        badges.push('<span class="st-asset-badge">' + icon('user') + '</span>');
-      }
+      badges.push('<span class="st-asset-badge">' + icon('user') + '</span>');
       if (hasVoice) notes.push('Suara: ' + (v.name || v.style));
       if (hasSheet) notes.push('Punya master sheet');
       if (c.role) notes.push(c.role);
@@ -662,9 +661,10 @@
       const on = i === mentionIndex ? ' on' : '';
       if (it.kind === 'char') {
         const c = it.data; const v = c.voice || {};
-        // D-223: satu ikon user sebagai penanda (bukan dua ikon terpisah).
+        // D-224: di daftar tampil 2 ikon status: suara (mic) & bible (book-open).
         const marks = [];
-        if ((v.name || v.style) || c.board_image_url) marks.push(icon('user'));
+        if (v.name || v.style) marks.push(icon('mic'));
+        if (c.board_image_url) marks.push(icon('book-open'));
         const ocls = (v.name || v.style) ? ' has-voice' : (c.board_image_url ? ' has-sheet' : '');
         return '<button type="button" class="st-mention-item' + on + ocls + '" data-mention-pick="char:' + esc(it.id) + '" data-mention-kind="char">'
           + '<span class="st-mention-face st-mention-face-box">' + characterThumb(c) + '</span>'
