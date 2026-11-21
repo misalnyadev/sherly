@@ -2192,3 +2192,74 @@ test('D-242: generate lipsync menolak tanpa karakter (tidak kirim request)', asy
   await new Promise((r) => setTimeout(r, 120));
   assert.equal(posted, false, 'tidak boleh kirim request tanpa karakter');
 });
+
+// ===== D-243: tombol generate seragam "Buat" + durasi lipsync otomatis =====
+
+test('D-243: semua tombol generate berlabel "Buat" (seragam, tidak melebar di HP)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const labelOf = (id) => {
+    const b = doc.getElementById(id);
+    return (b?.textContent || '').replace(/\s+/g, ' ').trim();
+  };
+  // Mode foto (default).
+  assert.equal(labelOf('stGenBtn'), 'Buat', 'tombol foto harus berlabel "Buat"');
+  // Mode video.
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video'));
+  assert.equal(labelOf('stVideoBtn'), 'Buat', 'tombol video harus berlabel "Buat"');
+  // Mode lipsync.
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop2 = doc.getElementById('stPop-type');
+  click([...pop2.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  assert.equal(labelOf('stLipsyncBtn'), 'Buat', 'tombol lipsync harus berlabel "Buat"');
+  // Semua tombol punya title yang menjelaskan isi (tooltip).
+  assert.match(doc.getElementById('stGenBtn').getAttribute('title') || '', /Gambar/i);
+  assert.match(doc.getElementById('stVideoBtn').getAttribute('title') || '', /Video/i);
+  assert.match(doc.getElementById('stLipsyncBtn').getAttribute('title') || '', /Bicara/i);
+});
+
+test('D-243: durasi lipsync otomatis dari panjang naskah (bukan diset di awal)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  const meta = doc.getElementById('stLipsyncMeta');
+  // Tanpa naskah -> hanya info batas.
+  assert.match(meta.textContent, /maks 15/i, 'meta harus menyebut batas 15 detik');
+  // Naskah pendek -> estimasi detik muncul.
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'Halo, aku Sherly.';
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.match(meta.textContent, /±\d+ dtk/i, 'estimasi durasi harus tampil: ' + meta.textContent);
+  // Naskah panjang -> estimator naik & ditandai peringatan.
+  ta.value = 'a'.repeat(600);
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const warn = /±(\d+) dtk/.exec(meta.textContent);
+  assert.ok(warn, 'estimasi durasi harus tampil');
+  assert.ok(Number(warn[1]) > 15, 'naskah panjang harus estimasi > 15 detik');
+  assert.ok(meta.classList.contains('st-lipsync-meta-warn'), 'naskah melebihi batas harus diberi peringatan');
+});
+
+test('D-243: mode lipsync tidak punya pill durasi (durasi mengikuti naskah)', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 50));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  assert.ok(doc.getElementById('stDurPill').classList.contains('st-hidden'), 'pill durasi harus hidden di mode lipsync');
+  // Tidak ada popover durasi untuk lipsync.
+  assert.equal(doc.getElementById('stPop-dur').children.length, 0, 'popover durasi tidak boleh terisi di mode lipsync');
+});

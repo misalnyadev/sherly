@@ -61,6 +61,13 @@ Model Kie yang relevan:
 > ke Kie, task disimpan di `sherly_video_tasks` (`meta.kind='lipsync'`), hasil masuk
 > galeri aset Studio. Sisa backlog Kie: `bytedance/omni-human`, `kwaivgi/kling-lip-sync`,
 > `zsxkib/multitalk` (multi-orang).
+>
+> **Durasi lipsync = OTOMATIS (D-243).** InfiniteTalk tidak punya parameter durasi;
+> durasi video mengikuti **panjang naskah** (TTS membacakan naskah → audio), batas keras
+> **15 detik** (≈ 195 karakter bahasa Indonesia). UI menampilkan estimasi realtime
+> "±N dtk (maks 15)" di bar karakter + peringatan pink bila estimasi melewati batas.
+> Tombol generate di semua mode diseragamkan berlabel "Buat" (+ ikon per mode) supaya
+> tidak turun baris di HP.
 
 ### Gap C — Tidak ada tipe konten non-foto/non-video standar
 

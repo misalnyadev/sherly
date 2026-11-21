@@ -1811,7 +1811,7 @@
       skel.remove();
       window.toast?.(e.message || 'Generator gambar gagal.');
     } finally {
-      btn.disabled = false; btn.innerHTML = icon('image-plus') + ' Buat Gambar';
+      btn.disabled = false; btn.innerHTML = icon('image-plus') + ' Buat';
     }
   }
 
@@ -1837,7 +1837,7 @@
       pollVideo();
     } catch (e) {
       window.toast?.(e.message || 'Generator video gagal.');
-      btn.disabled = false; btn.innerHTML = icon('film') + ' Buat Video';
+      btn.disabled = false; btn.innerHTML = icon('film') + ' Buat';
     }
   }
 
@@ -1850,6 +1850,15 @@
   function lipsyncCharacterById(id) {
     return lipsyncCharacters().find((c) => c.id === id) || null;
   }
+  // D-243: durasi lipsync TIDAK bisa diset di awal — dia mengikuti panjang naskah
+  // (TTS membacakan naskah, InfiniteTalk maksimal 15 detik audio).
+  // Estimasi kasar: ~13 karakter/detik untuk bahasa Indonesia (naskah 15 detik
+  // ≈ 195 karakter). Server juga membatasi naskah maksimal 1.500 karakter.
+  function estimateLipsyncSeconds(script) {
+    const chars = String(script || '').trim().length;
+    if (!chars) return 0;
+    return Math.max(1, Math.ceil(chars / 13));
+  }
   function renderLipsyncBar() {
     const bar = $('stLipsyncBar'); if (!bar) return;
     const isLip = state.mode === 'lipsync';
@@ -1861,8 +1870,13 @@
     const meta = $('stLipsyncMeta');
     if (meta) {
       const model = lipsyncModel();
-      meta.textContent = (model ? model.label + ' · ' : '')
-        + 'maks ' + (model?.maxSeconds || lipsyncCatalog.maxSeconds || 15) + ' detik';
+      const max = model?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
+      const est = estimateLipsyncSeconds(($('stPrompt') || {}).value);
+      // Durasi lipsync mengikuti naskah, bukan diset di awal.
+      meta.textContent = est
+        ? '±' + est + ' dtk (maks ' + max + ')'
+        : (model ? model.label + ' · ' : '') + 'maks ' + max + ' dtk';
+      meta.classList.toggle('st-lipsync-meta-warn', est > max);
     }
   }
   function buildLipsyncCharPop() {
@@ -1941,14 +1955,14 @@
       window.toast?.('Pemantauan video dibatalkan.');
     });
   }
-  // D-242: label tombol generate mengikuti mode aktif (foto / video / karakter bicara).
+  // D-243: semua tombol generate berlabel "Buat" + ikon per mode (tidak melebar di HP).
   function resetGenerateButtons() {
     const b = $('stVideoBtn');
-    if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat Video'; }
+    if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat'; }
     const l = $('stLipsyncBtn');
-    if (l) { l.disabled = false; l.innerHTML = icon('mic') + ' Buat Video Bicara'; }
+    if (l) { l.disabled = false; l.innerHTML = icon('mic') + ' Buat'; }
     const g = $('stGenBtn');
-    if (g) { g.disabled = false; g.innerHTML = icon('image-plus') + ' Buat Gambar'; }
+    if (g) { g.disabled = false; g.innerHTML = icon('image-plus') + ' Buat'; }
   }
   async function pollVideo() {
     if (!videoTask) return;
@@ -2058,10 +2072,12 @@
       // D-221: panel pengaturan konten (dropdown/modal di HP).
       + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
-      + '<button type="button" class="pink-btn" id="stGenBtn">' + icon('image-plus') + ' Buat Gambar</button>'
-      + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn">' + icon('film') + ' Buat Video</button>'
+      // D-243: semua tombol generate pakai label seragam "Buat" + ikon per mode,
+      // supaya tombol tidak melebar dan tidak turun baris di HP.
+      + '<button type="button" class="pink-btn" id="stGenBtn" title="Buat Gambar">' + icon('image-plus') + ' Buat</button>'
+      + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn" title="Buat Video">' + icon('film') + ' Buat</button>'
       // D-242: mode "Karakter Bicara" (lipsync) -> potret + audio -> video bicara.
-      + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn">' + icon('mic') + ' Buat Video Bicara</button>'
+      + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn" title="Buat Video Bicara">' + icon('mic') + ' Buat</button>'
       + '</div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
@@ -2224,6 +2240,8 @@
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
       autoFit();
+      // D-243: estimasi durasi lipsync ikut berubah saat naskah diketik.
+      renderLipsyncBar();
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
       // D-216: mention aset gambar -> masuk ke header sebagai referensi.
       syncMentionedAssetRefs();
