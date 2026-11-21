@@ -916,10 +916,16 @@ test('D-217: avatar karakter pakai outline (garis luar) sebagai penanda status',
   assert.ok(css.includes('.st-asset-char.has-voice .st-asset-face::after,.st-asset-char.has-sheet .st-asset-face::after{opacity:1}'),
     'outline harus tampil untuk has-voice / has-sheet');
   // Badge jadi ikon kecil outline (bukan filled circle gelap).
+  // D-227: badge = kertas hitam polos tanpa border (bukan kotak pink).
   const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
   assert.ok(badge, 'aturan .st-asset-badge tidak ada');
-  assert.ok(badge[0].includes('border:1px solid #ff9bdc'), 'badge harus outline pink');
+  assert.ok(/border:0(;|\s)/.test(badge[0]), 'badge tanpa border (D-227)');
   assert.ok(!badge[0].includes('background:#0f1828'), 'badge tidak boleh filled gelap');
+  // Ikonnya tetap outline pink (garis, bukan filled).
+  const svgRule = css.match(/\.st-asset-badge svg\{[^}]*\}/s);
+  assert.ok(svgRule, 'aturan svg badge tidak ada');
+  assert.ok(svgRule[0].includes('fill:none'), 'ikon badge harus outline (fill:none)');
+  assert.ok(svgRule[0].includes('stroke:#ff9bdc'), 'ikon badge harus pink');
 });
 
 test('D-217: markup menandai kelas has-voice / has-sheet', () => {
@@ -951,17 +957,17 @@ test('D-217: kursor composer ikut naik sesuai baris yang diketik', () => {
 
 // ===== D-218: badge outline di DALAM kotak karakter + kursor pas di teks =====
 
-test('D-218: badge penanda = ikon outline (posisi diatur D-226)', () => {
+test('D-218: badge penanda = ikon outline (posisi diatur D-227)', () => {
   const css = readFileSync('public/index.html', 'utf8');
   const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
   assert.ok(badge, 'aturan .st-asset-badge tidak ada');
   const rule = badge[0];
-  // D-226 supersede posisi: sekarang PETAK DI DALAM pojok kanan bawah
-  // (right:2px; bottom:2px). Yang diuji di sini: bentuk outline
-  // (bukan filled / kertas) & ikon kecil.
-  // Bentuk outline, bukan filled / kertas.
-  assert.ok(rule.includes('border:1px solid #ff9bdc'), 'badge harus border pink (outline)');
-  assert.ok(/width:1[23]px/.test(rule), 'badge kecil (12-13px)');
+  // D-227 supersede posisi: sekarang KERTAS HITAM tanpa border, nempel di
+  // tepi kanan + bawah bagian dalam kotak avatar. Yang diuji di sini:
+  // ikon svg tetap outline (fill:none) & ikon kecil.
+  // D-227: bentuk = kertas hitam tanpa border (bukan filled bulat / kotak pink).
+  assert.ok(/border:0(;|\s)/.test(rule), 'badge tanpa border (D-227)');
+  assert.ok(/width:1[234]px/.test(rule), 'badge kecil (12-14px)');
   // Ikon SVG-nya outline (tanpa isian).
   const svg = css.match(/\.st-asset-badge svg\{[^}]*\}/s);
   assert.ok(svg, 'aturan svg badge tidak ada');
@@ -1293,25 +1299,29 @@ test('D-224: kotak avatar hanya ikon user; daftar mention 2 ikon (suara + bible)
 // D-225 (badge keluar setengah nempel border) dikoreksi: user minta badge
 // tetap DI DALAM kotak avatar, di sudut kanan bawah, tanpa ada yang keluar.
 
-test('D-226: badge user = petak di dalam kotak, sudut kanan bawah', () => {
+test('D-227: badge user = kertas hitam tanpa border, nempel tepi kanan+bawah', () => {
   const css = readFileSync('public/index.html', 'utf8');
   const badge = css.match(/\.st-asset-badge\{[^}]*\}/s);
   assert.ok(badge, 'aturan .st-asset-badge tidak ada');
   const rule = badge[0];
-  // Pojok kanan bawah, DI DALAM (nilai positif, bukan negatif/keluar).
-  assert.ok(rule.includes('right:2px'), 'badge harus di dalam kanan (right:2px)');
-  assert.ok(rule.includes('bottom:2px'), 'badge harus di dalam bawah (bottom:2px)');
+  // Menempel di tepi SAMPING + BAWAH bagian dalam kotak (0, bukan offset jauh,
+  // dan bukan negatif/keluar).
+  assert.ok(rule.includes('right:0'), 'badge nempel tepi kanan (right:0)');
+  assert.ok(rule.includes('bottom:0'), 'badge nempel tepi bawah (bottom:0)');
   assert.ok(!/right:-\d/.test(rule), 'badge tidak boleh keluar dari kanan');
   assert.ok(!/bottom:-\d/.test(rule), 'badge tidak boleh keluar dari bawah');
-  // Bentuk petak (bukan bulat).
-  assert.ok(rule.includes('border-radius:3px'), 'badge harus petak (border-radius:3px)');
-  assert.ok(!rule.includes('border-radius:50%'), 'badge tidak boleh bulat');
-  // Ukuran kecil + tidak menghalang klik.
-  assert.ok(rule.includes('width:12px;height:12px'), 'badge 12x12');
+  // TANPA border -> kertas hitam polos, bukan kotak ber-border pink.
+  assert.ok(/border:0(;|\s)/.test(rule), 'badge harus tanpa border');
+  assert.ok(!rule.includes('#ff9bdc'), 'badge tidak boleh pakai warna border pink');
+  // Kertas hitam + menyatu (tanpa box-shadow pemisah yang bikin melayang).
+  assert.ok(rule.includes('background:#0c1422'), 'badge kertas hitam');
+  assert.ok(!rule.includes('box-shadow'), 'badge tidak boleh ada shadow (biar nyatu, bukan melayang)');
+  // Ukuran + tidak menghalang klik.
+  assert.ok(rule.includes('width:14px;height:14px'), 'badge 14x14');
   assert.ok(rule.includes('pointer-events:none'), 'badge tidak boleh menghalang klik');
 });
 
-test('D-226: badge ada DI DALAM .st-asset-face (tidak ada yang keluar kotak)', () => {
+test('D-227: badge ada DI DALAM .st-asset-face (tidak ada yang keluar kotak)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
   const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
@@ -1329,7 +1339,7 @@ test('D-226: badge ada DI DALAM .st-asset-face (tidak ada yang keluar kotak)', (
   assert.ok(face[0].includes('overflow:hidden'), 'avatar overflow:hidden (badge terpotong di dalam)');
 });
 
-test('D-226: badge user tetap pakai ikon user', () => {
+test('D-227: badge user tetap pakai ikon user', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
   const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
