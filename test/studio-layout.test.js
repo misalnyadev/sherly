@@ -1241,18 +1241,52 @@ test('D-223: badge karakter hanya satu ikon user, tanpa ikon layers (buku)', () 
   assert.ok(hbody.includes("icon('user')"), 'badge harus pakai icon user');
   // Tidak boleh ada icon layers (bentuknya seperti buku).
   assert.ok(!hbody.includes("icon('layers')"), 'badge tidak boleh pakai icon layers');
-  // Maksimal satu badge per karakter: kondisi gabungan.
-  assert.ok(hbody.includes('if (hasVoice || hasSheet)'), 'kondisi badge harus gabungan (satu badge)');
+  // D-224: badge user selalu tampil di kotak avatar (ikon terakhir dari 3 ikon).
+  assert.ok(hbody.includes("badges.push('<span class=\"st-asset-badge\">' + icon('user') + '</span>')"),
+    'kotak avatar harus punya satu badge icon user');
   // Font: penanda tetap di tooltip.
   assert.ok(hbody.includes("notes.push('Punya master sheet')"), 'detail sheet tetap di tooltip');
   assert.ok(hbody.includes("notes.push('Suara: '"), 'detail suara tetap di tooltip');
 });
 
-test('D-223: mention picker juga pakai satu ikon user', () => {
+test('D-223: mention picker tanpa ikon layers (buku/lapis)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const ren = studio.slice(studio.indexOf('function renderMention'));
   const rbody = ren.slice(0, ren.indexOf('\n  }'));
-  assert.ok(rbody.includes("icon('user')"), 'penanda picker harus icon user');
+  // D-224 Supersede: picker kini 2 ikon status (mic + book-open), bukan user.
   assert.ok(!rbody.includes("icon('layers')"), 'picker tidak boleh pakai icon layers');
-  assert.ok(rbody.includes("(v.name || v.style) || c.board_image_url"), 'kondisi penanda harus gabungan');
+  // (icon('user') di picker hanya untuk LABEL GRUP "Karakter", bukan penanda item.)
+  const markLine = rbody.split('\n').filter((l) => l.includes('marks.push'));
+  assert.ok(markLine.every((l) => !l.includes("icon('user')")), 'penanda item picker tidak boleh icon user (D-224)');
+});
+
+// ===== D-224: 3 ikon aset karakter (suara + bible + user) =====
+
+test('D-224: ICONS punya book-open (ikon bible/naskah)', () => {
+  const html = readFileSync('public/index.html', 'utf8');
+  assert.ok(html.includes("'book-open':'<"), "ICONS harus punya ikon 'book-open'");
+  assert.ok(html.includes("mic:'<"), "ICONS harus punya ikon 'mic'");
+  assert.ok(html.includes("user:'<"), "ICONS harus punya ikon 'user'");
+  // Kunci dengan tanda hubung wajib quoted.
+  assert.ok(!html.includes(" book-open:'<"), "kunci 'book-open' harus quoted");
+});
+
+test('D-224: kotak avatar hanya ikon user; daftar mention 2 ikon (suara + bible)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Header: satu badge user.
+  const hdr = studio.slice(studio.indexOf('function renderAssetHeader'));
+  const hbody = hdr.slice(0, hdr.indexOf('\n  }'));
+  assert.ok(hbody.includes("badges.push('<span class=\"st-asset-badge\">' + icon('user') + '</span>')"),
+    'kotak avatar harus pakai icon user');
+  assert.ok(!hbody.includes("icon('mic')"), 'kotak avatar tidak boleh pakai icon mic');
+  assert.ok(!hbody.includes("icon('book-open')"), 'kotak avatar tidak boleh pakai icon book-open');
+  // Picker: mic + book-open.
+  const ren = studio.slice(studio.indexOf('function renderMention'));
+  const rbody = ren.slice(0, ren.indexOf('\n  }'));
+  assert.ok(rbody.includes("marks.push(icon('mic'))"), 'daftar harus punya icon mic (suara)');
+  assert.ok(rbody.includes("marks.push(icon('book-open'))"), 'daftar harus punya icon book-open (bible)');
+  assert.ok(!rbody.includes("marks.push(icon('user'))"), 'daftar tidak perlu icon user');
+  // Detail status tetap di tooltip.
+  assert.ok(hbody.includes("notes.push('Suara: '"), 'detail suara di tooltip');
+  assert.ok(hbody.includes("notes.push('Punya master sheet')"), 'detail sheet di tooltip');
 });
