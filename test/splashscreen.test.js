@@ -86,13 +86,13 @@ test('D-248: aset brand video tersedia di disk', () => {
   }
 });
 
-test('D-248: logo ada di tengah layar (tagline & bar overlay absolut)', () => {
-  // tagline & bar harus position:absolute supaya tidak mendorong logo dari tengah
+test('D-248: video diputar FULLSCREEN (kotak video mustahil terlihat)', () => {
+  // area media = seluruh viewport (100vw x 100vh) + object-fit:cover
+  assert.match(html, /#splash \.sp-media\{[^}]*width:100vw;height:100vh/);
+  assert.match(html, /#splash \.sp-media video[^{]*\{[^}]*object-fit:cover/);
+  // tagline & bar tetap overlay absolut (tidak mendorong logo)
   assert.match(html, /#splash \.sp-tag\{position:absolute/);
   assert.match(html, /#splash \.sp-bar\{position:absolute/);
-  // area media punya aspect ratio eksplisit + object-fit contain (logo utuh, tidak gepencet)
-  assert.match(html, /#splash \.sp-media\{[^}]*aspect-ratio:36\/38/);
-  assert.match(html, /#splash \.sp-media video[^{]*\{[^}]*object-fit:contain/);
 });
 
 test('D-248: background splash PERSIS sama dengan background app (kotak video hilang)', () => {
@@ -107,11 +107,11 @@ test('D-248: background splash PERSIS sama dengan background app (kotak video hi
 });
 
 test('D-248: tagline & bar jauh di bawah logo (tidak kena logo)', () => {
-  // offset harus positif (turun) dan cukup besar dari titik tengah
-  const tag = html.match(/#splash \.sp-tag\{position:absolute;top:calc\(50% \+ min\(42vw,180px\) \+ (\d+)px\)/);
+  // offset relatif ke tinggi layar (fullscreen), harus positif & cukup besar
+  const tag = html.match(/#splash \.sp-tag\{position:absolute;top:calc\(50% \+ 24vh \+ (\d+)px\)/);
   assert.ok(tag, 'tagline harus positioned absolut dengan offset positif');
   assert.ok(Number(tag[1]) >= 40, `offset tagline ${tag[1]}px harus >= 40px (tidak kena logo)`);
-  const bar = html.match(/#splash \.sp-bar\{position:absolute;top:calc\(50% \+ min\(42vw,180px\) \+ (\d+)px\)/);
+  const bar = html.match(/#splash \.sp-bar\{position:absolute;top:calc\(50% \+ 24vh \+ (\d+)px\)/);
   assert.ok(bar);
   assert.ok(Number(bar[1]) > Number(tag[1]), 'progress bar harus di bawah tagline');
 });
