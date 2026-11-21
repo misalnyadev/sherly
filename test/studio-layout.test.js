@@ -2358,3 +2358,144 @@ test('D-244: karakter tanpa potret tidak bisa dipilih (picker hanya karakter ber
   const ids = [...doc.getElementById('stPop-lipsyncchar').querySelectorAll('[data-lip-char]')].map((b) => b.dataset.lipChar);
   assert.deepEqual(ids, ['22222222-2222-4222-8222-222222222222'], 'hanya karakter berpotret yang bisa dipilih');
 });
+
+// ===== D-245: provider & model lipsync bisa dipilih =====
+
+const LIP_CATALOG = {
+  ok: true, defaultModel: 'infinitalk/from-audio', maxSeconds: 15,
+  providers: [{ id: 'kie', label: 'Kie AI', note: 'Semua model lipsync via satu kunci Kie' }],
+  models: [
+    { id: 'infinitalk/from-audio', provider: 'kie', label: 'InfiniteTalk', maker: 'MeiGen-AI',
+      resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
+      note: 'n', defaultResolution: '720p', defaultAspect: '9:16' },
+    { id: 'ltx/2-5-fast-audio-to-video', provider: 'kie', label: 'LTX 2.5 Fast A2V', maker: 'Lightricks',
+      resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
+      note: 'n', defaultResolution: '1080p', defaultAspect: '9:16' },
+  ],
+};
+
+function lipFetchCapture(capture) {
+  return async (url, opts) => {
+    const u = String(url || '');
+    if (u.includes('/api/ai/lipsync') && opts && opts.method === 'POST') {
+      capture.body = JSON.parse(opts.body);
+      return { ok: true, json: async () => ({ ok: true, id: 'task-1', task_id: 'kie-1' }) };
+    }
+    if (u.includes('/api/ai/lipsync/models')) return { ok: true, json: async () => JSON.parse(JSON.stringify(LIP_CATALOG)) };
+    if (u.includes('/api/characters')) {
+      return { ok: true, json: async () => ({ characters: [
+        { id: '11111111-1111-4111-8111-111111111111', name: 'Sherly', reference_image_path: 'a.png', voice: { name: 'Zephyr' } }] }) };
+    }
+    return { ok: true, json: async () => (u.includes('/api/ai/image/models') ? IMAGE_CATALOG : u.includes('/api/prompt-bank') ? PROMPT_BANK : CATALOG) };
+  };
+}
+
+async function switchToLipsync(win, doc) {
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 40));
+  const pop = doc.getElementById('stPop-type');
+  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  return click;
+}
+
+/** Buka panel "Pengaturan Konten" (layout mobile => innerWidth <= 560). */
+async function openSettings(win, doc) {
+  Object.defineProperty(win, 'innerWidth', { value: 390, configurable: true });
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 80));
+  return click;
+}
+
+test('D-245: pill Provider & Resolusi tampil di mode Karakter Bicara', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  // Di mode foto -> pill provider tampil, pill resolusi lipsync hidden.
+  assert.ok(!doc.getElementById('stEnginePillWrap').classList.contains('st-hidden'), 'pill provider tampil di mode foto');
+  assert.ok(doc.getElementById('stLipResPillWrap').classList.contains('st-hidden'), 'pill resolusi lipsync hidden di mode foto');
+  const click = await switchToLipsync(win, doc);
+  assert.ok(!doc.getElementById('stEnginePillWrap').classList.contains('st-hidden'), 'pill provider harus tampil di mode lipsync');
+  assert.ok(!doc.getElementById('stLipResPillWrap').classList.contains('st-hidden'), 'pill resolusi lipsync harus tampil di mode lipsync');
+  assert.equal(doc.querySelector('#stEnginePill b').textContent.trim(), 'Kie AI');
+});
+
+test('D-245: panel Pengaturan Konten punya grup Provider, Model, Resolusi untuk lipsync', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  const labels = [...panel.querySelectorAll('.st-set-label b')].map((b) => b.textContent);
+  assert.ok(labels.includes('Provider'), 'grup Provider harus ada: ' + labels.join(','));
+  assert.ok(labels.includes('Model'), 'grup Model harus ada: ' + labels.join(','));
+  assert.ok(labels.includes('Resolusi'), 'grup Resolusi harus ada: ' + labels.join(','));
+  // Pilihan provider lipsync hanya Kie AI.
+  const provs = [...panel.querySelectorAll('[data-set-key="engine"]')].map((b) => b.dataset.setV);
+  assert.deepEqual(provs, ['kie'], 'provider lipsync hanya Kie AI');
+  // Ada 2 model lipsync.
+  const models = [...panel.querySelectorAll('[data-set-key="lipmodel"]')].map((b) => b.dataset.setV);
+  assert.deepEqual(models, ['infinitalk/from-audio', 'ltx/2-5-fast-audio-to-video']);
+});
+
+test('D-245: ganti model lipsync -> resolusi ikut ke default model baru & tersimpan', async () => {
+  const { win, doc } = buildStudio(lipFetchCapture({}));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  const panel = doc.getElementById('stPop-settings');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="ltx/2-5-fast-audio-to-video"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  // Resolusi LTX default 1080p.
+  assert.equal(doc.querySelector('#stLipResPill b').textContent.trim(), '1080p');
+  // Bar karakter menampilkan model LTX + provider Kie AI + maks 20 dtk.
+  const meta = doc.getElementById('stLipsyncMeta').textContent;
+  assert.match(meta, /Kie AI/, 'meta harus menyebut provider: ' + meta);
+  assert.match(meta, /LTX 2\.5/, 'meta harus menyebut model: ' + meta);
+  assert.match(meta, /maks 20/, 'meta harus menyebut batas 20 detik: ' + meta);
+  // Buka panel lagi -> pilihan tersimpan.
+  const click2 = await openSettings(win, doc);
+  const p2 = doc.getElementById('stPop-settings');
+  const on = [...p2.querySelectorAll('[data-set-key="lipmodel"]')].find((b) => b.classList.contains('on'));
+  assert.equal(on?.dataset.setV, 'ltx/2-5-fast-audio-to-video', 'model lipsync harus tersimpan');
+  const onRes = [...p2.querySelectorAll('[data-set-key="lipres"]')].find((b) => b.classList.contains('on'));
+  assert.equal(onRes?.dataset.setV, '1080p', 'resolusi lipsync harus tersimpan');
+});
+
+test('D-245: request lipsync mengirim provider & resolusi terpilih', async () => {
+  const capture = {};
+  const { win, doc } = buildStudio(lipFetchCapture(capture));
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  const realSetTimeout = win.setTimeout;
+  win.setTimeout = (fn, ms) => (ms >= 1000 ? 0 : realSetTimeout(fn, ms));
+  await switchToLipsync(win, doc);
+  const click = await openSettings(win, doc);
+  // Pilih model LTX + resolusi 1440p.
+  const panel = doc.getElementById('stPop-settings');
+  click(panel.querySelector('[data-set-key="lipmodel"][data-set-v="ltx/2-5-fast-audio-to-video"]'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stLipResPill'));
+  await new Promise((r) => setTimeout(r, 40));
+  click([...doc.getElementById('stPop-lipres').querySelectorAll('button')].find((b) => b.dataset.v === '1440p'));
+  // Pilih karakter + naskah.
+  click(doc.getElementById('stLipsyncCharBtn'));
+  await new Promise((r) => setTimeout(r, 40));
+  click(doc.getElementById('stPop-lipsyncchar').querySelector('[data-lip-char]'));
+  const ta = doc.getElementById('stPrompt');
+  ta.value = 'Halo, aku Sherly.';
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  click(doc.getElementById('stLipsyncBtn'));
+  await new Promise((r) => setTimeout(r, 120));
+  assert.ok(capture.body, 'request lipsync tidak terkirim');
+  assert.equal(capture.body.model, 'ltx/2-5-fast-audio-to-video');
+  assert.equal(capture.body.provider, 'kie');
+  assert.equal(capture.body.resolution, '1440p');
+});

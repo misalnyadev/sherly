@@ -434,6 +434,9 @@ export async function generateLipsyncWithKie(auth = {}, opts = {}) {
     resolution: opts.resolution || spec.defaultResolution,
     aspect: opts.aspect || spec.defaultAspect,
     seed: Number.isInteger(opts.seed) ? opts.seed : undefined,
+    // D-245: LTX 2.5 A2V punya fps & durasi opsional.
+    fps: Number.isInteger(opts.fps) ? opts.fps : undefined,
+    duration: Number.isFinite(Number(opts.duration)) ? Number(opts.duration) : undefined,
   };
   const input = buildLipsyncInput(spec.schema, params, opts.imageUrl, opts.audioUrl);
   let lastError = null;

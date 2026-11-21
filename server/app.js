@@ -824,13 +824,20 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       model: rawModel, resolution: rawResolution, aspect: rawAspect,
       voice: rawVoice, style: rawStyle, audioUrl: rawAudioUrl,
       referenceImage: rawRefImage,
+      provider: rawProvider, fps: rawFps, duration: rawDuration,
     } = req.body || {};
     const script = typeof rawScript === 'string' ? rawScript.trim() : '';
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
 
     // --- 1) Validasi parameter model ---
+    // D-245: provider lipsync (saat ini Kie AI untuk semua model).
+    const lipsyncProvider = String(rawProvider || 'kie').toLowerCase();
+    if (lipsyncProvider !== 'kie') {
+      return res.status(400).json({ ok: false, error: 'Provider lipsync saat ini hanya Kie AI.' });
+    }
     const spec = normalizeLipsyncParams({
       model: rawModel, resolution: rawResolution, aspect: rawAspect,
+      fps: rawFps, duration: rawDuration,
     });
     if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
     const { model: lipsyncModel, resolution, aspect } = spec;
@@ -888,8 +895,10 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     if (!audioBase64) return res.status(400).json({ ok: false, error: 'Audio tidak tersedia.' });
     // Batas durasi audio InfiniteTalk = 15 detik.
     const approxSeconds = Math.max(1, Math.round((audioBase64.length * 0.75) / 16000));
-    if (approxSeconds > LIPSYNC_MAX_SECONDS + 3) {
-      return res.status(400).json({ ok: false, error: 'Audio terlalu panjang (maks ' + LIPSYNC_MAX_SECONDS + ' detik).' });
+    // D-245: batas durasi audio mengikuti model (InfiniteTalk 15 dtk, LTX 2.5 A2V 20 dtk).
+    const maxSeconds = lipsyncModel.maxSeconds || LIPSYNC_MAX_SECONDS;
+    if (approxSeconds > maxSeconds + 3) {
+      return res.status(400).json({ ok: false, error: 'Audio terlalu panjang untuk ' + lipsyncModel.label + ' (maks ' + maxSeconds + ' detik).' });
     }
 
     // --- 4) Upload potret + audio ke Kie -> URL publik ---
@@ -960,15 +969,16 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     const auth = { supabase: req.supabase, accessToken: req.accessToken };
     const created = await generateLipsyncWithKie(auth, {
       model: lipsyncModel.id, prompt: lipPrompt, resolution, aspect,
-      imageUrl, audioUrl,
+      imageUrl, audioUrl, fps: spec.fps, duration: spec.duration,
     });
     const task = await createVideoTask(req.supabase, req.user.id, {
       provider: created.provider, model: created.model, taskId: created.taskId, prompt: lipPrompt,
       meta: {
         kind: 'lipsync', aspect, resolution, modelLabel: lipsyncModel.label,
+        providerLabel: 'Kie AI', fps: spec.fps || null,
         characterId: character.id, characterName: character.name, audioSource,
         imageFrom, sceneHint,
-        duration: Math.min(approxSeconds, LIPSYNC_MAX_SECONDS),
+        duration: Math.min(approxSeconds, maxSeconds),
       },
     });
     res.status(202).json({
