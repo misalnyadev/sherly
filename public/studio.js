@@ -233,6 +233,8 @@
     lipsyncModel: 'infinitalk/from-audio', lipsyncCharacterId: '', lipsyncResolution: '720p',
     // D-203: model gambar (Kie) + jenis konten (satu kotak pilihan).
     imageModel: 'nano-banana-2', imageResolution: '2K', contentType: 'photo',
+    // D-249: mode Motion Graphics — template render + durasi + isi per field.
+    motionTemplateId: 'branded-intro', motionDuration: 6, motionProps: {},
   };
   let assets = [];           // D-198: galeri aset (dari server)
   let chain = [];            // rantai adegan (lokal): frame terakhir jadi referensi gambar
@@ -246,6 +248,11 @@
   let mentionAt = -1;       // posisi karakter "@" yang memicu dropdown
   let videoTask = null;     // D-198: task video yang sedang berjalan
   let videoTimer = null;
+  // D-249: template Motion Graphics (dari server) + task render yang jalan.
+  let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
+  let motionAvailable = false;   // renderer siap di server?
+  let motionTask = null;         // task render Motion Graphics yang sedang berjalan
+  let motionTimer = null;
   // D-207: Bank Prompt — template utuh + blok modular.
   let promptBank = [];          // entri dari server (template & block)
   let promptBankLoaded = false;
@@ -865,20 +872,100 @@
 
   function aspectLabel() { const a = ASPECTS.find((x) => x[0] === state.aspect); return a ? a[0] : state.aspect; }
 
+  // ===== D-249: Mode Motion Graphics (render video programatik) =====
+  //
+  // Template & kapabilitas diambil dari server (/api/studio/motion-graphics/templates).
+  // Kalau renderer tidak siap di server, mode ini disembunyikan dari pilihan
+  // jenis konten supaya user tidak stumble ke fitur yang tidak bisa jalan.
+
+  /** Template Motion Graphics terpilih. */
+  function motionTemplate() {
+    return motionTemplates.find((t) => t.id === state.motionTemplateId)
+      || motionTemplates[0]
+      || null;
+  }
+  /** Muat daftar template Motion Graphics (sekali per render Studio). */
+  async function loadMotionTemplates() {
+    try {
+      const r = await fetch('/api/studio/motion-graphics/templates', { headers: await authHeaders() });
+      const d = await r.json();
+      motionTemplates = Array.isArray(d?.templates) ? d.templates : [];
+      motionAvailable = !!d?.available;
+    } catch {
+      motionTemplates = [];
+      motionAvailable = false;
+    }
+    renderMotionBar();
+    updatePillLabels();
+  }
+  /** Baris pilihan template + field isinya (mode Motion Graphics). */
+  function renderMotionBar() {
+    const bar = $('stMotionBar'); if (!bar) return;
+    const isMotion = state.mode === 'motion';
+    bar.classList.toggle('st-hidden', !isMotion);
+    if (!isMotion) return;
+    const tpl = motionTemplate();
+    if (!tpl) { bar.innerHTML = ''; return; }
+    const fields = (tpl.fields || []).map((f) => {
+      const value = state.motionProps[f.key] || '';
+      const multi = f.type === 'textarea';
+      return '<label class="st-motion-field" for="stMotionField-' + esc(f.key) + '">'
+        + '<span>' + esc(f.label) + (f.required ? ' *' : '') + '</span>'
+        + (multi
+          ? '<textarea id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" rows="2" maxlength="4000" placeholder="' + esc(f.placeholder || '') + '">' + esc(value) + '</textarea>'
+          : '<input id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" type="text" maxlength="4000" value="' + esc(value) + '" placeholder="' + esc(f.placeholder || '') + '">')
+        + '</label>';
+    }).join('');
+    bar.innerHTML = '<div class="st-motion-head">' + icon('film') + '<b>' + esc(tpl.label) + '</b>'
+      + '<small>' + esc(tpl.hint || '') + '</small></div>'
+      + '<div class="st-motion-fields">' + fields + '</div>';
+    bar.querySelectorAll('[data-motion-field]').forEach((input) => {
+      input.addEventListener('input', () => {
+        state.motionProps[input.dataset.motionField] = input.value;
+      });
+    });
+  }
+  /** Isi render yang dikirim ke server: field template + teks composer. */
+  function motionRenderProps() {
+    const tpl = motionTemplate();
+    const props = Object.assign({}, state.motionProps || {});
+    const ta = $('stPrompt');
+    const typed = String(ta?.value || '').trim();
+    // Kolom pertama template boleh diisi dari composer kalau masih kosong.
+    const first = (tpl?.fields || [])[0];
+    if (typed && first && !String(props[first.key] || '').trim()) props[first.key] = typed;
+    return props;
+  }
+
   // D-203: jenis konten dipilih lewat satu kotak pilihan (pill "Jenis Konten").
   const CONTENT_TYPES = [
     ['photo', 'Foto', 'image-plus'],
     ['video', 'Video', 'video'],
     // D-242: mode lipsync — karakter bicara (potret + naskah -> video).
     ['lipsync', 'Karakter Bicara', 'mic'],
+    // D-249: mode Motion Graphics — render video programatik (Remotion, lokal).
+    ['motion', 'Motion Graphics', 'film'],
   ];
+  /**
+   * D-249: daftar jenis konten yang TERSEDIA.
+   * Mode Motion Graphics disembunyikan kalau renderer tidak siap di server
+   * (mis. dependency Remotion belum terpasang) — user tidak boleh melihat
+   * pilihan yang tidak bisa dipakai.
+   */
+  function availableContentTypes() {
+    return CONTENT_TYPES.filter(([v]) => v !== 'motion' || motionAvailable);
+  }
   function setMode(m) {
     // D-242: tiga mode konten — foto, video, dan karakter bicara (lipsync).
-    const mode = m === 'video' ? 'video' : m === 'lipsync' ? 'lipsync' : 'photo';
+    // D-249: ditambah mode Motion Graphics (render video programatik).
+    const mode = m === 'video' ? 'video' : m === 'lipsync' ? 'lipsync'
+      : m === 'motion' ? 'motion' : 'photo';
     state.mode = mode;
     state.contentType = mode;
     const isVideo = mode === 'video';
     const isLip = mode === 'lipsync';
+    // D-249: mode Motion Graphics — render video programatik (template + isi).
+    const isMotion = mode === 'motion';
     // Rasio aspek video mengikuti kapabilitas model terpilih.
     if (isVideo) {
       const aspects = videoModel()?.aspects || ['16:9', '9:16'];
@@ -887,6 +974,10 @@
       // Lipsync: rasio mengikuti model lipsync (16:9 / 9:16 / 1:1).
       const asp = lipsyncModel()?.aspects || ['9:16'];
       if (!asp.includes(state.aspect)) state.aspect = asp.includes('9:16') ? '9:16' : asp[0];
+    } else if (isMotion) {
+      // D-249: rasio mengikuti template Motion Graphics terpilih.
+      const asp = motionTemplate()?.aspects || ['9:16'];
+      if (!asp.includes(state.aspect)) state.aspect = asp.includes('9:16') ? '9:16' : asp[0];
     } else if (!ASPECTS.some((v) => v[0] === state.aspect)) state.aspect = '4:5';
     // D-222: placeholder ringkas (tidak ada contoh panjang).
     const ta = $('stPrompt');
@@ -894,6 +985,8 @@
       ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.'
         // D-244: di mode Karakter Bicara, mention gambar = karakter di lokasi tertentu.
         : isLip ? 'Naskah… mention @ gambar karakter di lokasi tertentu'
+        // D-249: di mode Motion Graphics, isi = teks yang akan dirender.
+        : isMotion ? (motionTemplate()?.fields?.[0]?.placeholder || 'Isi yang mau dirender…')
         : 'Prompt… mention @ karakter/aset dll.';
     // D-244: di mode lipsync, textarea utama = naskah (bukan prompt adegan).
     }
@@ -908,7 +1001,8 @@
     $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
     // D-208: pill Style dihapus — semua gaya jadi template transparan di Bank Prompt.
     // Bank prompt mengikuti jenis konten (foto <-> video) supaya tidak salah pilih.
-    // mode konten di Studio: 'photo' | 'video' | 'lipsync'  ->  mode prompt: 'foto' | 'video'
+    // mode konten di Studio: 'photo' | 'video' | 'lipsync' | 'motion'
+    //   ->  mode prompt: 'foto' | 'video'
     const pbMode = mode === 'video' ? 'video' : 'foto';
     if (promptBankMode !== pbMode) {
       promptBankMode = pbMode;
@@ -917,16 +1011,21 @@
     }
     // D-203: pill model gambar hanya saat foto & mesin memakai Kie.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || isLip || !kieEngine);
-    $('stGenBtn')?.classList.toggle('st-hidden', isVideo || isLip);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || isLip || isMotion || !kieEngine);
+    $('stGenBtn')?.classList.toggle('st-hidden', isVideo || isLip || isMotion);
     $('stVideoBtn')?.classList.toggle('st-hidden', !isVideo);
     // D-242: tombol khusus lipsync.
     $('stLipsyncBtn')?.classList.toggle('st-hidden', !isLip);
+    // D-249: tombol khusus Motion Graphics (render video programatik).
+    $('stMotionBtn')?.classList.toggle('st-hidden', !isMotion);
+    // D-249: baris template Motion Graphics (dipilih di panel Pengaturan).
+    $('stMotionBar')?.classList.toggle('st-hidden', !isMotion);
     // D-242: Bank Prompt (template foto/video) tidak relevan untuk naskah lipsync.
-    document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip);
+    document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip || isMotion);
     // D-244: input "Arahan adegan" hanya untuk mode Karakter Bicara.
     $('stSceneHintBox')?.classList.toggle('st-hidden', !isLip);
     renderLipsyncBar();
+    renderMotionBar();
     updatePillLabels();
   }
 
@@ -944,7 +1043,7 @@
     // D-203: label jenis konten & model gambar.
     const tp = $('stTypePill');
     if (tp) {
-      const ct = CONTENT_TYPES.find((c) => c[0] === state.mode) || CONTENT_TYPES[0];
+      const ct = availableContentTypes().find((c) => c[0] === state.mode) || availableContentTypes()[0];
       tp.querySelector('b').textContent = ct[1];
       setIcon(tp, ct[2]);
     }
@@ -1071,7 +1170,7 @@
     }
     else if (which === 'type') {
       // D-203: satu kotak pilihan jenis konten (Foto / Video).
-      items = CONTENT_TYPES.map(([v, l, ico]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.mode === v ? 'on' : '') + '">'
+      items = availableContentTypes().map(([v, l, ico]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.mode === v ? 'on' : '') + '">'
         + icon(ico) + ' ' + esc(l) + '</button>').join('');
     }
     else if (which === 'imgmodel') {
@@ -1154,6 +1253,9 @@
       imageResolution: state.imageResolution,
       // D-245: model & resolusi lipsync.
       lipsyncModel: state.lipsyncModel, lipsyncResolution: state.lipsyncResolution,
+      // D-249: template & durasi Motion Graphics.
+      motionTemplateId: state.motionTemplateId, motionDuration: state.motionDuration,
+      motionProps: Object.assign({}, state.motionProps),
     };
     return settingsDraft;
   }
@@ -1177,6 +1279,10 @@
     // D-245: model & resolusi lipsync ikut tersimpan.
     state.lipsyncModel = d.lipsyncModel;
     state.lipsyncResolution = d.lipsyncResolution;
+    // D-249: template, durasi, & isi Motion Graphics ikut tersimpan.
+    state.motionTemplateId = d.motionTemplateId;
+    state.motionDuration = d.motionDuration;
+    state.motionProps = Object.assign({}, d.motionProps);
     if (d.mode !== state.mode) setMode(d.mode);
     // Rasio & resolusi mengikuti kapabilitas model terpilih.
     if (state.mode === 'photo') {
@@ -1195,6 +1301,12 @@
             ? lm.defaultAspect : (lm.aspects.includes('9:16') ? '9:16' : lm.aspects[0]);
         }
       }
+    } else if (state.mode === 'motion') {
+      // D-249: rasio mengikuti template Motion Graphics (bukan model video).
+      const tpl = motionTemplates.find((t) => t.id === state.motionTemplateId);
+      if (tpl && !tpl.aspects.includes(state.aspect)) {
+        state.aspect = tpl.aspects.includes('9:16') ? '9:16' : tpl.aspects[0];
+      }
     } else {
       const vm = videoCatalog.models.find((m) => m.id === state.videoModel);
       // D-240: JANGAN reset ke default model saat menyimpan draft.
@@ -1206,10 +1318,12 @@
     }
     // Pill "Model gambar" (Kie) ikut mengikuti provider terpilih.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || !kieEngine);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || state.mode === 'motion' || !kieEngine);
     updatePillLabels();
     // D-245: bar karakter menampilkan model/provider lipsync terbaru.
     renderLipsyncBar();
+    // D-249: bar template Motion Graphics ikut diperbarui.
+    renderMotionBar();
   }
 
   /** Daftar pilihan untuk satu jenis pengaturan (dipakai panel & popover). */
@@ -1243,6 +1357,12 @@
       const m = lipsyncModel();
       return (m?.resolutions || ['720p']).map((r) => ({ v: r, l: r }));
     }
+    // D-249: template & durasi render Motion Graphics.
+    if (which === 'mgtpl') return motionTemplates.map((t) => ({ v: t.id, l: t.label, note: t.hint || '' }));
+    if (which === 'mgdur') {
+      const tpl = motionTemplate();
+      return (tpl?.durations || [5, 6, 8]).map((d) => ({ v: String(d), l: d + ' detik' }));
+    }
     if (which === 'tier') return tierOptions(ctx).map(([v, l]) => ({ v, l }));
     if (which === 'res') return resolutionOptions(ctx).map(([v, l]) => ({ v, l }));
     return [];
@@ -1258,6 +1378,9 @@
     // D-245: model & resolusi lipsync.
     if (which === 'lipmodel') return ctx.lipsyncModel;
     if (which === 'lipres') return ctx.lipsyncResolution;
+    // D-249: template & durasi Motion Graphics.
+    if (which === 'mgtpl') return ctx.motionTemplateId;
+    if (which === 'mgdur') return String(ctx.motionDuration);
     if (which === 'tier') return ctx.tier;
     if (which === 'res') return ctx.resolution;
     return '';
@@ -1267,6 +1390,8 @@
     const ctx = settingCtx();
     const isVideo = ctx.mode === 'video';
     const isLip = ctx.mode === 'lipsync';
+    // D-249: mode Motion Graphics.
+    const isMotion = ctx.mode === 'motion';
     const kieEngine = ctx.engine === 'kie' || ctx.engine === 'auto' || ctx.engine.startsWith('custom:');
     const list = [
       { key: 'aspect', label: 'Rasio', icon: 'smartphone' },
@@ -1281,6 +1406,11 @@
       // D-245: mode Karakter Bicara — provider, model, dan resolusi.
       list.push({ key: 'lipmodel', label: 'Model', icon: 'mic' });
       list.push({ key: 'lipres', label: 'Resolusi', icon: 'sparkles' });
+    } else if (isMotion) {
+      // D-249: mode Motion Graphics — template render + durasi (tanpa provider).
+      list.length = 0;
+      list.push({ key: 'mgtpl', label: 'Template', icon: 'film' });
+      list.push({ key: 'mgdur', label: 'Durasi', icon: 'clock' });
     } else if (kieEngine) {
       list.push({ key: 'imgmodel', label: 'Model', icon: 'sparkles' });
     }
@@ -1362,6 +1492,23 @@
       }
     }
     if (which === 'lipres') target.lipsyncResolution = v;
+    // D-249: template & durasi render Motion Graphics.
+    if (which === 'mgtpl') {
+      target.motionTemplateId = v;
+      // Durasi & rasio ikut template baru.
+      const tpl = motionTemplates.find((t) => t.id === v);
+      if (tpl) {
+        if (!tpl.durations.includes(Number(target.motionDuration))) {
+          target.motionDuration = tpl.defaultDuration || tpl.durations[0];
+        }
+        if (!tpl.aspects.includes(target.aspect)) {
+          target.aspect = tpl.aspects.includes('9:16') ? '9:16' : tpl.aspects[0];
+        }
+      }
+      // Isi field template lama tidak relevan untuk template baru.
+      target.motionProps = {};
+    }
+    if (which === 'mgdur') target.motionDuration = Number(v);
     if (!draftMode) updatePillLabels();
   }
   /**
@@ -1403,7 +1550,7 @@
     const ctx = settingCtx();
     // D-221: panel juga memuat pilihan jenis konten (Foto / Video) supaya
     // di HP semua pengaturan konten ada di satu panel.
-    const typeChips = CONTENT_TYPES.map(([v, l, ico]) => {
+    const typeChips = availableContentTypes().map(([v, l, ico]) => {
       const on = ctx.mode === v;
       return '<button type="button" class="st-set-chip' + (on ? ' on' : '') + '" data-set-key="type" data-set-v="' + esc(v) + '">'
         + icon(ico) + '<span>' + esc(l) + '</span></button>';
@@ -1972,6 +2119,110 @@
     }
   }
 
+  // ===== D-249: render Motion Graphics (video programatik) =====
+  //
+  // Alur: POST /api/studio/motion-graphics -> task dibuat (server render di
+  // background) -> polling status -> video tersimpan sebagai aset di galeri.
+
+  async function generateMotionGraphics() {
+    const tpl = motionTemplate();
+    if (!tpl) { window.toast?.('Template Motion Graphics belum tersedia.'); return; }
+    const props = motionRenderProps();
+    // Kolom wajib harus terisi.
+    for (const f of (tpl.fields || [])) {
+      if (f.required && !String(props[f.key] || '').trim()) {
+        window.toast?.('Isi dulu kolom "' + f.label + '".');
+        $('stMotionField-' + f.key)?.focus();
+        return;
+      }
+    }
+    const btn = $('stMotionBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Render'; }
+    try {
+      const r = await fetch('/api/studio/motion-graphics', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          template: tpl.id,
+          aspect: state.aspect,
+          duration: state.motionDuration,
+          props,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Render Motion Graphics gagal.');
+      motionTask = { id: d.task?.id, progress: 0, status: 'queued' };
+      renderMotionProgress();
+      window.toast?.('Video sedang dirender… (±10-60 detik)');
+      pollMotion();
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = icon('film') + ' Render'; }
+      window.toast?.(e.message || 'Render Motion Graphics gagal.');
+    }
+  }
+
+  /** Bar progres render Motion Graphics. */
+  function renderMotionProgress() {
+    const box = $('stMotionProgress');
+    if (!box) return;
+    if (!motionTask) { box.classList.add('st-hidden'); box.setAttribute('data-progress', '0'); return; }
+    box.classList.remove('st-hidden');
+    const pct = Math.max(2, Math.min(100, Number(motionTask.progress) || 0));
+    box.setAttribute('data-progress', String(pct));
+    box.innerHTML = '<div class="st-vp-bar"><span style="width:' + pct + '%"></span></div>'
+      + '<p>' + icon('film') + ' <b>Video sedang dirender</b> — ' + pct + '%'
+      + (motionTask.status === 'error' ? ' · gagal: ' + esc(motionTask.error || '') : '')
+      + '<button type="button" class="st-vp-cancel" id="stMotionCancel">Batalkan</button></p>';
+    $('stMotionCancel')?.addEventListener('click', () => {
+      if (motionTimer) clearTimeout(motionTimer);
+      motionTimer = null; motionTask = null;
+      renderMotionProgress();
+      resetGenerateButtons();
+      window.toast?.('Pemantauan render dibatalkan.');
+    });
+  }
+
+  /** Polling status render Motion Graphics. */
+  async function pollMotion() {
+    if (!motionTask) return;
+    try {
+      const r = await fetch('/api/studio/motion-graphics/' + motionTask.id, { headers: await authHeaders() });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Gagal mengecek status render.');
+      const t = d.task || {};
+      motionTask.progress = t.progress || motionTask.progress;
+      motionTask.status = t.status || 'queued';
+      if (t.status === 'done') {
+        // Muat ulang galeri aset supaya hasil render langsung muncul.
+        try {
+          const lr = await fetch('/api/studio/assets', { headers: await authHeaders() });
+          const ld = await lr.json();
+          if (Array.isArray(ld?.assets)) { assets = ld.assets; renderGallery(); }
+        } catch { /* galeri tetap yang lama */ }
+        motionTask = null;
+        renderMotionProgress();
+        resetGenerateButtons();
+        window.toast?.('Video Motion Graphics jadi ✨');
+        return;
+      }
+      if (t.status === 'error') {
+        motionTask.error = t.error || 'Render gagal.';
+        motionTask = null;
+        renderMotionProgress();
+        resetGenerateButtons();
+        window.toast?.(t.error || 'Render Motion Graphics gagal.');
+        return;
+      }
+      renderMotionProgress();
+      motionTimer = setTimeout(pollMotion, 1500);
+    } catch (e) {
+      motionTask = null;
+      renderMotionProgress();
+      resetGenerateButtons();
+      window.toast?.(e.message || 'Gagal mengecek status render.');
+    }
+  }
+
   // ===== D-242: mode "Karakter Bicara" (lipsync) =====
   // Alur: pilih karakter -> tulis naskah -> server (TTS + upload Kie) ->
   // task InfiniteTalk -> polling -> video tersimpan di galeri aset.
@@ -2139,6 +2390,9 @@
     if (l) { l.disabled = false; l.innerHTML = icon('mic') + ' Buat'; }
     const g = $('stGenBtn');
     if (g) { g.disabled = false; g.innerHTML = icon('image-plus') + ' Buat'; }
+    // D-249: tombol render Motion Graphics.
+    const m = $('stMotionBtn');
+    if (m) { m.disabled = false; m.innerHTML = icon('film') + ' Render'; }
   }
   async function pollVideo() {
     if (!videoTask) return;
@@ -2232,6 +2486,8 @@
       + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
       + '<div class="st-lipsync-meta"><span id="stLipsyncMeta">Maks 15 detik</span></div>'
       + '</div>'
+      // D-249: mode Motion Graphics — baris template + isi yang akan dirender.
+      + '<div class="st-motion-bar st-hidden" id="stMotionBar"></div>'
       + '<div class="st-controls">'
       // D-221: di HP semua pengaturan konten jadi SATU panel dropdown.
       // Kolom kiri = tombol jenis konten (Foto/Video) + chevron;
@@ -2260,11 +2516,16 @@
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn" title="Buat Video">' + icon('film') + ' Buat</button>'
       // D-242: mode "Karakter Bicara" (lipsync) -> potret + audio -> video bicara.
       + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn" title="Buat Video Bicara">' + icon('mic') + ' Buat</button>'
+      // D-249: tombol render Motion Graphics (label "Render" — bukan "Buat",
+      // karena hasilnya programatik, bukan hasil generator AI).
+      + '<button type="button" class="pink-btn st-hidden" id="stMotionBtn" title="Render Motion Graphics">' + icon('film') + ' Render</button>'
       + '</div>'
       // D-221/D-247: panel pengaturan konten — dipakai HP (modal tengah) & PC
       // (dropdown di atas pemicu). Anak langsung composer supaya posisinya stabil.
       + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
+      // D-249: progres render Motion Graphics (baris sendiri).
+      + '<div class="st-video-progress st-hidden" id="stMotionProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
       + '<div class="st-lightbox" id="stLightbox"></div>';
 
@@ -2318,6 +2579,8 @@
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
     // D-245: pill resolusi lipsync.
     $('stLipResPill')?.addEventListener('click', () => { buildPop('lipres'); togglePop('lipres'); });
+    // D-249: template Motion Graphics + status renderer di server.
+    loadMotionTemplates();
     // D-203: katalog model gambar dari server (/api/ai/image/models).
     fetch('/api/ai/image/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
@@ -2464,6 +2727,8 @@
     $('stVideoBtn')?.addEventListener('click', generateVideo);
     // D-242: mode "Karakter Bicara" (lipsync).
     $('stLipsyncBtn')?.addEventListener('click', generateLipsync);
+    // D-249: tombol render Motion Graphics.
+    $('stMotionBtn')?.addEventListener('click', generateMotionGraphics);
     $('stLipsyncCharBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       buildLipsyncCharPop();
