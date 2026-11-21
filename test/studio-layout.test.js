@@ -23,6 +23,43 @@ function buildStudio(fetchImpl) {
   return { win, doc };
 }
 
+
+/**
+ * D-247: klik pill jenis konten kini membuka PANEL PENGATURAN (HP & PC sama).
+ * Helper ini membuka panel lalu memilih jenis konten dari grup "Jenis Konten".
+ */
+async function pickContentType(win, doc, kind) {
+  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+  const panel = doc.getElementById('stPop-settings');
+  const btn = [...panel.querySelectorAll('[data-set-key="type"]')].find((b) => b.dataset.setV === kind);
+  assert.ok(btn, 'pilihan jenis konten "' + kind + '" harus ada di panel pengaturan');
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+  // D-231: panel pengaturan menerapkan semua setelan sekaligus saat Simpan.
+  doc.getElementById('stSetSave').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+}
+
+
+/**
+ * D-247: pilih jenis konten dari PANEL pengaturan lalu tekan Simpan.
+ * Mengembalikan fungsi click untuk dipakai lanjutan test.
+ */
+async function pickTypeWithPanel(win, doc, kind) {
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 60));
+  const panel = doc.getElementById('stPop-settings');
+  const btn = [...panel.querySelectorAll('[data-set-key="type"]')].find((b) => b.dataset.setV === kind);
+  assert.ok(btn, 'pilihan "' + kind + '" harus ada di panel pengaturan');
+  click(btn);
+  await new Promise((r) => setTimeout(r, 60));
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
+  return click;
+}
+
 const CATALOG = {
   ok: true, defaultModel: 'veo-3-1',
   models: [
@@ -352,11 +389,12 @@ test('D-203: hasil render — Unggah di sudut, pill jenis konten di bawah kompos
   assert.ok(typePill.closest('.st-controls'), 'pill jenis konten tidak di baris kontrol');
   // Tidak ada tab Foto/Video terpisah lagi.
   assert.equal(doc.querySelectorAll('.st-tab').length, 0, 'masih ada tab Foto/Video');
-  // Popover jenis konten memuat tiga pilihan: Foto, Video & Karakter Bicara (D-242).
+  // D-247: klik pill jenis konten membuka PANEL pengaturan (HP & PC sama).
   typePill.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const pop = doc.getElementById('stPop-type');
-  assert.ok(pop.classList.contains('open'), 'popover jenis konten tidak terbuka');
-  const opts = [...pop.querySelectorAll('button')].map((b) => b.dataset.v);
+  await new Promise((r) => setTimeout(r, 40));
+  const panel = doc.getElementById('stPop-settings');
+  assert.ok(panel.classList.contains('open'), 'panel pengaturan tidak terbuka');
+  const opts = [...panel.querySelectorAll('[data-set-key="type"]')].map((b) => b.dataset.setV);
   assert.deepEqual(opts, ['photo', 'video', 'lipsync'], 'pilihan jenis konten: ' + opts.join(','));
 });
 
@@ -364,11 +402,7 @@ test('D-203: pilih jenis konten Video lewat satu kotak -> mode video aktif', asy
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
-  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const pop = doc.getElementById('stPop-type');
-  const video = [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video');
-  assert.ok(video, 'pilihan Video tidak ada');
-  video.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await pickContentType(win, doc, 'video');
   // Label pill jenis konten = Video.
   assert.equal(doc.querySelector('#stTypePill b').textContent.trim(), 'Video', 'label jenis konten');
   const wrap = doc.getElementById('stModelPillWrap');
@@ -410,10 +444,7 @@ test('D-205: ikon jenis konten ikut pilihan (Foto = gambar, Video = video)', asy
   // Default: Foto -> ikon gambar.
   assert.equal(iconOf('stTypePill'), 'image-plus', 'ikon jenis konten awal');
   // Pilih Video -> ikon harus berubah ke video (bukan tetap gambar).
-  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const pop = doc.getElementById('stPop-type');
-  [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video')
-    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await pickContentType(win, doc, 'video');
   assert.equal(doc.querySelector('#stTypePill b').textContent.trim(), 'Video', 'label jenis konten');
   assert.equal(iconOf('stTypePill'), 'video', 'ikon jenis konten harus video saat mode Video');
 });
@@ -514,10 +545,7 @@ test('D-200 (regresi): pilihan durasi tetap dinamis mengikuti model', async () =
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
-  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const typePop = doc.getElementById('stPop-type');
-  [...typePop.querySelectorAll('button')].find((b) => b.dataset.v === 'video')
-    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await pickContentType(win, doc, 'video');
   const durText = () => doc.querySelector('#stDurPill .st-pill b').textContent.trim();
   assert.equal(durText(), '8 detik', 'durasi awal Veo');
   doc.getElementById('stModelPill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
@@ -1091,8 +1119,9 @@ test('D-234: tombol X & deskripsi header (X dihapus di D-236)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   assert.ok(!studio.includes('stSetClose'), 'tombol X (stSetClose) harus dihapus');
   // Panel tetap positioned (aman untuk absolute lain).
+  // D-247: di PC = absolute (dropdown), di HP = fixed (modal tengah).
   const panel = css.match(/\.st-pop-settings\{[^}]*\}/);
-  assert.ok(panel[0].includes('position:relative') || panel[0].includes('position:fixed'),
+  assert.ok(panel[0].includes('position:absolute') || panel[0].includes('position:fixed'),
     'panel harus positioned');
 });
 
@@ -1455,11 +1484,11 @@ test('D-232: chip punya ikon + tidak terpotong (footer sticky, body scroll)', ()
   // Tombol footer lebih besar (tidak terpotong).
   const footBtn = css.match(/\.st-set-foot button\{[^}]*\}/s);
   assert.ok(/padding:1[12]px 1[34]px/.test(footBtn[0]), 'tombol footer harus bertinggi lega');
-  // Panel lebih lega (mobile).
-  const mobRules = [...css.matchAll(/\.st-pop-settings\{([^}]*)\}/g)].map((m) => m[1]);
+  // Panel lebih lega (mobile). D-247: aturan HP dipindah ke `.st-pop.st-pop-settings`.
+  const mobRules = [...css.matchAll(/\.st-pop\.st-pop-settings\{([^}]*)\}/g)].map((m) => m[1]);
   const mobile = mobRules.find((r) => r.includes('position:fixed'));
   assert.ok(mobile, 'aturan mobile panel tidak ada');
-  assert.ok(mobile.includes('max-height:min(86vh,620px)'), 'panel harus lebih tinggi');
+  assert.ok(mobile.includes('max-height:min(80vh,560px)'), 'panel harus lebih tinggi');
   assert.ok(mobile.includes('padding:14px'), 'panel harus ada padding lega');
 });
 
@@ -1782,30 +1811,50 @@ test('D-221: panel pengaturan berisi jenis konten + semua setelan relevan', () =
   assert.ok(abody.includes("'engine'"), 'selalu ada provider');
 });
 
-test('D-221: HP -> panel pengaturan, desktop -> dropdown jenis konten biasa', () => {
+test('D-247: HP & PC sama-sama buka PANEL pengaturan (bukan dropdown jenis konten)', () => {
   const studio = readFileSync('public/studio.js', 'utf8');
   const handler = studio.slice(studio.indexOf("$('stTypePill')?.addEventListener"));
   const hbody = handler.slice(0, handler.indexOf('\n    });'));
-  assert.ok(hbody.includes('isMobileLayout()'), 'harus memeriksa layout HP');
-  assert.ok(hbody.includes('openSettingsPanel()'), 'di HP harus membuka panel pengaturan');
-  assert.ok(hbody.includes("buildPop('type'); togglePop('type')"), 'di desktop tetap dropdown biasa');
+  assert.ok(hbody.includes('openSettingsPanel()'), 'tombol jenis konten harus membuka panel pengaturan');
+  assert.ok(!hbody.includes("buildPop('type')"), 'tidak lagi dropdown jenis konten terpisah');
   // togglePop harus bisa menutup panel settings.
   assert.ok(studio.includes("'actions', 'settings'"), 'togglePop harus menutup panel settings');
+  // D-247: panel di HP = modal tengah, di PC = dropdown (lewat class toggle).
+  assert.ok(studio.includes("el.classList.toggle('st-pop-center', isMobileLayout())"),
+    'panel harus jadi modal tengah hanya di HP');
 });
 
-test('D-221: CSS — pill pengaturan disembunyikan di HP, panel tampil tengah', () => {
+test('D-247: CSS — pill pengaturan disembunyikan di SEMUA device, panel styling ada', () => {
   const css = readFileSync('public/index.html', 'utf8');
-  // Di HP: container pill disembunyikan.
-  const mob = css.match(/@media\(max-width:560px\)\{\s*\.st-settings-pills\{display:none!important\}/);
-  assert.ok(mob, 'di HP .st-settings-pills harus display:none');
-  // Di desktop: container = contents (pill tetap sebaris).
-  assert.ok(css.includes('.st-settings-pills{display:contents}'), 'di desktop container harus display:contents');
+  // D-247: container pill disembunyikan di semua device (PC pun).
+  assert.ok(/\.st-settings-pills\{display:none!important\}/.test(css),
+    '.st-settings-pills harus display:none di semua device');
+  assert.ok(!css.includes('.st-settings-pills{display:contents}'),
+    'display:contents (pill sebaris di PC) harus dihapus');
   // Panel pengaturan styling.
   assert.ok(css.includes('.st-pop-settings{'), 'aturan .st-pop-settings harus ada');
   assert.ok(css.includes('.st-set-chip.on{'), 'chip aktif harus punya styling');
   assert.ok(css.includes('.st-set-row{'), 'baris pengaturan harus punya styling');
   // Panel di HP diposisikan di tengah layar (modal).
-  assert.ok(/\.st-pop-settings\{position:fixed;left:50%;top:50%/.test(css), 'panel di HP harus di tengah layar');
+  assert.ok(/\.st-pop\.st-pop-settings\{position:fixed!important;left:50%!important;top:50%!important/.test(css),
+    'panel di HP harus di tengah layar');
+});
+
+test('D-247: composer ringkas, transparan, di tengah horizontal & tetap di bawah', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-composer\{([^}]*)\}/);
+  assert.ok(rule, 'aturan .st-composer harus ada');
+  const body = rule[1];
+  assert.ok(body.includes('align-self:center'), 'composer harus di tengah horizontal');
+  assert.ok(body.includes('max-width:760px'), 'composer dibatasi lebar (bukan melintang)');
+  assert.ok(body.includes('bottom:0'), 'composer tetap menempel di bawah');
+  assert.ok(body.includes('position:sticky'), 'composer tetap sticky di bawah');
+  // Transparan: tidak ada warna solid opaque di background.
+  assert.ok(!/background:\s*#[0-9a-f]{3,6}\s*;/.test(body.replace(/background-image[^;]*;/g, '')),
+    'composer tidak boleh memakai background solid');
+  // Tidak boleh ada filter/transform di composer (bikin containing block untuk fixed).
+  assert.ok(!body.includes('backdrop-filter'), 'composer tidak boleh pakai backdrop-filter');
+  assert.ok(!body.includes('transform'), 'composer tidak boleh pakai transform');
 });
 
 // ===== D-222: placeholder singkat + area tulis menyatu dengan form =====
@@ -2071,12 +2120,8 @@ test('D-242: mode Karakter Bicara punya tombol, bar karakter & tombol buat video
   const { win, doc } = buildStudio(okFetch);
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
-  // Pilih mode lipsync lewat popover jenis konten.
-  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const pop = doc.getElementById('stPop-type');
-  const lip = [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync');
-  assert.ok(lip, 'pilihan Karakter Bicara harus ada');
-  lip.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // Pilih mode lipsync lewat panel pengaturan.
+  await pickContentType(win, doc, 'lipsync');
   // Label pill = "Karakter Bicara".
   assert.equal(doc.querySelector('#stTypePill b').textContent.trim(), 'Karakter Bicara');
   // Tombol "Buat Video Bicara" tampil, tombol gambar & video biasa hidden.
@@ -2102,10 +2147,7 @@ test('D-242: bar karakter hanya tampil di mode lipsync', async () => {
   assert.ok(bar.classList.contains('st-hidden'), 'mode foto -> bar karakter hidden');
   assert.ok(doc.getElementById('stLipsyncBtn').classList.contains('st-hidden'));
   // Pindah ke video -> tetap hidden.
-  doc.getElementById('stTypePill').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  const pop = doc.getElementById('stPop-type');
-  [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video')
-    .dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await pickContentType(win, doc, 'video');
   assert.ok(bar.classList.contains('st-hidden'), 'mode video -> bar karakter hidden');
 });
 
@@ -2144,13 +2186,8 @@ test('D-242: generate lipsync mengirim characterId, script, model, resolusi & as
   const realSetTimeout = win.setTimeout;
   win.setTimeout = (fn, ms) => (ms >= 1000 ? 0 : realSetTimeout(fn, ms));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  // Masuk mode lipsync lewat pill jenis konten (desktop -> popover).
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  const lip = [...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync');
-  assert.ok(lip, 'pilihan Karakter Bicara tidak ada di popover');
-  click(lip);
+  // Masuk mode lipsync lewat panel pengaturan (D-247).
+  await pickTypeWithPanel(win, doc, 'lipsync');
   // Pilih karakter di bar lipsync.
   click(doc.getElementById('stLipsyncCharBtn'));
   await new Promise((r) => setTimeout(r, 40));
@@ -2182,10 +2219,7 @@ test('D-242: generate lipsync menolak tanpa karakter (tidak kirim request)', asy
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 80));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   const ta = doc.getElementById('stPrompt');
   ta.value = 'Halo.';
   click(doc.getElementById('stLipsyncBtn'));
@@ -2207,16 +2241,10 @@ test('D-243: semua tombol generate berlabel "Buat" (seragam, tidak melebar di HP
   // Mode foto (default).
   assert.equal(labelOf('stGenBtn'), 'Buat', 'tombol foto harus berlabel "Buat"');
   // Mode video.
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'video'));
+  await pickTypeWithPanel(win, doc, 'video');
   assert.equal(labelOf('stVideoBtn'), 'Buat', 'tombol video harus berlabel "Buat"');
   // Mode lipsync.
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop2 = doc.getElementById('stPop-type');
-  click([...pop2.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   assert.equal(labelOf('stLipsyncBtn'), 'Buat', 'tombol lipsync harus berlabel "Buat"');
   // Semua tombol punya title yang menjelaskan isi (tooltip).
   assert.match(doc.getElementById('stGenBtn').getAttribute('title') || '', /Gambar/i);
@@ -2229,10 +2257,7 @@ test('D-243: durasi lipsync otomatis dari panjang naskah (bukan diset di awal)',
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   const meta = doc.getElementById('stLipsyncMeta');
   // Tanpa naskah -> hanya info batas.
   assert.match(meta.textContent, /maks 15/i, 'meta harus menyebut batas 15 detik');
@@ -2255,10 +2280,7 @@ test('D-243: mode lipsync tidak punya pill durasi (durasi mengikuti naskah)', as
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 50));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   assert.ok(doc.getElementById('stDurPill').classList.contains('st-hidden'), 'pill durasi harus hidden di mode lipsync');
   // Tidak ada popover durasi untuk lipsync.
   assert.equal(doc.getElementById('stPop-dur').children.length, 0, 'popover durasi tidak boleh terisi di mode lipsync');
@@ -2274,10 +2296,7 @@ test('D-244: mode Karakter Bicara punya input "Arahan adegan" terpisah dari nask
   // Box arahan adegan tersembunyi di mode foto.
   assert.ok(doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus hidden di mode foto');
   // Masuk mode lipsync.
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   assert.ok(!doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus tampil di mode lipsync');
   assert.ok(doc.getElementById('stSceneHint'), 'textarea arahan adegan harus ada');
   assert.ok(doc.getElementById('stSceneHint').getAttribute('maxlength'), 'textarea arahan adegan punya batas panjang');
@@ -2311,10 +2330,7 @@ test('D-244: request lipsync mengirim arahan adegan sebagai prompt', async () =>
   const realSetTimeout = win.setTimeout;
   win.setTimeout = (fn, ms) => (ms >= 1000 ? 0 : realSetTimeout(fn, ms));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   // Pilih karakter.
   click(doc.getElementById('stLipsyncCharBtn'));
   await new Promise((r) => setTimeout(r, 40));
@@ -2349,10 +2365,7 @@ test('D-244: karakter tanpa potret tidak bisa dipilih (picker hanya karakter ber
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 80));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await pickTypeWithPanel(win, doc, 'lipsync');
   click(doc.getElementById('stLipsyncCharBtn'));
   await new Promise((r) => setTimeout(r, 40));
   const ids = [...doc.getElementById('stPop-lipsyncchar').querySelectorAll('[data-lip-char]')].map((b) => b.dataset.lipChar);
@@ -2398,10 +2411,15 @@ function lipFetchCapture(capture) {
 
 async function switchToLipsync(win, doc) {
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // D-247: jenis konten dipilih dari PANEL pengaturan (HP & PC sama).
   click(doc.getElementById('stTypePill'));
-  await new Promise((r) => setTimeout(r, 40));
-  const pop = doc.getElementById('stPop-type');
-  click([...pop.querySelectorAll('button')].find((b) => b.dataset.v === 'lipsync'));
+  await new Promise((r) => setTimeout(r, 60));
+  const panel = doc.getElementById('stPop-settings');
+  click([...panel.querySelectorAll('[data-set-key="type"]')].find((b) => b.dataset.setV === 'lipsync'));
+  await new Promise((r) => setTimeout(r, 60));
+  // D-231: terapkan lewat Simpan.
+  click(doc.getElementById('stSetSave'));
+  await new Promise((r) => setTimeout(r, 60));
   return click;
 }
 
@@ -2596,4 +2614,72 @@ test('D-246: arahan adegan dibatasi 300 karakter untuk OmniHuman (5.000 untuk mo
   click(doc.getElementById('stSetSave'));
   await new Promise((r) => setTimeout(r, 60));
   assert.equal(hint.getAttribute('maxlength'), '300', 'prompt OmniHuman dibatasi 300 karakter');
+});
+
+// ===== D-247: composer flow (transparan, compact, center horizontal) & panel HP=PC =====
+
+test('D-247: PC & HP sama-sama buka panel Pengaturan dari pill jenis konten', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // Layout desktop (default jsdom innerWidth = 1024).
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 60));
+  const panel = doc.getElementById('stPop-settings');
+  assert.ok(panel.classList.contains('open'), 'panel pengaturan harus terbuka di desktop');
+  assert.ok(!panel.classList.contains('st-pop-center'), 'di desktop panel bukan modal tengah');
+  // Panel punya grup Jenis Konten dengan 3 pilihan.
+  const types = [...panel.querySelectorAll('[data-set-key="type"]')].map((b) => b.dataset.setV);
+  assert.deepEqual(types, ['photo', 'video', 'lipsync'], 'pilihan jenis konten di panel');
+  // Panel adalah anak composer (posisi dropdown stabil).
+  assert.ok(panel.closest('.st-composer'), 'panel pengaturan harus anak composer');
+});
+
+test('D-247: HP membuka panel sebagai modal tengah', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  Object.defineProperty(win, 'innerWidth', { value: 390, configurable: true });
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  click(doc.getElementById('stTypePill'));
+  await new Promise((r) => setTimeout(r, 60));
+  const panel = doc.getElementById('stPop-settings');
+  assert.ok(panel.classList.contains('open'), 'panel pengaturan harus terbuka di HP');
+  assert.ok(panel.classList.contains('st-pop-center'), 'di HP panel harus modal tengah');
+});
+
+test('D-247: pill baris (Rasio/Mesin/Model/Duration) tidak lagi tampil sebagai baris', async () => {
+  const { win, doc } = buildStudio(okFetch);
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 60));
+  const pills = doc.getElementById('stSettingsPills');
+  assert.ok(pills, 'container stSettingsPills harus tetap ada di markup');
+  // CSS menyembunyikannya di semua device (HP & PC) -> isi panel satu-satunya sumber.
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(/\.st-settings-pills\{display:none!important\}/.test(css),
+    '.st-settings-pills harus tersembunyi di semua device');
+  // Button model gambar TIDAK lagi jadi pill terpisah (masih ada di markup tapi disembunyikan).
+  const imgWrap = doc.getElementById('stImgModelPillWrap');
+  assert.ok(imgWrap.closest('#stSettingsPills'), 'pill model gambar harus di dalam container yang disembunyikan');
+});
+
+test('D-247: markup composer — textarea 1 baris (auto-grow) & panel di dalam composer', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('id="stPrompt" rows="1"'), 'textarea prompt mulai 1 baris (auto-grow)');
+  // Panel pengaturan berada di dalam composer (bukan di dalam .st-controls).
+  const compStart = studio.indexOf("'<div class=\"st-composer\">'");
+  const compEnd = studio.indexOf("'<input type=\"file\" id=\"stUploadInput\"");
+  const comp = studio.slice(compStart, compEnd);
+  assert.ok(comp.includes('id="stPop-settings"'), 'panel pengaturan harus di dalam composer');
+  assert.ok(comp.includes('id="stControlsHint"') || comp.includes('class="st-controls"'),
+    'sanity: composer punya blok controls');
+});
+
+test('D-247: panel pengaturan di dalam composer, tapi DI LUAR baris kontrol', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const ctrlStart = studio.indexOf("'<div class=\"st-controls\">'");
+  const ctrlEnd = studio.indexOf("'<span class=\"st-count\"");
+  const ctrl = studio.slice(ctrlStart, ctrlEnd);
+  assert.ok(!ctrl.includes('id="stPop-settings"'), 'panel tak boleh di dalam .st-controls');
 });
