@@ -225,3 +225,25 @@ test('D-249: template punya setting sendiri (template + durasi), tanpa provider'
   // Mode Motion Graphics tidak punya Provider/Model/Tier/Resolusi.
   assert.match(studioJs, /isMotion\) \{[\s\S]*?list\.length = 0;/);
 });
+
+test('D-249: health endpoint melaporkan status renderer Motion Graphics', () => {
+  // Kalau renderer belum terpasang, mode disembunyikan dari UI — health
+  // endpoint jadi cara cepet cek tanpa buka UI.
+  assert.match(appJs, /app\.get\('\/api\/health', async/);
+  assert.match(appJs, /motionGraphics: \{ available: motionGraphics\.ok/);
+});
+
+test('D-249: composer di mode Motion Graphics tidak mengulang placeholder kolom template', () => {
+  // Kolom pertama template sudah punya input sendiri di bar Motion Graphics.
+  // Kalau composer pakai placeholder yang sama, teksnya dobel di layar.
+  assert.match(studioJs, /: isMotion \? 'Isi tambahan… \(opsional\)'/);
+  assert.doesNotMatch(studioJs, /: isMotion \? \(motionTemplate\(\)\?\.fields\?\.\[0\]\?\.placeholder/);
+});
+
+test('D-249: ada script setup yang PASANG kedua node_modules (root + motion-graphics)', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  assert.ok(pkg.scripts.setup, 'package.json harus punya script "setup"');
+  assert.match(pkg.scripts.setup, /npm install --prefix motion-graphics/);
+  // Server motion-graphics wajib ikut dicek syntax-nya.
+  assert.match(pkg.scripts.check, /node --check server\/motion-graphics\.js/);
+});

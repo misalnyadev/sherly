@@ -250,7 +250,19 @@ async function buildTrustedContext(user, timezone, profile, supabase, currentCon
   return parts.join('\n\n');
 }
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured, aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) }, vaultConfigured: vaultConfigured(), timestamp: new Date().toISOString() }));
+app.get('/api/health', async (_req, res) => {
+  // D-249: status renderer Motion Graphics — kalau belum terpasang, mode
+  // "Motion Graphics" disembunyikan dari UI. Dilaporkan di health supaya
+  // mudah dicek tanpa membuka UI.
+  const motionGraphics = await motionGraphicsAvailable().catch((e) => ({ok: false, reason: e.message}));
+  res.json({
+    ok: true, app: 'SherlyStudio', mode: 'local', supabaseConfigured,
+    aiProviders: { gemini: Boolean(process.env.GEMINI_API_KEY), groq: Boolean(process.env.GROQ_API_KEY), openrouter: Boolean(process.env.OPENROUTER_API_KEY) },
+    vaultConfigured: vaultConfigured(),
+    motionGraphics: { available: motionGraphics.ok, reason: motionGraphics.ok ? null : motionGraphics.reason },
+    timestamp: new Date().toISOString(),
+  });
+});
 
 app.post('/api/auth/login', async (req, res) => {
   try {
