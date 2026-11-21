@@ -35,7 +35,7 @@ for spec in "${SCREENS[@]}"; do
 
   # logo occupies ~30% of the shorter edge (poster source is 290x340 = 29:34)
   logo_h=$((px_h * 20 / 100))
-  logo_w=$((logo_h * 300 / 320))
+  logo_w=$((logo_h * 360 / 380))
 
   # palette-reduce keeps the total size reasonable without visible banding
   # logo diekstrak ke atas latar app (buang kotak hitam poster), lalu di-composite
