@@ -141,10 +141,17 @@ test('D-205/D-206: composer di bawah tapi ada ruang napas dari tepi layar', () =
 });
 
 test('D-202: tombol Unggah diposisikan di sudut kanan area Studio', () => {
-  assert.ok(/\.st-upload-corner\{[^}]*position:absolute[^}]*top:0[^}]*right:0/.test(html),
-    'kelas .st-upload-corner tidak posisi absolut kanan-atas');
-  assert.ok(/#studioRoot\{[^}]*position:relative/.test(html), '#studioRoot tidak position:relative');
-  assert.ok(studio.includes('st-upload-btn st-upload-corner'), 'tombol Unggah tidak memakai kelas corner');
+  // D-265: tombol Unggah bukan lagi absolute di pojok — sekarang jadi elemen
+  // FLOW di baris atas area Studio (`.st-stage-top`), tetap di sisi KANAN
+  // (margin-left:auto), sebaris dengan baris filter logo.
+  assert.ok(/\.st-stage-top\{[^}]*display:flex[^}]*align-items:center/.test(html),
+    '.st-stage-top harus flex row');
+  assert.ok(/\.st-stage-top \.st-upload-btn\{[^}]*margin-left:auto/.test(html),
+    'tombol Unggah harus terdorong ke kanan (margin-left:auto)');
+  assert.ok(studio.includes('class="st-upload-btn" id="stUploadBtn"'),
+    'tombol Unggah harus ada di dalam baris atas');
+  assert.ok(studio.indexOf('id="stUploadBtn"') > studio.indexOf('<div class="st-stage-top">'),
+    'tombol Unggah harus di dalam .st-stage-top');
   assert.ok(!studio.includes('st-topbar'), 'wrapper .st-topbar masih dipakai');
 });
 
@@ -380,9 +387,14 @@ test('D-203: hasil render — Unggah di sudut, pill jenis konten di bawah kompos
   await win.renderStudio();
   const upload = doc.getElementById('stUploadBtn');
   assert.ok(upload, 'tombol Unggah tidak dirender');
-  assert.ok(upload.classList.contains('st-upload-corner'), 'kelas corner tidak ada di tombol Unggah');
-  // Tombol Unggah berada di luar stage galeri (di pojok halaman).
+  // D-265: tombol Unggah berada di baris atas (`.st-stage-top`), di luar stage galeri.
+  assert.ok(upload.closest('.st-stage-top'), 'tombol Unggah harus di dalam .st-stage-top');
   assert.ok(!upload.closest('.st-stage'), 'tombol Unggah masih di dalam stage');
+  // D-265: baris atas juga jadi tempat filter logo (Semua/Foto/Video).
+  const filters = doc.getElementById('stGalFilters');
+  assert.ok(filters, 'baris filter tidak dirender');
+  assert.ok(filters.closest('.st-stage-top'), 'filter harus sebaris dengan tombol Unggah');
+  assert.ok(!doc.querySelector('#stGallery .st-gal-filters'), 'filter tidak boleh di dalam galeri');
   // Pill jenis konten ada di dalam baris kontrol composer.
   const typePill = doc.getElementById('stTypePill');
   assert.ok(typePill, 'pill jenis konten tidak dirender');
@@ -3331,17 +3343,19 @@ test('D-264: baris filter jenis konten ada di atas galeri', () => {
   // Tombol filter + jumlah aset.
   assert.ok(js.includes('st-gal-filter'), 'harus ada kelas .st-gal-filter');
   assert.ok(js.includes('data-gal-filter'), 'tombol filter harus punya data-gal-filter');
-  assert.ok(js.includes("filterBtn('all', 'Semua', counts.all)"), 'tombol Semua wajib');
-  assert.ok(js.includes("filterBtn('photo', 'Foto', counts.photo)"), 'tombol Foto wajib');
-  assert.ok(js.includes("filterBtn('video', 'Video', counts.video)"), 'tombol Video wajib');
+  assert.ok(js.includes("filterBtn('all', 'layout-grid', 'Semua', counts.all)"), 'tombol Semua wajib');
+  assert.ok(js.includes("filterBtn('photo', 'image', 'Foto', counts.photo)"), 'tombol Foto wajib');
+  assert.ok(js.includes("filterBtn('video', 'video', 'Video', counts.video)"), 'tombol Video wajib');
   // Hitungan per jenis media.
   assert.ok(js.includes("if (a.media_type === 'video') counts.video++; else counts.photo++"),
     'jumlah dihitung dari jenis media (video vs lainnya)');
-  // Baris filter harus DI ATAS baris isi galeri.
+  // D-265: baris filter TIDAK lagi jadi baris di dalam galeri — dia hidup di
+  // baris atas area Studio (sebaris dengan tombol Unggah).
   const rIdx = js.indexOf('const filterBar =');
   const vIdx = js.indexOf("rowHtml('Vertikal'");
   assert.ok(rIdx > 0 && vIdx > 0 && rIdx < vIdx, 'baris filter harus ditulis sebelum isi galeri');
-  assert.ok(js.includes('box.innerHTML = filterBar'), 'filter bar dirender sebelum baris aset');
+  assert.ok(!/[^a-zA-Z]box\.innerHTML = filterBar/.test(js), 'filter bar tidak boleh masuk ke dalam galeri');
+  assert.ok(js.includes("const fbox = $('stGalFilters');"), 'filter bar harus di-render ke #stGalFilters');
 });
 
 test('D-264: filter menyaring isi galeri & jumlah label tetap total', () => {
@@ -3386,14 +3400,88 @@ test('D-264: CSS baris filter ada (pill + aktif + empty state)', () => {
   assert.ok(css.includes('.st-gal-filter{'), 'harus ada aturan .st-gal-filter');
   assert.ok(css.includes('.st-gal-filter.is-active{'), 'harus ada aturan tombol aktif');
   assert.ok(css.includes('.st-gal-empty-filter{'), 'harus ada aturan empty state');
-  // Filter bar sticky -> tetap terlihat saat halaman di-scroll.
-  const rule = css.match(/\.st-gal-filters\{([^}]*)\}/);
-  assert.ok(rule && rule[1].includes('position:sticky'), 'baris filter harus sticky');
+});
+
+// ===== D-265: Filter jadi LOGO SAJA, sebaris dengan tombol Unggah =====
+
+test('D-265: tombol filter = logo saja (tanpa teks label)', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('const filterBtn ='));
+  const body = fn.slice(0, fn.indexOf('\n    const filterBar'));
+  // Tombol berisi ikon + badge jumlah, TANPA teks "Semua/Foto/Video" di dalam.
+  assert.ok(body.includes('icon(ico)'), 'tombol filter harus render ikon');
+  assert.ok(body.includes("'<b>' + n + '</b>"), 'tombol filter harus punya badge jumlah');
+  assert.ok(!body.includes('>' + "label"), 'label tidak boleh dicetak sebagai teks di dalam tombol');
+  // Label tetap tersedia untuk aksesibilitas (title/aria-label).
+  assert.ok(body.includes("title=\"' + esc(label) + ' (' + n + ')'"), 'harus punya title aksesibel');
+  assert.ok(body.includes('aria-label') && body.includes(`esc(label) + ' (' + n + ')'`),
+    'harus punya aria-label aksesibel');
+  // Ikon: grid (Semua), image (Foto), video (Video).
+  assert.ok(js.includes("filterBtn('all', 'layout-grid'"), 'tombol Semua pakai ikon layout-grid');
+  assert.ok(js.includes("filterBtn('photo', 'image'"), 'tombol Foto pakai ikon image');
+  assert.ok(js.includes("filterBtn('video', 'video'"), 'tombol Video pakai ikon video');
+});
+
+test('D-265: baris filter DI LUAR galeri, sebaris dengan tombol Unggah', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  // Baris atas Studio memuat filter + tombol Unggah dalam satu baris.
+  assert.ok(js.includes('<div class="st-stage-top">'), 'harus ada .st-stage-top');
+  const topIdx = js.indexOf('<div class="st-stage-top">');
+  const filtIdx = js.indexOf('class="st-gal-filters st-hidden" id="stGalFilters"', topIdx);
+  const upIdx = js.indexOf('id="stUploadBtn"', topIdx);
+  assert.ok(filtIdx > topIdx && upIdx > topIdx, 'filter & Unggah harus di dalam .st-stage-top');
+  // Filter TIDAK boleh digabung ke dalam isi galeri.
+  const galIdx = js.indexOf("box.innerHTML = (shown.length");
+  assert.ok(galIdx > 0, 'isi galeri harus dirender terpisah dari filter bar');
+  assert.ok(!/[^a-zA-Z]box\.innerHTML = filterBar/.test(js), 'filter bar tak boleh masuk ke dalam galeri');
+  // Filter bar & tombol Unggah dirender terpisah (masing-masing ke container).
+  assert.ok(js.includes("const fbox = $('stGalFilters');"), 'filter bar di-render ke #stGalFilters');
+  assert.ok(js.includes('fbox.innerHTML = filterBar.replace'), 'filter bar replaces isi #stGalFilters');
+});
+
+test('D-265: filter disembunyikan saat belum ada aset', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('function renderGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("fboxTop?.classList.add('st-hidden')"), 'filter harus disembunyikan saat galeri kosong');
+  assert.ok(body.includes("fbox.classList.remove('st-hidden')"), 'filter harus tampil saat ada aset');
+});
+
+test('D-265: CSS baris atas = 1 baris flex (filter kiri, Unggah kanan)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-stage-top{'), 'harus ada aturan .st-stage-top');
+  const rule = css.match(/\.st-stage-top\{([^}]*)\}/);
+  assert.ok(rule && rule[1].includes('display:flex'), '.st-stage-top harus flex row');
+  assert.ok(rule && rule[1].includes('align-items:center'), '.st-stage-top harus align center');
+  // Filter di kiri, tombol Unggah didorong ke kanan.
+  assert.ok(/\.st-stage-top \.st-upload-btn\{[^}]*margin-left:auto/.test(css),
+    'filter kiri & Unggah kanan');
+  // Badge jumlah: di pojok kanan bawah, tidak menutupi ikon, tidak selectable.
+  const badge = css.match(/\.st-gal-filter b\{([^}]*)\}/);
+  assert.ok(badge && badge[1].includes('position:absolute'), 'badge harus absolut');
+  assert.ok(badge && badge[1].includes('pointer-events:none'), 'badge tidak boleh memblokir klik');
+  assert.ok(badge && badge[1].includes('right:'), 'badge di pojok kanan');
+  assert.ok(badge && badge[1].includes('bottom:'), 'badge di pojok bawah');
+  // Tombol filter harus compact (kotak kecil, bukan pill teks).
+  const btn = css.match(/\.st-gal-filter\{([^}]*)\}/);
+  assert.ok(btn && /width:\d+px/.test(btn[1]) && /height:\d+px/.test(btn[1]),
+    'tombol filter harus ukuran tetap (logo only)');
 });
 
 test('D-264: harness filter galeri harus ada', () => {
   const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
   assert.ok(h.includes('data-gal-filter'), 'harness harus mengklik filter');
-  assert.ok(h.includes('SEMUA LOLOS — D-264 OK'), 'harness harus punya penanda lulus');
+  assert.ok(h.includes('SEMUA LOLOS'), 'harness harus punya penanda lulus');
   assert.ok(h.includes('jumlah label TIDAK berubah'), 'harness harus mengecek jumlah label stabil');
+});
+
+// ===== D-265: harness + regresi =====
+
+test('D-265: harness filter mengecek posisi logo-only & 1 baris', () => {
+  const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
+  assert.ok(h.includes('filter bar DI LUAR galeri'), 'harness harus cek filter di luar galeri');
+  assert.ok(h.includes('sebaris dengan tombol Unggah'), 'harness harus cek sebaris dengan Unggah');
+  assert.ok(h.includes('tombol filter pakai logo'), 'harness harus cek tombol filter pakai logo');
+  assert.ok(h.includes('semua tombol filter 1 baris'), 'harness harus cek 1 baris');
+  assert.ok(h.includes('jumlah Foto = 10'), 'harness harus tetap cek jumlah total stabil');
 });

@@ -79,40 +79,64 @@ for (const vp of VIEWPORTS) {
   await new Promise((r) => setTimeout(r, 1200));
 
   const read = () => page.evaluate(() => {
-    const bar = [...document.querySelectorAll('.st-gal-filter')].map((b) => ({
-      key: b.dataset.galFilter,
-      label: b.textContent.replace(/\s+/g, ' ').trim(),
-      on: b.classList.contains('is-active'),
-      n: Number((b.querySelector('b') || {}).textContent || 0),
-    }));
+    const bar = [...document.querySelectorAll('.st-gal-filter')].map((b) => {
+      const r = b.getBoundingClientRect();
+      return {
+        key: b.dataset.galFilter,
+        label: b.textContent.replace(/\s+/g, ' ').trim(),
+        on: b.classList.contains('is-active'),
+        n: Number((b.querySelector('b') || {}).textContent || 0),
+        top: Math.round(r.top),
+        h: Math.round(r.height),
+        w: Math.round(r.width),
+        hasSvg: !!b.querySelector('svg'),
+        title: b.getAttribute('title') || '',
+      };
+    });
     const rows = [...document.querySelectorAll('.st-gal-row')].map((r) => ({
       m: (r.className.match(/st-gal-row--(\w+)/) || [])[1],
       cols: r.getElementsByClassName('st-gal-col').length,
       n: r.querySelectorAll('.st-gal-item').length,
     }));
+    const up = document.querySelector('#stUploadBtn');
+    const upRect = up?.getBoundingClientRect();
     return {
       bar,
       rows,
       items: document.querySelectorAll('.st-gal-item').length,
       empty: !!document.querySelector('.st-gal-empty-filter'),
-      // Filter bar harus jadi elemen PERTAMA di dalam galeri (di atas).
-      filterFirst: !!document.querySelector('#stGallery > .st-gal-filters'),
+      // D-265: filter bar HARUS di luar galeri, di baris yang sama dengan
+      // tombol Unggah (1 baris, tidak menambah baris baru).
+      filterOutside: !!document.querySelector('#stGalFilters')
+        && !document.querySelector('#stGallery > .st-gal-filters'),
+      inTopRow: !!document.querySelector('.st-stage-top #stGalFilters'),
+      uploadTop: upRect ? Math.round(upRect.top) : null,
+      uploadH: upRect ? Math.round(upRect.height) : null,
     };
   });
 
   const all = await read();
   console.log('  ALL: ' + JSON.stringify(all));
-  // 1) Baris filter ada, di atas, dengan 3 tombol.
-  check(vp.name, 'baris filter ada & paling atas', all.filterFirst && all.bar.length === 3,
-    `first=${all.filterFirst} n=${all.bar.length}`);
+  // 1) Baris filter ada, di luar galeri, sebaris dengan tombol Unggah.
+  check(vp.name, 'baris filter ada (3 tombol)', all.bar.length === 3, `n=${all.bar.length}`);
+  check(vp.name, 'filter bar DI LUAR galeri (bukan baris baru)', all.filterOutside, `outside=${all.filterOutside}`);
+  check(vp.name, 'filter bar sebaris dengan tombol Unggah', all.inTopRow, `inTopRow=${all.inTopRow}`);
+  // Semua tombol filter + Unggah harus di baris yang SAMA (top sama).
+  const tops = all.bar.map((b) => b.top);
+  check(vp.name, 'semua tombol filter 1 baris (top sama)',
+    new Set(tops).size === 1, `tops=${[...new Set(tops)].join(',')}`);
+  check(vp.name, 'tombol Unggah sebaris dengan filter',
+    all.uploadTop !== null && Math.abs(all.uploadTop - tops[0]) <= 12,
+    `upload=${all.uploadTop} filter=${tops[0]}`);
+  // D-265: tombol filter = LOGO SAJA (punya svg) + jumlah.
+  check(vp.name, 'tombol filter pakai logo (svg)', all.bar.every((b) => b.hasSvg), JSON.stringify(all.bar.map((b) => b.hasSvg)));
+  check(vp.name, 'tombol filter punya title/label aksesibel',
+    all.bar.every((b) => /Semua|Foto|Video/.test(b.title)), JSON.stringify(all.bar.map((b) => b.title)));
   // 2) Jumlah: total 16, foto 10, video 6.
   const byKey = Object.fromEntries(all.bar.map((b) => [b.key, b]));
   check(vp.name, 'jumlah Semua = 16', byKey.all?.n === 16, `n=${byKey.all?.n}`);
   check(vp.name, 'jumlah Foto = 10', byKey.photo?.n === 10, `n=${byKey.photo?.n}`);
   check(vp.name, 'jumlah Video = 6', byKey.video?.n === 6, `n=${byKey.video?.n}`);
-  // Label harus memakai kata yang diminta.
-  check(vp.name, 'label Semua/Foto/Video', /^Semua/.test(byKey.all?.label || '') && /^Foto/.test(byKey.photo?.label || '') && /^Video/.test(byKey.video?.label || ''),
-    all.bar.map((b) => b.label).join(' | '));
   // Layout saat semua tampil.
   const vRow = all.rows.find((r) => r.m === 'vertical');
   const hRow = all.rows.find((r) => r.m === 'horizontal');
@@ -170,4 +194,4 @@ if (failures.length) {
   failures.forEach((f) => console.log('  - ' + f));
   process.exit(1);
 }
-console.log('SEMUA LOLOS — D-264 OK');
+console.log('SEMUA LOLOS — D-265 OK');
