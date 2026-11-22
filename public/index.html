@@ -1076,40 +1076,52 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#111a2e 30%,#1c2b40 50%,#111a2e 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
 
 /* ===== D-198: Galeri Aset Studio (flat grid di atas komposer) ===== */
-/* D-255: galeri COMPACT — thumbnail lebih kecil, rasio vertikal/horizontal saling mengisi
-   (dense packing), jarak diatur lewat --st-gal-gap.
-   Item memakai `grid-auto-rows` + `aspect-ratio` per aset supaya kotak
-   portrait (9:16) & landscape (16:9) bisa saling mengisi baris tanpa
-   menyisakan celah besar. */
-.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
-  grid-auto-rows:min-content;grid-auto-flow:row dense;align-items:start;
-  --st-gal-mincol:104px;--st-gal-gap:8px;
-  gap:var(--st-gal-gap);margin:0 0 10px;align-content:start}
-@media(min-width:900px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
-  --st-gal-mincol:132px;--st-gal-gap:10px;gap:var(--st-gal-gap)}}
-@media(max-width:560px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
-  --st-gal-mincol:96px;--st-gal-gap:7px;gap:var(--st-gal-gap)}}
-/* D-255: mode MASONRY — container jadi multi-column, tiap aset blok utuh
-   (break-inside:avoid) supaya kotak vertikal & horizontal saling mengisi
-   dan tidak ada sel kosong besar di antara baris. */
-.st-gallery--packed{display:block;column-gap:var(--st-gal-gap,8px)}
-.st-gallery--packed .st-gal-item{display:block;width:100%;margin:0 0 var(--st-gal-gap,8px);
+/* D-256: pola kartu ala BERANDA — galeri dipisah jadi dua baris:
+   "Vertikal" (9:16, 4:5, 3:4) & "Horizontal" (16:9, 1:1). Tiap baris punya
+   jumlah kolom sendiri: HP 3 grid untuk vertikal & 2 grid untuk horizontal.
+   Jarak & ukuran kolom diatur lewat --st-gal-gap / --st-gal-mincol. */
+.st-gallery{display:grid;gap:14px;margin:0 0 10px;align-content:start;
+  --st-gal-mincol:132px;--st-gal-gap:10px}
+/* Baris dalam galeri: grid polos, jumlah kolom diatur per orientasi. */
+.st-gal-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--st-gal-mincol),1fr));
+  gap:var(--st-gal-gap);align-items:start}
+/* Judul baris (kecil, ala "Produksi Terbaru" di Beranda). */
+.st-gal-row-head{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.st-gal-row-head h3{display:flex;align-items:center;gap:6px;margin:0;font-size:11.5px;
+  font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#cfd6e4}
+.st-gal-row-head h3 svg{width:13px;height:13px;stroke:#ff72c5}
+.st-gal-row-head::after{content:"";flex:1;height:1px;
+  background:linear-gradient(90deg,#24344e,transparent)}
+.st-gal-row-count{font-size:10px;color:var(--muted);letter-spacing:.04em;flex:none}
+/* D-256: VERTIKAL — kolom lebih sempit (HP 3 grid). */
+.st-gal-row--vertical{--st-gal-mincol:104px}
+@media(min-width:900px){.st-gal-row--vertical{--st-gal-mincol:132px}}
+@media(max-width:560px){.st-gal-row--vertical{--st-gal-mincol:96px}}
+/* D-256: HORIZONTAL — kolom lebih lebar (HP 2 grid). */
+.st-gal-row--horizontal{--st-gal-mincol:150px}
+@media(min-width:900px){.st-gal-row--horizontal{--st-gal-mincol:190px}}
+@media(max-width:560px){.st-gal-row--horizontal{--st-gal-mincol:132px}}
+/* D-256: mode MASONRY per baris — tiap baris jadi multi-column supaya
+   kotak vertikal & horizontal saling mengisi tanpa sel kosong besar.
+   Tiap aset = blok utuh (break-inside:avoid), tinggi mengikuti rasio aset. */
+.st-gal-row--packed{display:block;column-gap:var(--st-gal-gap,10px)}
+.st-gal-row--packed .st-gal-item{display:block;width:100%;margin:0 0 var(--st-gal-gap,10px);
   break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
-/* D-255: tiap aset memakai tinggi baris sesuai rasio aslinya (compact, saling
-   mengisi). `span` dihitung dari rasio metadata di studio.js. */
-.st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:10px;background:#101b2c;overflow:hidden;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+/* D-256: kartu galeri — tinggi thumbnail tetap ikut rasio aset (compact),
+   dipotong rapi (cover) supaya kotak seragam seperti kartu Beranda. */
+.st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:12px;background:#101b2c;overflow:hidden;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}
+.st-gal-item:hover{transform:translateY(-2px)}
 .st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
 /* D-255: fokus keyboard ikut kelihatan (galeri bisa dijelajahi dengan Tab). */
 .st-gal-item:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-255: video yang sedang diputar (hover PC / tap HP) diberi sedikit glow. */
 .st-gal-item.is-playing{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
-.st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
+/* D-256: kartu galeri ala Beranda — thumbnail pakai `cover` (potong rapi,
+   persis kartu "Produksi Terbaru"), jadi kotak portrait & horizontal sama
+   rapinya dan tidak ada ruang kosong. Aset UTUH tetap bisa dilihat lewat
+   preview: media di lightbox memakai `object-fit:contain`. */
+.st-gal-thumb{background:#160f20}
 .st-gal-thumb img,.st-gal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
-/* D-254: aset portrait (video 9:16) — media pakai `contain` supaya TIDAK
-   terpotong; latar gelap biar letterbox rapi. */
-.st-gal-item--portrait .st-gal-thumb{background:#070b14}
-.st-gal-item--portrait .st-gal-thumb img,
-.st-gal-item--portrait .st-gal-thumb video{object-fit:contain}
 .st-gal-empty{width:100%;height:100%;display:grid;place-items:center}
 .st-gal-empty svg{width:20px;height:20px;stroke:#49334e}
 .st-gal-badge{position:absolute;left:4px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:8px;background:#04070fcc;color:#ffd0ec;font-size:9.5px}
@@ -1985,6 +1997,9 @@ const ICONS={
  'circle-dot':'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1.5"/>',
  // D-255: ikon "perbesar" untuk baris ukuran asli di lightbox preview.
  'maximize':'<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3"/>',
+ // D-256: ikon orientasi untuk judul baris galeri (Vertikal / Horizontal).
+ 'smartphone':'<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18.5h2"/>',
+ 'monitor':'<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
  scissors:'<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
  'volume-2':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
  'volume-x':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
