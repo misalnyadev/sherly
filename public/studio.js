@@ -434,8 +434,24 @@
     }
     return '<img src="' + esc(a.url) + '" alt="' + esc(String(a.file_name || '').slice(0, 60)) + '" loading="lazy">';
   }
+  // D-254: rasio aset dari metadata (width/height). Kalau tidak ada, dipakai
+  // rasio fallback per tipe (video default 9:16, gambar 1:1).
+  function assetRatio(a) {
+    const w = Number(a?.width) || 0, h = Number(a?.height) || 0;
+    if (w > 0 && h > 0) return w / h;
+    if (a?.media_type === 'video') return 9 / 16;
+    return 1;
+  }
+  // D-254: aset portrait (video 9:16 / gambar tinggi) tidak boleh dipotong
+  // kotak square. Kotak item ikut memakai rasio aslinya supaya video 9:16
+  // tampil UTUH (object-fit:contain di atas latar gelap).
+  function isPortraitRatio(r) { return r < 0.95; }
   function assetCardHtml(a) {
-    return '<button type="button" class="st-gal-item" data-asset-open="' + esc(a.id) + '" title="' + esc(a.file_name || 'aset') + '">'
+    const ratio = assetRatio(a);
+    const portrait = isPortraitRatio(ratio);
+    const cls = 'st-gal-item' + (portrait ? ' st-gal-item--portrait' : '');
+    const style = portrait ? ' style="aspect-ratio:' + (Math.round(ratio * 1000) / 1000) + '"' : '';
+    return '<button type="button" class="' + cls + '"' + style + ' data-asset-open="' + esc(a.id) + '" title="' + esc(a.file_name || 'aset') + '">'
       + '<span class="st-gal-thumb">' + assetThumb(a) + '</span>'
       + '<span class="st-gal-kind">' + (a.kind === 'generate' ? icon('sparkles') : icon('upload')) + '</span>'
       + '</button>';
@@ -2612,12 +2628,19 @@
       // D-202: judul & deskripsi halaman dihapus; tombol Unggah naik ke sudut kanan
       // area Studio (diposisikan absolute di luar grid), grid jadi lebih luas.
       '<button type="button" class="st-upload-btn st-upload-corner" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
-      // D-199: area atas = galeri aset (scrollable), komposer menempel di bawah.
+      // D-254: galeri (area hasil) jadi AREA UTAMA Studio — halaman scroll
+      // natural (full page), bukan scroll container internal. Konten 9:16
+      // tidak lagi terpotong tepat di tinggi composer.
       + '<div class="st-stage">'
       + '<div class="st-gallery st-hidden" id="stGallery"></div>'
       + '<div class="st-stage-empty" id="stStageEmpty">' + icon('image-plus') + '<b>Hasil generate & asetmu muncul di sini</b>'
       + '<p>Ketik <b>@</b> untuk menyematkan karakter, atau unggah aset untuk dipakai ulang.</p></div>'
       + '</div>'
+      // D-254: composer di DOCK sticky — `position:sticky; bottom:0` pada
+      // wrapper-nya, sehingga tetap nempel di bawah viewport saat halaman
+      // di-scroll tanpa menggeser posisinya.
+      + '<div class="st-composer-dock">'
+      + '<div class="st-composer">'
       // D-210: baris judul prompt DI ATAS kotak composer.
       // D-211: label "Deskripsi konten yang kamu mau" dihapus — bikin teks turun
       // 5 baris di HP.
@@ -2625,7 +2648,6 @@
       // D-213: 4 aksi (Reset - Prompt - Optimalkan - Copy) diringkas jadi SATU menu
       // dropdown di DALAM kotak composer, supaya header composer tetap pendek
       // (tidak lagi 2 baris di HP).
-      + '<div class="st-composer">'
       // D-214: baris ATAS composer = referensi (karakter/gambar) SEBARIS dengan
       // menu dropdown prompt — jadi 1 baris, bukan 2 baris bertumpuk.
       + '<div class="st-composer-top">'
@@ -2704,7 +2726,27 @@
       // D-249: progres render Motion Graphics (baris sendiri).
       + '<div class="st-video-progress st-hidden" id="stMotionProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
-      + '<div class="st-lightbox" id="stLightbox"></div>';
+      + '<div class="st-lightbox" id="stLightbox"></div>'
+      // Tutup composer, lalu dock composer (D-254).
+      + '</div>'
+      + '</div>';
+
+    // D-254: composer dipindah ke dock FIXED (nempel di bawah viewport) —
+    // tinggi composer dinamis, jadi terus disinkronkan ke CSS var
+    // `--st-composer-h` supaya galeri menyisakan ruang di bawah (aset terakhir
+    // tidak tertutup composer) dan area scroll halaman tetap pas.
+    const dock = root.querySelector('.st-composer-dock');
+    const composer = root.querySelector('.st-composer');
+    const syncComposerH = () => {
+      if (!composer) return;
+      const h = Math.round(composer.getBoundingClientRect().height);
+      if (h > 0) root.style.setProperty('--st-composer-h', h + 'px');
+    };
+    syncComposerH();
+    if (window.ResizeObserver && composer) {
+      const ro = new ResizeObserver(syncComposerH);
+      ro.observe(composer);
+    }
 
     // Karakter user — dipakai untuk mention picker & header aset.
     fetch('/api/characters', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
