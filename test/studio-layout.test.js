@@ -3321,3 +3321,79 @@ test('D-262: harness-layout mengecek PC horizontal 4 grid', () => {
   // Baris horizontal PC harus tetap PENUH (4 x 254 + 3 x 12 = 1052).
   assert.ok(h.includes('baris terisi penuh'), 'harness harus tetap mengecek baris terisi penuh');
 });
+
+// ===== D-264: Filter jenis konten (Semua | Foto | Video) =====
+
+test('D-264: baris filter jenis konten ada di atas galeri', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  // Keadaan filter.
+  assert.ok(js.includes("let galleryFilter = 'all'"), 'harus ada state galleryFilter');
+  // Tombol filter + jumlah aset.
+  assert.ok(js.includes('st-gal-filter'), 'harus ada kelas .st-gal-filter');
+  assert.ok(js.includes('data-gal-filter'), 'tombol filter harus punya data-gal-filter');
+  assert.ok(js.includes("filterBtn('all', 'Semua', counts.all)"), 'tombol Semua wajib');
+  assert.ok(js.includes("filterBtn('photo', 'Foto', counts.photo)"), 'tombol Foto wajib');
+  assert.ok(js.includes("filterBtn('video', 'Video', counts.video)"), 'tombol Video wajib');
+  // Hitungan per jenis media.
+  assert.ok(js.includes("if (a.media_type === 'video') counts.video++; else counts.photo++"),
+    'jumlah dihitung dari jenis media (video vs lainnya)');
+  // Baris filter harus DI ATAS baris isi galeri.
+  const rIdx = js.indexOf('const filterBar =');
+  const vIdx = js.indexOf("rowHtml('Vertikal'");
+  assert.ok(rIdx > 0 && vIdx > 0 && rIdx < vIdx, 'baris filter harus ditulis sebelum isi galeri');
+  assert.ok(js.includes('box.innerHTML = filterBar'), 'filter bar dirender sebelum baris aset');
+});
+
+test('D-264: filter menyaring isi galeri & jumlah label tetap total', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('function renderGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Penyaringan berdasarkan jenis media.
+  assert.ok(body.includes("galleryFilter === 'photo'"), 'harus ada cabang filter photo');
+  assert.ok(body.includes("assets.filter((a) => a.media_type !== 'video')"), 'filter foto = bukan video');
+  assert.ok(body.includes("assets.filter((a) => a.media_type === 'video')"), 'filter video = video');
+  // Jumlah label dihitung dari TOTAL aset, bukan hasil filter.
+  assert.ok(body.includes('const counts = { all: assets.length, photo: 0, video: 0 };'),
+    'hitungan harus dari total aset');
+  // Filter tak valid -> balik ke all.
+  assert.ok(body.includes("if (!['all', 'photo', 'video'].includes(galleryFilter)) galleryFilter = 'all'"),
+    'filter tak valid harus aman');
+});
+
+test('D-264: klik filter menyaring galeri & toggle kelas aktif', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('function renderGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("[data-gal-filter]"), 'harus memasang handler klik filter');
+  assert.ok(body.includes('galleryFilter = key;'), 'klik harus mengubah filter aktif');
+  assert.ok(body.includes('renderGallery();'), 'klik harus render ulang galeri');
+  // Kelas aktif + aria-pressed untuk aksesibilitas.
+  assert.ok(body.includes("galleryFilter === key ? ' is-active' : ''"), 'tombol aktif harus punya kelas is-active');
+  assert.ok(body.includes('aria-pressed'), 'tombol filter harus punya aria-pressed');
+});
+
+test('D-264: empty state tampil saat filter tidak punya aset', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('function renderGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('st-gal-empty-filter'), 'harus ada empty state untuk filter kosong');
+  assert.ok(body.includes('shown.length'), 'isi galeri harus dicek dari jumlah hasil filter');
+});
+
+test('D-264: CSS baris filter ada (pill + aktif + empty state)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-gal-filters{'), 'harus ada aturan .st-gal-filters');
+  assert.ok(css.includes('.st-gal-filter{'), 'harus ada aturan .st-gal-filter');
+  assert.ok(css.includes('.st-gal-filter.is-active{'), 'harus ada aturan tombol aktif');
+  assert.ok(css.includes('.st-gal-empty-filter{'), 'harus ada aturan empty state');
+  // Filter bar sticky -> tetap terlihat saat halaman di-scroll.
+  const rule = css.match(/\.st-gal-filters\{([^}]*)\}/);
+  assert.ok(rule && rule[1].includes('position:sticky'), 'baris filter harus sticky');
+});
+
+test('D-264: harness filter galeri harus ada', () => {
+  const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
+  assert.ok(h.includes('data-gal-filter'), 'harness harus mengklik filter');
+  assert.ok(h.includes('SEMUA LOLOS — D-264 OK'), 'harness harus punya penanda lulus');
+  assert.ok(h.includes('jumlah label TIDAK berubah'), 'harness harus mengecek jumlah label stabil');
+});

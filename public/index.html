@@ -1102,6 +1102,27 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    kanan). HP tetap 3 vertikal / 2 horizontal. */
 .st-gallery{display:grid;gap:16px;margin:0 0 10px;align-content:start;
   --st-gal-mincol:132px;--st-gal-gap:12px}
+/* ===== D-264: Filter jenis konten di atas galeri ===== */
+/* Baris filter: Semua | Foto | Video + jumlah aset. Mirip tab pill, rata
+   kiri, bisa di-scroll horizontal di HP kalau sempit. */
+.st-gal-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:0 0 2px;position:sticky;top:0;z-index:6;
+  padding:6px 0;background:linear-gradient(180deg,#070b14 68%,rgba(0,0,0,0))}
+.st-gal-filter{display:inline-flex;align-items:center;gap:6px;
+  padding:7px 13px;border-radius:999px;border:1px solid var(--line);
+  background:#101b2c;color:#cfd6e4;font:inherit;font-size:12px;font-weight:700;
+  cursor:pointer;transition:border-color .16s,color .16s,background .16s}
+.st-gal-filter b{font-size:10.5px;font-weight:800;color:var(--muted);
+  background:#1c2b40;border-radius:999px;padding:2px 7px;min-width:20px;text-align:center}
+.st-gal-filter:hover{border-color:#49334e;color:#f4f5fb}
+.st-gal-filter.is-active{border-color:#ff72c5;color:#fff;background:#311738}
+.st-gal-filter.is-active b{color:#ff9bdc;background:#5b1f4e}
+/* Kosong setelah filter (mis. filter Video tapi belum ada video). */
+.st-gal-empty-filter{display:grid;place-items:center;gap:6px;padding:34px 16px;
+  text-align:center;border:1px dashed #24344e;border-radius:14px;color:var(--muted)}
+.st-gal-empty-filter svg{width:26px;height:26px;stroke:#5d6f88}
+.st-gal-empty-filter b{color:#cfd6e4;font-size:13px}
+.st-gal-empty-filter p{margin:0;font-size:11.5px}
 /* Baris dalam galeri: grid polos, jumlah kolom diatur per orientasi. */
 .st-gal-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--st-gal-mincol),1fr));
   gap:var(--st-gal-gap);align-items:start}
