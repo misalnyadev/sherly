@@ -143,6 +143,32 @@ for (const vp of VIEWPORTS) {
       })(),
       // Per baris: tinggi item + tinggi kolom. Toleransi rongga = tinggi 1
       // item DI BARIS ITU (sisa satu item boleh lebih pendek — standar grid).
+      // D-260: jarak antar item (vertikal dalam kolom) & antar kolom.
+      gaps: (() => {
+        const row = document.querySelector('.st-gal-row--horizontal');
+        if (!row) return null;
+        const cols = [...row.getElementsByClassName('st-gal-col')];
+        const cs = getComputedStyle(cols[0] || row);
+        const gapCss = cs.gap || cs.rowGap || '0';
+        // Jarak nyata antar 2 kolom (batas kanan kolom 1 & kiri kolom 2).
+        let between = null;
+        if (cols.length >= 2) {
+          const a = cols[0].getBoundingClientRect();
+          const b = cols[1].getBoundingClientRect();
+          between = Math.round(b.left - a.right);
+        }
+        // Jarak nyata antar 2 item dalam satu kolom.
+        let stack = null;
+        for (const c of cols) {
+          if (c.children.length >= 2) {
+            const a = c.children[0].getBoundingClientRect();
+            const b = c.children[1].getBoundingClientRect();
+            stack = Math.round(b.top - a.bottom);
+            break;
+          }
+        }
+        return { gapCss, between, stack };
+      })(),
       itemHByRow: (() => {
         const out = {};
         document.querySelectorAll('.st-gal-row').forEach((r) => {
@@ -201,6 +227,14 @@ for (const vp of VIEWPORTS) {
   if (vp.name === 'HP') {
     check(vp.name, 'HP vertikal = 3 grid', before.verticalCols === 3, `vert=${before.verticalCols}`);
     check(vp.name, 'HP horizontal = 2 grid', before.horizontalCols === 2, `horz=${before.horizontalCols}`);
+  }
+  // D-260: jarak antar kolom & antar item harus terlihat (tidak nempel).
+  const gp = before.gaps || {};
+  if (gp.between !== null) {
+    check(vp.name, 'jarak antar kolom terlihat', gp.between >= 4, `jarak=${gp.between}px`);
+  }
+  if (gp.stack !== null) {
+    check(vp.name, 'jarak antar item dalam kolom terlihat', gp.stack >= 4, `jarak=${gp.stack}px`);
   }
   // D-258: semua kolom masonry sama tinggi -> tidak ada kotak kosong di
   // bawah kolom yang lebih pendek.

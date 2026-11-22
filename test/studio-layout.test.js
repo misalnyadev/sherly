@@ -3149,7 +3149,8 @@ test('D-259: jumlah kolom dibatasi agar tiap kolom terisi (bukan 1 baris)', () =
   const fn = studio.slice(studio.indexOf('function packGallery('));
   const body = fn.slice(0, fn.indexOf('\n  }'));
   // Kolom maksimal = jumlah item / 2 -> tiap kolom punya minimal 2 item.
-  assert.ok(body.includes('const maxCols = Math.max(1, Math.floor(items.length / 2))'),
+  // D-260: minimal 2 kolom (biar 1-2 aset tetap berjadian, bukan menumpuk).
+  assert.ok(body.includes('const maxCols = Math.max(2, Math.floor(items.length / 2))'),
     'jumlah kolom harus dibatasi agar tiap kolom terisi >= 2 item');
   assert.ok(body.includes('Math.min(idealCols, maxCols)'), 'cols harus dibatasi oleh maxCols');
   // Lebar kolom tidak boleh ikut melebar saat jumlah kolom dikurangi.
@@ -3188,4 +3189,44 @@ test('D-259: jarak antar item galeri tidak terlalu sempit di HP', () => {
   const css = readFileSync('public/index.html', 'utf8');
   assert.ok(/@media\(max-width:560px\)\{\.st-gallery\{--st-gal-gap:9px\}/.test(css),
     'HP harus punya jarak galeri sendiri (9px)');
+});
+
+// ===== D-260: jarak kolom tidak nempel, upload error non-JSON informatif =====
+
+test('D-260: jarak antar kolom diambil dari --st-gal-gap (bukan computed gap)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Mode masonry mengubah `gap` computed -> 0, jadi jarak HARUS dibaca dari var.
+  assert.ok(body.includes("getPropertyValue('--st-gal-gap')"), 'jarak kolom harus dari --st-gal-gap');
+  assert.ok(body.includes('if (!gap) gap = parseFloat(cs.gap'), 'ada fallback ke computed gap');
+  // CSS masonry tidak bolehivi gap:0 (bikin kolom nempel).
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-gal-row--masonry\{([^}]*)\}/);
+  assert.ok(rule, 'aturan masonry harus ada');
+  assert.ok(!/gap:0/.test(rule[1]), 'masonry tidak boleh pakai gap:0 (kolom nempel)');
+});
+
+test('D-260: minimal 2 kolom & jumlah kolom dibatasi', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Minimal 2 kolom -> 1-2 aset tetap tampil berjadian, bukan menumpuk ke bawah.
+  assert.ok(body.includes('const maxCols = Math.max(2,'), 'maxCols minimal 2');
+  assert.ok(body.includes('Math.max(2, Math.min(idealCols, maxCols))'), 'cols minimal 2');
+});
+
+test('D-260: error upload non-JSON ditampilkan dengan pesan yang bisa dibaca', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('async function uploadAsset('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Baca teks dulu, baru coba parse (r.json() langsung = "JSON.Parse ...").
+  assert.ok(body.includes('await r.text()'), 'response harus dibaca sebagai teks dulu');
+  assert.ok(body.includes('JSON.parse(raw)'), 'teks baru diparse sebagai JSON');
+  assert.ok(body.includes('try { d = raw ? JSON.parse(raw) : null; } catch { d = null; }'),
+    'parse JSON harus di-catch (balasan HTML tidak boleh melempar)');
+  // Pesan informatif per status.
+  assert.ok(body.includes('r.status === 413'), 'harus ada pesan untuk 413');
+  assert.ok(body.includes('4,5 MB'), 'pesan 413 harus menyebut batas 4,5 MB');
+  assert.ok(body.includes('r.status === 401 || r.status === 403'), 'harus ada pesan untuk sesi habis');
 });
