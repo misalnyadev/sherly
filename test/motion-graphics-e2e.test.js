@@ -159,6 +159,31 @@ describe('D-251 alur Motion Graphics end-to-end di browser', () => {
     await page.close();
   });
 
+  test('D-253: request upload memakai Content-Type multipart (bukan JSON)', { skip: !needsChromium() && 'chromium tidak tersedia' }, async () => {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 480, height: 900 });
+    await page.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+    // Reproduksi persis cara UI mengunggah: FormData + header dari app.
+    const out = await page.evaluate(async () => {
+      const mod = await import('/motion-graphics.js');
+      const result = await mod.renderMotionGraphicsOnClient({
+        template: 'branded-intro', aspect: '9:16', duration: 2, props: { title: 'Cek Header' },
+      }, { onProgress: () => {} });
+      const fd = new FormData();
+      fd.append('file', result.blob, 'motion-graphics-branded-intro.mp4');
+      fd.append('prompt', 'Cek Header');
+      fd.append('meta', JSON.stringify({ kind: 'motion-graphics', renderer: 'client' }));
+      // Header harus TANPA Content-Type — sama seperti authHeadersMultipart().
+      const res = await fetch('/api/studio/motion-graphics/asset', {
+        method: 'POST', headers: { Authorization: 'Bearer test-token' }, body: fd,
+      });
+      return { ok: res.ok, status: res.status };
+    });
+    assert.equal(out.ok, true, 'upload multipart harus sukses, dapat status ' + out.status);
+    assert.equal(out.status, 201);
+    await page.close();
+  });
+
   test('D-252: hasil render muat di bawah batas upload (4 MB)', { skip: !needsChromium() && 'chromium tidak tersedia' }, async () => {
     const page = await browser.newPage();
     await page.setViewport({ width: 480, height: 900 });
