@@ -1199,9 +1199,18 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-gal-badge svg{width:9px;height:9px;stroke:currentColor}
 .st-gal-kind{position:absolute;right:4px;top:4px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:#04070fcc}
 .st-gal-kind svg{width:9px;height:9px;stroke:#ffd0ec}
-.st-upload-btn{height:38px;padding:0 12px;border-radius:10px;border:1px dashed #49334e;background:transparent;color:#cfd6e4;font:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:border-color .18s,color .18s}
-.st-upload-btn:hover{border-color:#f044a8;color:#ffd0ec}
-.st-upload-btn svg{width:14px;height:14px;stroke:#ff72c5}
+/* D-267: tombol Unggah diseragamkan dengan tombol filter (pill compact:
+   tinggi sama, border solid, radius sama, ikon & teks sebaris). */
+.st-upload-btn{height:34px;padding:0 10px;border-radius:11px;border:1px solid var(--line);
+  background:#101b2c;color:#a9b8cd;font:inherit;font-size:11.5px;font-weight:700;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  transition:border-color .16s,color .16s,background .16s}
+.st-upload-btn:hover{border-color:#49334e;color:#f4f5fb}
+.st-upload-btn svg{width:17px;height:17px;stroke:#ff72c5;flex:none}
+@media(max-width:560px){
+  .st-upload-btn{height:30px;padding:0 8px;gap:5px;border-radius:10px;font-size:10.5px}
+  .st-upload-btn svg{width:15px;height:15px}
+}
 
 /* ===== D-198: Lightbox preview aset ===== */
 .st-lightbox{position:fixed;inset:0;z-index:120;display:none}

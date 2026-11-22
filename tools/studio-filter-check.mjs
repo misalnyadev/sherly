@@ -143,6 +143,10 @@ for (const vp of VIEWPORTS) {
   check(vp.name, 'tombol Unggah sebaris dengan filter',
     all.uploadTop !== null && Math.abs(all.uploadTop - tops[0]) <= 12,
     `upload=${all.uploadTop} filter=${tops[0]}`);
+  // D-267: tombol Unggah harus SERAGAM dengan tombol filter (tinggi sama).
+  check(vp.name, 'tinggi tombol Unggah sama dengan filter',
+    all.uploadH !== null && all.bar.length > 0 && all.bar.every((b) => b.h === all.uploadH),
+    `upload=${all.uploadH} filter=${all.bar.map((b) => b.h).join(',')}`);
   // D-265: tombol filter = LOGO SAJA (punya svg) + jumlah.
   check(vp.name, 'tombol filter pakai logo (svg)', all.bar.every((b) => b.hasSvg), JSON.stringify(all.bar.map((b) => b.hasSvg)));
   check(vp.name, 'tombol filter punya title/label aksesibel',
@@ -216,4 +220,4 @@ if (failures.length) {
   failures.forEach((f) => console.log('  - ' + f));
   process.exit(1);
 }
-console.log('SEMUA LOLOS — D-266 OK');
+console.log('SEMUA LOLOS — D-267 OK');
