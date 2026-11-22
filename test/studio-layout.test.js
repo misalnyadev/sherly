@@ -2835,10 +2835,11 @@ test('D-255: galeri pakai masonry multi-column (vertikal & horizontal saling isi
   assert.ok(css.includes('--st-gal-gap'), 'jarak galeri harus pakai CSS var');
   assert.ok(css.includes('--st-gal-mincol'), 'lebar kolom minimal harus pakai CSS var');
   // Thumbnail lebih kecil dari sebelumnya (D-247: 180px PC / 112px HP).
+  // D-261: aturan vertikal sekarang juga punya --st-gal-maxcol.
   assert.ok(/min-width:900px\)\{\.st-gal-row--vertical\{--st-gal-mincol:132px/.test(css),
     'kolom vertikal PC harus 132px');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
-    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px'),
     'kolom vertikal HP harus 96px');
 });
 
@@ -2951,23 +2952,24 @@ test('D-256: galeri dipisah jadi baris Vertikal & Horizontal (ala Beranda)', () 
 test('D-256: HP 3 grid vertikal & 2 grid horizontal', () => {
   const css = readFileSync('public/index.html', 'utf8');
   // Vertikal: kolom minimum kecil (3 kolom muat di HP).
-  assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:104px}'),
+  // D-261: aturan sekarang juga punya --st-gal-maxcol.
+  assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:104px;'),
     'aturan baris vertikal harus ada');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
-    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px'),
     'vertikal HP mincol 96px (3 grid)');
   // Horizontal: kolom minimum lebih lebar (2 kolom di HP).
-  assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:150px}'),
+  assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:150px;'),
     'aturan baris horizontal harus ada');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px}')
-    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
     'horizontal HP mincol 132px (2 grid)');
   // Media query HP override.
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
-    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px'),
     'media query HP untuk baris vertikal harus ada');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px}')
-    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
     'media query HP untuk baris horizontal harus ada');
 });
 
@@ -3127,7 +3129,11 @@ test('D-258: distribute item menyeimbangkan kolom & sisa di kolom tengah', () =>
   const body = fn.slice(0, fn.indexOf('\n  }'));
   assert.ok(body.includes('const base = Math.floor(total / cols)'), 'jumlah item per kolom dihitung');
   assert.ok(body.includes('const rest = total % cols'), 'sisa item dihitung');
-  assert.ok(body.includes('midIdx'), 'sisa item diberikan ke kolom tengah');
+  // D-261: sisa TIDAK lagi ditumpuk di satu kolom tengah (bikin satu kolom
+  // jauh lebih tinggi & rongga besar di tengah) -> dibagi satu-satu ke
+  // kolom dari kanan ke kiri.
+  assert.ok(body.includes('extraCols'), 'sisa item dibagi ke beberapa kolom');
+  assert.ok(!body.includes('midIdx'), 'sisa item tidak boleh ditumpuk di kolom tengah');
   assert.ok(body.includes('row.style.height'), 'tinggi baris harus disetel');
 });
 
@@ -3148,13 +3154,16 @@ test('D-259: jumlah kolom dibatasi agar tiap kolom terisi (bukan 1 baris)', () =
   const studio = readFileSync('public/studio.js', 'utf8');
   const fn = studio.slice(studio.indexOf('function packGallery('));
   const body = fn.slice(0, fn.indexOf('\n  }'));
-  // Kolom maksimal = jumlah item / 2 -> tiap kolom punya minimal 2 item.
-  // D-260: minimal 2 kolom (biar 1-2 aset tetap berjadian, bukan menumpuk).
-  assert.ok(body.includes('const maxCols = Math.max(2, Math.floor(items.length / 2))'),
-    'jumlah kolom harus dibatasi agar tiap kolom terisi >= 2 item');
+  // D-261: batas kolom berubah dari `floor(items/2)` menjadi `items.length`
+  // (tiap kolom minimal 1 item) + minimal 2 kolom, supaya galeri TIDAK
+  // lagi jadi "2 kolom" di layar lebar walau ruang di kanan masih kosong.
+  assert.ok(body.includes('const maxCols = Math.max(2, items.length)'),
+    'jumlah kolom dibatasi jumlah item (tiap kolom >= 1 item)');
   assert.ok(body.includes('Math.min(idealCols, maxCols)'), 'cols harus dibatasi oleh maxCols');
   // Lebar kolom tidak boleh ikut melebar saat jumlah kolom dikurangi.
-  assert.ok(body.includes('minCol * 1.35'), 'lebar kolom harus dibatasi (tidak ikut melebar)');
+  assert.ok(body.includes("--st-gal-maxcol"), 'lebar kolom harus dibatasi oleh --st-gal-maxcol');
+  assert.ok(!body.includes('minCol * 1.35'),
+    'batas lebar kolom tidak lagi hardcoded 1,35x minCol');
 });
 
 test('D-259: baris masonry tidak rata tengah (align-content start)', () => {
@@ -3229,4 +3238,60 @@ test('D-260: error upload non-JSON ditampilkan dengan pesan yang bisa dibaca', (
   assert.ok(body.includes('r.status === 413'), 'harus ada pesan untuk 413');
   assert.ok(body.includes('4,5 MB'), 'pesan 413 harus menyebut batas 4,5 MB');
   assert.ok(body.includes('r.status === 401 || r.status === 403'), 'harus ada pesan untuk sesi habis');
+});
+
+// ===== D-261: kolom ikut lebar halaman (PC penuh), thumbnail tetap kartu =====
+
+test('D-261: jumlah kolom ikut lebar halaman (bukan dibatasi items/2)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Batas lama `floor(items/2)` bikin galeri cuma 2 kolom di layar lebar.
+  assert.ok(!body.includes('Math.floor(items.length / 2)'),
+    'batas kolom tidak boleh items/2 (bikin 2 kolom di layar lebar)');
+  assert.ok(body.includes('const maxCols = Math.max(2, items.length)'),
+    'batas kolom = jumlah item, minimal 2');
+  // Jumlah kolom dihitung dari lebar baris (auto-fit).
+  assert.ok(body.includes('const idealCols = Math.max(1, Math.floor((row.clientWidth + gap)'),
+    'jumlah kolom harus dihitung dari lebar baris');
+});
+
+test('D-261: lebar kolom tetap sebesar kartu (tidak giant) & baris penuh', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Batas atas lebar kolom dari CSS var.
+  assert.ok(body.includes("getPropertyValue('--st-gal-maxcol')"),
+    'batas lebar kolom dari --st-gal-maxcol');
+  // Sisa ruang diserap kolom tapi TIDAK melebihi maxcol.
+  assert.ok(body.includes('const leftover ='), 'sisa ruang dihitung');
+  assert.ok(body.includes('Math.min(colW + extra, maxCol || Infinity)'),
+    'lebar kolom tidak boleh melebihi maxcol');
+  // CSS harus punya --st-gal-maxcol per orientasi.
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('--st-gal-maxcol'), 'CSS harus punya --st-gal-maxcol');
+  assert.ok(/\.st-gal-row--vertical\{[^}]*--st-gal-maxcol:180px/.test(css),
+    'vertikal punya batas lebar kolom 180px');
+  assert.ok(/\.st-gal-row--horizontal\{[^}]*--st-gal-maxcol:260px/.test(css),
+    'horizontal punya batas lebar kolom 260px');
+});
+
+test('D-261: sisa item dibagi ke banyak kolom (tidak menumpuk di tengah)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // 9 aset & 7 kolom -> kolom tengah tidak boleh dapat 3 item (baris
+  // bergerigi & rongga besar di tengah konten).
+  assert.ok(body.includes('extraCols'), 'sisa item memakai daftar kolom ekstra');
+  assert.ok(!body.includes('midIdx'), 'tidak ada lagi kolom tengah khusus sisa');
+  assert.ok(body.includes('for (let c = cols - 1; c >= 0 && extraCols.length < rest; c--)'),
+    'sisa item dibagi dari kolom kanan ke kiri (ragged di ujung kiri)');
+});
+
+test('D-261: harness aset sedikit — minimal 2 kolom & thumbnail tidak giant', () => {
+  const h = readFileSync('tools/studio-few-assets-check.mjs', 'utf8');
+  assert.ok(h.includes('SCENARIOS'), 'harness aset sedikit harus punya skenario');
+  assert.ok(h.includes('cols >= 2'), 'harus mengecek minimal 2 kolom');
+  assert.ok(h.includes('lebar kolom vertikal <= maxcol'), 'harus mengecek kolom tidak giant');
+  assert.ok(h.includes('SEMUA LOLOS — D-261 OK'), 'harness aset sedikit harus punya penanda lulus');
 });
