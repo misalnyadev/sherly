@@ -3494,6 +3494,47 @@ test('D-266: harness filter mengecek jumlah di samping ikon', () => {
   assert.ok(h.includes('1 baris'), 'harness harus tetap cek 1 baris');
 });
 
+// ===== D-267: Tombol Unggah diseragamkan dengan tombol filter =====
+
+test('D-267: tombol Unggah kompak & sepadan dengan tombol filter', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const up = css.match(/(^|\n)\.st-upload-btn\{([^}]*)\}/);
+  const fil = css.match(/\.st-gal-filter\{([^}]*)\}/);
+  assert.ok(up, 'aturan .st-upload-btn harus ada');
+  assert.ok(fil, 'aturan .st-gal-filter harus ada');
+  // Bentuk sama: inline-flex, align center, radius sama, border solid.
+  assert.ok(up[2].includes('display:inline-flex'), 'Unggah harus inline-flex');
+  assert.ok(up[2].includes('align-items:center'), 'Unggah harus align center');
+  const upR = (up[2].match(/border-radius:(\d+)px/) || [])[1];
+  const filR = (fil[1].match(/border-radius:(\d+)px/) || [])[1];
+  assert.ok(upR && filR && upR === filR, `radius harus sama (Unggah ${upR} vs filter ${filR})`);
+  assert.ok(!up[1].includes('dashed'), 'border Unggah tidak boleh dashed (harus solid)');
+  // Tinggi sama -> 1 baris yang rata.
+  const upH = (up[2].match(/height:(\d+)px/) || [])[1];
+  const filH = (fil[1].match(/height:(\d+)px/) || [])[1];
+  assert.ok(upH && filH && upH === filH, `tinggi harus sama (Unggah ${upH} vs filter ${filH})`);
+  // Warna dasar sama (pill gelap), hover sama.
+  assert.ok(up[2].includes('background:#101b2c'), 'latar Unggah harus sama dengan filter');
+  const upHover = css.match(/\.st-upload-btn:hover\{([^}]*)\}/);
+  const filHover = css.match(/\.st-gal-filter:hover\{([^}]*)\}/);
+  assert.ok(upHover && filHover && upHover[1] === filHover[1],
+    'hover Unggah harus sama dengan hover filter');
+  // HP: versi compact juga sama.
+  const hpUp = css.match(/\.st-upload-btn\{([^}]*height:\d+px[^}]*)\}/);
+  const hpFil = css.match(/\.st-gal-filter\{([^}]*height:\d+px[^}]*)\}/);
+  assert.ok(hpUp && hpFil, 'aturan HP untuk Unggah & filter harus ada');
+  const hpUpH = (hpUp[1].match(/height:(\d+)px/) || [])[1];
+  const hpFilH = (hpFil[1].match(/height:(\d+)px/) || [])[1];
+  assert.ok(hpUpH && hpFilH && hpUpH === hpFilH,
+    `tinggi HP harus sama (Unggah ${hpUpH} vs filter ${hpFilH})`);
+});
+
+test('D-267: harness mengecek tinggi tombol Unggah = tinggi tombol filter', () => {
+  const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
+  assert.ok(h.includes('tinggi tombol Unggah sama dengan filter'),
+    'harness harus cek tinggi tombol Unggah seragam');
+});
+
 test('D-264: harness filter galeri harus ada', () => {
   const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
   assert.ok(h.includes('data-gal-filter'), 'harness harus mengklik filter');
