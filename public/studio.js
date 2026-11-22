@@ -531,7 +531,10 @@
       const items = [...row.querySelectorAll('.st-gal-item')];
       if (!items.length) return;
       const cs = getComputedStyle(row);
-      const gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
+      // D-260: jarak kolom diambil dari --st-gal-gap (computed `gap` bisa 0 pada
+      // mode masonry -> kolom jadi nempel tanpa jarak pemisah).
+      let gap = parseFloat(cs.getPropertyValue('--st-gal-gap')) || 0;
+      if (!gap) gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
       // D-256: baris yang belum punya lebar (view tersembunyi) dilewati;
       // packing diulang oleh ResizeObserver begitu lebar nyata tersedia.
       if (!row.clientWidth) return;
@@ -541,8 +544,11 @@
       // D-259: jangan buat kolom lebih banyak dari yang bisa diisi. Kalau
       // kolom > jumlah item, tiap kolom cuma berisi 1 item -> galeri terlihat
       // "1 baris" dan itemnya melayang (grid keliatan rata tengah).
-      const maxCols = Math.max(1, Math.floor(items.length / 2));
-      const cols = Math.max(1, Math.min(idealCols, maxCols));
+      // D-260: jumlah kolom dibatasi agar tiap kolom berisi >= 2 item (biar
+      // tidak terlihat "1 baris"), TAPI minimal 2 kolom supaya 1-2 aset
+      // tetap tampil BERJADIAN (bukan menumpuk ke bawah satu kolom).
+      const maxCols = Math.max(2, Math.floor(items.length / 2));
+      const cols = Math.max(2, Math.min(idealCols, maxCols));
       if (cols < 1) return;
       // D-259: lebar kolom TIDAK ikut melebar saat jumlah kolom dikurangi.
       // Kalau ikut melebar, 7 aset & 3 kolom -> kolom jadi 350px (thumbnail
@@ -932,7 +938,23 @@
     try {
       const t = (await window.sherlyGetAccessToken?.()) || '';
       const r = await fetch('/api/studio/assets', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: fd });
-      const d = await r.json();
+      // D-260: server bisa membalas NON-JSON (mis. HTML error Vercel 413 untuk
+      // file > 4,5 MB, atau halaman error 404/500). `r.json()` langsung
+      // melempar "JSON.Parse: unexpected character at line 1 column 1" ->
+      // pesan tidak berguna. Baca teks dulu, baru coba parse.
+      const raw = await r.text();
+      let d = null;
+      try { d = raw ? JSON.parse(raw) : null; } catch { d = null; }
+      if (!d) {
+        // Balasan non-JSON -> pesan yang bisa dibaca user.
+        if (r.status === 413) {
+          throw new Error('File terlalu besar untuk diunggah (maks 4,5 MB). Compres dulu, lalu coba lagi.');
+        }
+        if (r.status === 401 || r.status === 403) {
+          throw new Error('Sesi habis. Muat ulang halaman lalu coba lagi.');
+        }
+        throw new Error('Server tidak bisa memproses file ini (HTTP ' + r.status + '). Coba file lain.');
+      }
       if (!r.ok) throw new Error(d?.error || 'Gagal mengunggah aset.');
       if (d?.asset) { assets.unshift(d.asset); renderGallery(); window.toast?.('Aset ditambahkan ke galeri ✨'); }
     } catch (e) { window.toast?.(e.message || 'Gagal mengunggah aset.'); }
