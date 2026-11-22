@@ -250,7 +250,7 @@ for (const vp of VIEWPORTS) {
   if (vp.name === 'PC') {
     check(vp.name, 'PC vertikal = 7 grid (ikut lebar halaman)', before.verticalCols === 7,
       `vert=${before.verticalCols}`);
-    check(vp.name, 'PC horizontal = 5 grid (ikut lebar halaman)', before.horizontalCols === 5,
+    check(vp.name, 'PC horizontal = 4 grid (ukuran lebih seimbang)', before.horizontalCols === 4,
       `horz=${before.horizontalCols}`);
   }
   // D-261: baris terisi penuh (>= 97% lebar baris) -> tidak ada ruang kosong

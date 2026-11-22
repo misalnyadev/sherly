@@ -3295,3 +3295,29 @@ test('D-261: harness aset sedikit — minimal 2 kolom & thumbnail tidak giant', 
   assert.ok(h.includes('lebar kolom vertikal <= maxcol'), 'harus mengecek kolom tidak giant');
   assert.ok(h.includes('SEMUA LOLOS — D-261 OK'), 'harness aset sedikit harus punya penanda lulus');
 });
+
+// ===== D-262: PC horizontal 4 kolom (ukuran lebih seimbang) =====
+
+test('D-262: PC horizontal 4 grid (bukan 5) — ukuran lebih seimbang', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // mincol PC horizontal = 220px -> floor((1052+12)/(220+12)) = 4 kolom.
+  assert.ok(/min-width:900px\)\{\.st-gal-row--horizontal\{--st-gal-mincol:220px/.test(css),
+    'PC horizontal harus mincol 220px (4 grid)');
+  assert.ok(!/min-width:900px\)\{\.st-gal-row--horizontal\{--st-gal-mincol:190px/.test(css),
+    'mincol lama 190px (5 grid) harus diganti');
+  // Batas lebar kolom tetap 260px (4 kolom x 254px muat di 1052px).
+  assert.ok(/\.st-gal-row--horizontal\{--st-gal-mincol:150px;--st-gal-maxcol:260px\}/.test(css),
+    'horizontal maxcol tetap 260px');
+  // HP tetap 2 grid (D-256) — tidak ikut berubah.
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
+    'HP horizontal tetap mincol 132px (2 grid)');
+});
+
+test('D-262: harness-layout mengecek PC horizontal 4 grid', () => {
+  const h = readFileSync('tools/studio-layout-check.mjs', 'utf8');
+  assert.ok(h.includes('PC horizontal = 4 grid'), 'harness harus mengecek PC horizontal 4 grid');
+  assert.ok(h.includes('before.horizontalCols === 4'), 'assertion jumlah kolom horizontal PC = 4');
+  // Baris horizontal PC harus tetap PENUH (4 x 254 + 3 x 12 = 1052).
+  assert.ok(h.includes('baris terisi penuh'), 'harness harus tetap mengecek baris terisi penuh');
+});
