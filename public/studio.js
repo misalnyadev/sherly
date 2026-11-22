@@ -666,16 +666,20 @@
   function renderGallery() {
     const box = $('stGallery'); if (!box) return;
     const empty = $('stStageEmpty');
+    // D-265: baris filter disembunyikan saat belum ada aset (nggak ada yang
+    // bisa disaring) — tombol Unggah tetap kelihatan di baris yang sama.
+    const fboxTop = $('stGalFilters');
     if (!assets.length) {
       box.classList.add('st-hidden'); box.innerHTML = '';
       empty?.classList.remove('st-hidden');
+      fboxTop?.classList.add('st-hidden');
       return;
     }
     box.classList.remove('st-hidden');
     empty?.classList.add('st-hidden');
-    // D-264: filter jenis konten — All | Foto | Video (berdasarkan jenis
-    // media aset). Hitungan selalu pakai TOTAL aset (bukan hasil filter)
-    // supaya angka di label tidak berubah-ubah saat user klik.
+    // D-264/D-265: filter jenis konten — Semua | Foto | Video (berdasarkan
+    // jenis media aset). Hitungan selalu pakai TOTAL aset (bukan hasil
+    // filter) supaya angka di badge tidak berubah-ubah saat user klik.
     const counts = { all: assets.length, photo: 0, video: 0 };
     assets.forEach((a) => {
       if (a.media_type === 'video') counts.video++; else counts.photo++;
@@ -702,18 +706,27 @@
         + '<div class="st-gal-row ' + mod + '">' + list.map(assetCardHtml).join('') + '</div>'
         + '</section>';
     };
-    // D-264: baris filter di ATAS galeri — All | Foto | Video + jumlah aset.
-    const filterBtn = (key, label, n) =>
+    // D-265: baris filter BERADA DI LUAR galeri — sebaris dengan tombol
+    // Unggah di sudut kanan area Studio (bukan di dalam daftar aset), supaya
+    // barisnya cuma 1 ( hemat ruang di HP). Tombol = LOGO SAJA + jumlah.
+    const filterBtn = (key, ico, label, n) =>
       '<button type="button" class="st-gal-filter' + (galleryFilter === key ? ' is-active' : '') + '"'
-      + ' data-gal-filter="' + key + '" aria-pressed="' + (galleryFilter === key ? 'true' : 'false') + '">'
-      + esc(label) + ' <b>' + n + '</b></button>';
-    const filterBar = '<div class="st-gal-filters" role="group" aria-label="Saring aset">'
-      + filterBtn('all', 'Semua', counts.all)
-      + filterBtn('photo', 'Foto', counts.photo)
-      + filterBtn('video', 'Video', counts.video)
+      + ' data-gal-filter="' + key + '" title="' + esc(label) + ' (' + n + ')'
+      + '" aria-label="' + esc(label) + ' (' + n + ')"'
+      + ' aria-pressed="' + (galleryFilter === key ? 'true' : 'false') + '">'
+      + icon(ico) + '<b>' + n + '</b></button>';
+    const filterBar = '<div class="st-gal-filters" id="stGalFilters" role="group" aria-label="Saring aset">'
+      + filterBtn('all', 'layout-grid', 'Semua', counts.all)
+      + filterBtn('photo', 'image', 'Foto', counts.photo)
+      + filterBtn('video', 'video', 'Video', counts.video)
       + '</div>';
-    box.innerHTML = filterBar
-      + (shown.length
+    // Baris filter diganti isinya (bukan digabung ke dalam galeri).
+    const fbox = $('stGalFilters');
+    if (fbox) {
+      fbox.innerHTML = filterBar.replace(/^<div[^>]*>|<\/div>$/g, '');
+      fbox.classList.remove('st-hidden');
+    }
+    box.innerHTML = (shown.length
         ? rowHtml('Vertikal', 'smartphone', vert, 'st-gal-row--vertical')
           + rowHtml('Horizontal', 'monitor', horz, 'st-gal-row--horizontal')
         : '<div class="st-gal-empty-filter">' + icon('layout-grid')
@@ -738,14 +751,18 @@
       }
       openPreview(a);
     }));
-    // D-264: klik filter jenis konten -> saring galeri (All/Foto/Video).
-    box.querySelectorAll('[data-gal-filter]').forEach((b) => b.addEventListener('click', () => {
-      const key = b.dataset.galFilter;
-      if (!['all', 'photo', 'video'].includes(key) || key === galleryFilter) return;
-      galleryFilter = key;
-      // Render ulang — renderGallery() sudah menjadwalkan packing ulang sendiri.
-      renderGallery();
-    }));
+    // D-265: klik filter jenis konten -> saring galeri (Semua/Foto/Video).
+    // Filter bar ada DI LUAR galeri (sebaris dengan tombol Unggah).
+    const fbox2 = $('stGalFilters');
+    if (fbox2) {
+      fbox2.querySelectorAll('[data-gal-filter]').forEach((b) => b.addEventListener('click', () => {
+        const key = b.dataset.galFilter;
+        if (!['all', 'photo', 'video'].includes(key) || key === galleryFilter) return;
+        galleryFilter = key;
+        // Render ulang — renderGallery() memperbarui isi filter & galeri.
+        renderGallery();
+      }));
+    }
     // D-257: aset lama (upload sebelum dimensi dicatat) belum punya
     // width/height -> orientasi tidak bisa ditentukan dari metadata.
     // Video thumbnail sudah dimuat di halaman, jadi dimensions-nya bisa
@@ -3144,7 +3161,12 @@
     root.innerHTML =
       // D-202: judul & deskripsi halaman dihapus; tombol Unggah naik ke sudut kanan
       // area Studio (diposisikan absolute di luar grid), grid jadi lebih luas.
-      '<button type="button" class="st-upload-btn st-upload-corner" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
+      // D-265: baris atas area Studio berisi FILTER (kiri, logo + jumlah) dan
+      // tombol Unggah (kanan) — SEBARIS SATU BARIS, hemat ruang di HP.
+      '<div class="st-stage-top">'
+      + '<div class="st-gal-filters st-hidden" id="stGalFilters" role="group" aria-label="Saring aset"></div>'
+      + '<button type="button" class="st-upload-btn" id="stUploadBtn" title="Unggah aset">' + icon('upload') + ' Unggah</button>'
+      + '</div>'
       // D-254: galeri (area hasil) jadi AREA UTAMA Studio — halaman scroll
       // natural (full page), bukan scroll container internal. Konten 9:16
       // tidak lagi terpotong tepat di tinggi composer.
