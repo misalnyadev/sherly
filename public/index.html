@@ -616,11 +616,31 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    Padding bawah main (28px) dikompensasi margin-bottom -28px supaya tak ada celah bawah
    DAN komposer tak terpotong. D-202/D-203 sebelumnya salah: margin negatif +
    tinggi 100vh-96px membuat komposer justru terangkat ~45px dari bawah. */
-#studioView.active{display:flex;flex-direction:column;height:calc(100vh - 91px);min-height:420px;padding:0;margin-bottom:-28px}
-#studioRoot{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding-bottom:0}
+/* D-254: Studio jadi FULL PAGE — halaman scroll normal, galeri boleh sepanjang
+   halaman. Dulu view dikunci `height:calc(100vh - 91px)` + `.st-stage` jadi
+   scroll container sendiri, sehingga konten 9:16 terpotong tepat di tinggi
+   composer dan halaman luar tidak bisa scroll.
+   Sekarang:
+     - `#studioView.active` -> min-height (bukan height), flow dokumen biasa.
+     - `.st-stage` -> flow normal (bukan overflow-y:auto), jadi galeri tumbuh.
+     - composer -> dipindah ke dock FIXED (lihat `.st-composer-dock` di bawah)
+       supaya nempel di bawah viewport sepanjang halaman.
+   `margin-bottom:-28px` tetap dipakai supaya composer tak ada celah bawah. */
+#studioView.active{display:block;min-height:calc(100vh - 91px);padding:0;margin-bottom:-28px;height:auto}
+/* D-254: `#studioRoot` jadi wrapper RELATIF + flex column, jadi galeri
+   (`.st-stage`) tumbuh mengikuti isi dan composer (di dalam dock fixed)
+   tidak ikut terangkat keluar layar ketika halaman digulir ke bawah. */
+#studioRoot{position:relative;display:flex;flex-direction:column;min-height:calc(100vh - 91px);padding-bottom:0}
 /* D-247: ruang atas untuk tombol Unggah (pojok kanan) — composer jadi flow
-   sehingga grid aset boleh penuh lebar, tapi tombol Unggah tidak boleh ketiban. */
-.st-stage{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px;padding-top:46px}
+   sehingga grid aset boleh penuh lebar, tapi tombol Unggah tidak boleh ketiban.
+   D-254: `.st-stage` bukan lagi scroll container -> galeri mengalir di halaman
+   penuh; `padding-bottom` memberi ruang agar composer tidak menutupi aset
+   terakhir saat halaman di-scroll ke paling bawah. */
+.st-stage{flex:1 1 auto;padding-bottom:8px;padding-top:46px;
+  /* D-254: ruang bawah galeri = tinggi composer (fixed) + margin, supaya
+     baris terakhir aset tidak tertutup composer. Nilainya di-update dari JS
+     (`--st-composer-h`) karena tinggi composer dinamis (textarea grows). */
+  padding-bottom:calc(var(--st-composer-h,170px) + 18px)}
 .st-stage-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:38px 16px;color:var(--muted);text-align:center}
 .st-stage-empty svg{width:26px;height:26px;stroke:#ff72c5}
 .st-stage-empty b{color:#fff;font-size:13.5px;font-weight:600}
@@ -629,8 +649,27 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-247: composer jadi "flow" — TRANSPARAN, COMPACT, di TENGAH horizontal,
    tetap menempel di BAWAH halaman. Tidak lagi kotak besar melintang full
    width yang memakan ruang grid aset. PC & HP satu tampilan. */
-.st-composer{position:sticky;bottom:0;z-index:30;flex-shrink:0;align-self:center;
-  width:100%;max-width:760px;box-sizing:border-box;
+/* D-254: dock composer FIXED full-viewport.
+   Kenapa `fixed` dan bukan `sticky`? `position:sticky` selalu TERBATAS oleh
+   containing block-nya (#studioRoot). Begitu halaman di-scroll melewati
+   seluruh galeri, composer ikut terangkat keluar viewport — persis masalah
+   "composer bergeser saat scroll". Dengan `fixed`, composer nempel di bawah
+   viewport SEJAK AKHIR hulu halaman.
+   Box dock sengaja berukuran viewport (left/right/bottom 0 + height 100dvh)
+   supaya anak-anaknya yang `position:fixed` (panel pengaturan HP, lightbox)
+   tetap berpatokan ke viewport, bukan ke kotak composer.
+   Dock `pointer-events:none` supaya klik tetap tembus ke galeri; composer
+   sendiri `pointer-events:auto`. */
+.st-composer-dock{position:fixed;left:0;right:0;bottom:0;z-index:30;
+  height:100vh;height:100dvh;
+  display:flex;align-items:flex-end;pointer-events:none}
+/* D-254: di HP ada tabbar bawah (kapsul menu) — composer harus nempel DI
+   ATAS tabbar, bukan tertutup olehnya. */
+@media(max-width:850px){
+  .st-composer-dock{bottom:calc(68px + max(4px,env(safe-area-inset-bottom) - 18px))}
+}
+.st-composer{position:relative;pointer-events:auto;display:flex;flex-direction:column;
+  width:100%;max-width:760px;box-sizing:border-box;margin:0 auto;
   background:linear-gradient(180deg,rgba(4,7,15,0),rgba(4,7,15,.72) 34%,rgba(4,7,15,.86));
   border:1px solid #24344e;border-radius:18px;padding:9px 12px;
   box-shadow:0 8px 26px #04070fcc}
@@ -1044,6 +1083,11 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
 .st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
 .st-gal-thumb img,.st-gal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+/* D-254: aset portrait (video 9:16) — kotak item ikut rasio asli dan media
+   pakai `contain` supaya TIDAK terpotong; latar gelap biar letterbox rapi. */
+.st-gal-item--portrait .st-gal-thumb{background:#070b14}
+.st-gal-item--portrait .st-gal-thumb img,
+.st-gal-item--portrait .st-gal-thumb video{object-fit:contain}
 .st-gal-empty{width:100%;height:100%;display:grid;place-items:center}
 .st-gal-empty svg{width:20px;height:20px;stroke:#49334e}
 .st-gal-badge{position:absolute;left:4px;bottom:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:8px;background:#04070fcc;color:#ffd0ec;font-size:9.5px}

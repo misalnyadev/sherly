@@ -611,7 +611,12 @@ test('D-213: menu aksi & textarea berada di dalam composer', async () => {
   await new Promise((r) => setTimeout(r, 60));
   const root = doc.getElementById('studioRoot');
   const composer = doc.querySelector('.st-composer');
-  assert.equal(composer.parentElement, root, 'composer harus anak langsung studioRoot');
+  // D-254: composer dibungkus dock (position:fixed) supaya nempel di bawah
+  // viewport sepanjang halaman. Dock = anak langsung studioRoot.
+  const dock = doc.querySelector('.st-composer-dock');
+  assert.ok(dock, 'dock composer harus ada');
+  assert.equal(dock.parentElement, root, 'dock harus anak langsung studioRoot');
+  assert.equal(composer.parentElement, dock, 'composer harus anak dock');
   // Baris menu & textarea di DALAM composer.
   const row = doc.querySelector('.st-tools-menu-row');
   const ta = doc.getElementById('stPrompt');
@@ -1846,10 +1851,15 @@ test('D-247: composer ringkas, transparan, di tengah horizontal & tetap di bawah
   const rule = css.match(/\.st-composer\{([^}]*)\}/);
   assert.ok(rule, 'aturan .st-composer harus ada');
   const body = rule[1];
-  assert.ok(body.includes('align-self:center'), 'composer harus di tengah horizontal');
+  // D-254: composer tidak lagi `align-self:center` (ia kini anak dock fixed,
+  // bukan flex item) — pemusatan lewat `margin:0 auto`.
+  assert.ok(body.includes('margin:0 auto'), 'composer harus di tengah horizontal');
   assert.ok(body.includes('max-width:760px'), 'composer dibatasi lebar (bukan melintang)');
-  assert.ok(body.includes('bottom:0'), 'composer tetap menempel di bawah');
-  assert.ok(body.includes('position:sticky'), 'composer tetap sticky di bawah');
+  // D-254: "menempel di bawah" sekarang dipegang dock (position:fixed).
+  const dock = css.match(/\.st-composer-dock\{([^}]*)\}/);
+  assert.ok(dock, 'aturan .st-composer-dock harus ada');
+  assert.ok(dock[1].includes('position:fixed'), 'dock composer harus fixed (nempel di bawah)');
+  assert.ok(dock[1].includes('bottom:0'), 'dock harus menempel di bawah');
   // Transparan: tidak ada warna solid opaque di background.
   assert.ok(!/background:\s*#[0-9a-f]{3,6}\s*;/.test(body.replace(/background-image[^;]*;/g, '')),
     'composer tidak boleh memakai background solid');
@@ -2684,4 +2694,117 @@ test('D-247: panel pengaturan di dalam composer, tapi DI LUAR baris kontrol', ()
   const ctrlEnd = studio.indexOf("'<span class=\"st-count\"");
   const ctrl = studio.slice(ctrlStart, ctrlEnd);
   assert.ok(!ctrl.includes('id="stPop-settings"'), 'panel tak boleh di dalam .st-controls');
+});
+
+// ===== D-254: Studio full-page — galeri mengalir, composer sticky, video 9:16 utuh =====
+
+test('D-254: view Studio jadi full-page (min-height, bukan fixed height)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/#studioView\.active\{([^}]*)\}/);
+  assert.ok(rule, 'aturan #studioView.active tidak ada');
+  assert.ok(rule[1].includes('min-height:'), 'view Studio harus pakai min-height (bukan height tetap)');
+  // Tidak boleh ada `height:` TETAP — hanya min-height & height:auto.
+  const heights = [...rule[1].matchAll(/(^|;)\s*height:([^;]+)/g)].map((m) => m[2].trim());
+  assert.ok(heights.every((h) => h === 'auto'),
+    'view Studio tidak boleh punya height tetap (halaman harus scroll natural): ' + heights.join(','));
+});
+
+test('D-254: galeri bukan scroll container internal (halaman luar yang bergulir)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-stage\{([^}]*)\}/);
+  assert.ok(rule, 'aturan .st-stage tidak ada');
+  assert.ok(!/overflow-y:auto/.test(rule[1]), 'galeri tidak boleh jadi scroll container internal');
+  assert.ok(!/overflow:auto/.test(rule[1]), 'galeri tidak boleh jadi scroll container internal');
+  // Galeri menyisakan ruang bawah untuk composer (fixed).
+  assert.ok(rule[1].includes('--st-composer-h'), 'galeri harus menyisakan ruang untuk composer');
+});
+
+test('D-254: dock composer fixed (nempel di bawah viewport) & pointer-events none', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-composer-dock\{([^}]*)\}/);
+  assert.ok(rule, 'aturan .st-composer-dock tidak ada');
+  assert.ok(rule[1].includes('position:fixed'), 'dock harus fixed');
+  assert.ok(rule[1].includes('bottom:0'), 'dock harus di bawah');
+  assert.ok(rule[1].includes('pointer-events:none'), 'dock tidak boleh menghalang klik ke galeri');
+  assert.ok(rule[1].includes('align-items:flex-end'), 'composer harus di dasar dock');
+  // Composer (anak dock) tetap bisa diklik.
+  const comp = css.match(/\.st-composer\{([^}]*)\}/);
+  assert.ok(comp[1].includes('pointer-events:auto'), 'composer harus bisa diklik');
+});
+
+test('D-254: di HP composer nempel DI ATAS tabbar bawah (kapsul menu)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const mob = css.match(/@media\(max-width:850px\)\{[^}]*\.st-composer-dock\{([^}]*)\}/s);
+  assert.ok(mob, 'aturan dock composer untuk HP tidak ada');
+  assert.ok(mob[1].includes('bottom:'), 'dock HP harus punya offset bottom');
+  assert.ok(/68px/.test(mob[1]), 'dock HP harus menyisakan ruang untuk tabbar (68px)');
+});
+
+test('D-254: tinggi composer disinkronkan ke CSS var (ruang bawah galeri)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('--st-composer-h'), 'tinggi composer harus disinkronkan ke CSS var');
+  assert.ok(studio.includes('ResizeObserver'), 'perubahan tinggi composer harus dipantau');
+  assert.ok(studio.includes("root.style.setProperty('--st-composer-h'"), 'CSS var harus di-set');
+});
+
+test('D-254: aset portrait (video 9:16) tidak terpotong — rasio item ikut metadata', async () => {
+  const { win, doc } = buildStudio(async (url) => {
+    const u = String(url || '');
+    if (u.includes('/api/studio/assets')) {
+      return { ok: true, json: async () => ({ ok: true, assets: [
+        { id: 'v1', file_name: 'vid.mp4', media_type: 'video', kind: 'generate', url: '/x.mp4', width: 1080, height: 1920 },
+        { id: 'p1', file_name: 'foto.png', media_type: 'image', kind: 'upload', url: '/x.png', width: 1024, height: 1024 },
+      ] }) };
+    }
+    return { ok: true, json: async () => (u.includes('/api/ai/image/models') ? IMAGE_CATALOG : u.includes('/api/prompt-bank') ? PROMPT_BANK : CATALOG) };
+  });
+  await win.renderStudio();
+  await new Promise((r) => setTimeout(r, 80));
+  const items = [...doc.querySelectorAll('.st-gal-item')];
+  assert.equal(items.length, 2, 'harus ada 2 aset di galeri');
+  const vid = items.find((i) => i.querySelector('video'));
+  const img = items.find((i) => i.querySelector('img'));
+  assert.ok(vid, 'item video harus ada');
+  assert.ok(img, 'item gambar harus ada');
+  // Item video portrait -> kelas khusus + aspect-ratio inline (9:16).
+  assert.ok(vid.classList.contains('st-gal-item--portrait'), 'item video portrait harus punya kelas portrait');
+  const vStyle = vid.getAttribute('style') || '';
+  const vRatio = /aspect-ratio:([\d.]+)/.exec(vStyle);
+  assert.ok(vRatio, 'item video harus punya aspect-ratio inline, dapat ' + vStyle);
+  assert.ok(Math.abs(Number(vRatio[1]) - 9 / 16) < 0.01,
+    'item video harus ikut rasio 9:16, dapat ' + vRatio[1]);
+  // Item gambar tetap kotak (tanpa kelas portrait, tanpa aspect-ratio inline).
+  assert.ok(!img.classList.contains('st-gal-item--portrait'), 'gambar 1:1 bukan portrait');
+  assert.ok(!/aspect-ratio/.test(img.getAttribute('style') || ''), 'gambar 1:1 tetap kotak default');
+  // CSS: media portrait pakai contain (bukan cover) supaya tidak terpotong.
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-gal-item--portrait \.st-gal-thumb img,\s*\.st-gal-item--portrait \.st-gal-thumb video\{([^}]*)\}/s);
+  assert.ok(rule, 'aturan media portrait tidak ada');
+  assert.ok(rule[1].includes('object-fit:contain'), 'media portrait harus object-fit:contain');
+});
+
+test('D-254: fallback rasio video 9:16 saat metadata width/height kosong', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function assetRatio('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("a?.media_type === 'video'"), 'video tanpa metadata harus fallback');
+  assert.ok(body.includes('9 / 16'), 'fallback video harus 9:16');
+  assert.ok(body.includes('return 1;'), 'gambar tanpa metadata harus fallback 1:1');
+});
+
+test('D-254: galeri & composer — dock terpisah dari stage di markup studio.js', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('class="st-composer-dock"'), 'dock composer harus ada di markup');
+  assert.ok(studio.includes('class="st-stage"'), 'stage galeri harus ada di markup');
+  // Composer DI DALAM dock; stage (galeri) DI LUAR dock -> dock jadi overlay
+  // fixed di atas galeri, galeri tetap mengalir di flow dokumen.
+  const dockIdx = studio.indexOf('class="st-composer-dock"');
+  const stageIdx = studio.indexOf('class="st-stage"');
+  assert.ok(dockIdx > -1 && stageIdx > -1, 'dock & stage harus ada');
+  // Stage harus berada SETELAH markup dock (dock ditutup 2x: composer + dock).
+  const lightboxIdx = studio.indexOf('class="st-lightbox"');
+  const afterLightbox = studio.slice(lightboxIdx, lightboxIdx + 400);
+  assert.ok(/'\s*\+\s*'<\/div>'\s*\+\s*'<\/div>'/.test(afterLightbox) ||
+    /\+\s*'<\/div>'[\s\S]{0,40}\+\s*'<\/div>'/.test(afterLightbox),
+    'dock harus ditutup (composer + dock) sebelum markup stage: ' + afterLightbox.slice(0, 160));
 });
