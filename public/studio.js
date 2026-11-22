@@ -426,10 +426,12 @@
   }
 
   // ===== D-198: Galeri aset =====
+  // D-255: video di thumbnail punya `loop` + `playsinline` supaya bisa
+  // diputar berulang (hover PC / tap HP) tanpa tombol play.
   function assetThumb(a) {
     if (!a || !a.url) return '<span class="st-gal-empty">' + icon('image') + '</span>';
     if (a.media_type === 'video') {
-      return '<video src="' + esc(a.url) + '#t=0.1" muted preload="metadata" playsinline></video>'
+      return '<video src="' + esc(a.url) + '#t=0.1" muted loop preload="metadata" playsinline></video>'
         + '<span class="st-gal-badge">' + icon('film') + (a.duration_ms ? Math.round(a.duration_ms / 1000) + 's' : '') + '</span>';
     }
     return '<img src="' + esc(a.url) + '" alt="' + esc(String(a.file_name || '').slice(0, 60)) + '" loading="lazy">';
@@ -446,15 +448,106 @@
   // kotak square. Kotak item ikut memakai rasio aslinya supaya video 9:16
   // tampil UTUH (object-fit:contain di atas latar gelap).
   function isPortraitRatio(r) { return r < 0.95; }
+  // D-255: berapa baris grid yang dipakai item, dihitung dari rasio aset
+  // supaya kotak vertikal & horizontal saling mengisi (packing rapat) dan
+  // thumbnail tetap COMPACT (tidak melebar jadi 1:1 untuk semua).
+  // `ratio` = lebar/tinggi. Baris grid ~132px + gap 10px di PC, ~96px + 7px
+  // di HP. Item setinggi `w * (h/w)` = w / ratio, jadi jumlah baris:
+  //   span = ceil((tinggi + gap) / (baris + gap))
+  // Nilai dibatasi supaya tidak ada sel besar kosong di grid.
+  function assetRowSpan(ratio) {
+    const r = ratio > 0 ? ratio : 1;
+    // Tinggi relatif terhadap lebar kolom (1 baris = 1 satuan).
+    const rel = 1 / r;                    // 9:16 -> 1.78, 1:1 -> 1, 16:9 -> 0.56
+    if (rel <= 0.72) return 1;            // landscape (16:9, 3:2)
+    if (rel <= 1.12) return 1;            // square (1:1)
+    if (rel <= 1.55) return 2;            // 4:5, 3:4
+    return 2;                             // 9:16 & potret lain
+  }
   function assetCardHtml(a) {
     const ratio = assetRatio(a);
     const portrait = isPortraitRatio(ratio);
     const cls = 'st-gal-item' + (portrait ? ' st-gal-item--portrait' : '');
-    const style = portrait ? ' style="aspect-ratio:' + (Math.round(ratio * 1000) / 1000) + '"' : '';
-    return '<button type="button" class="' + cls + '"' + style + ' data-asset-open="' + esc(a.id) + '" title="' + esc(a.file_name || 'aset') + '">'
+    // D-255: rasio kolom dari metadata -> tinggi item ikut rasio asli
+    // (compact & vertikal/horizontal saling mengisi).
+    const style = ' style="aspect-ratio:' + (Math.round(ratio * 1000) / 1000) + '"';
+    // D-255: judul tooltip ikut menampilkan ukuran asli (klik -> preview).
+    const dims = (a.width && a.height) ? (a.width + 'x' + a.height) : '';
+    const tip = [a.file_name || 'aset', dims].filter(Boolean).join(' · ');
+    return '<button type="button" class="' + cls + '"' + style + ' data-asset-open="' + esc(a.id) + '" title="' + esc(tip) + '">'
       + '<span class="st-gal-thumb">' + assetThumb(a) + '</span>'
       + '<span class="st-gal-kind">' + (a.kind === 'generate' ? icon('sparkles') : icon('upload')) + '</span>'
       + '</button>';
+  }
+  // D-255: autoplay video di thumbnail.
+  //  - PC: kursor DIATAS thumbnail -> video diputar (loop, muted).
+  //  - HP: klik thumbnail -> video diputar (loop, muted) tanpa tombol play;
+  //    klik lagi / klik aset lain -> berhenti.
+  function playThumbVideo(item) {
+    const v = item?.querySelector('video');
+    if (!v) return;
+    const p = v.play?.();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+    item.classList.add('is-playing');
+  }
+  function pauseThumbVideo(item) {
+    const v = item?.querySelector('video');
+    if (!v) return;
+    try { v.pause(); } catch { /* ignore */ }
+    item.classList.remove('is-playing');
+  }
+  function pauseAllThumbVideos(except) {
+    const box = $('stGallery');
+    if (!box) return;
+    box.querySelectorAll('.st-gal-item.is-playing').forEach((it) => {
+      if (it !== except) pauseThumbVideo(it);
+    });
+  }
+  // D-255: paket galeri jadi MASONRY: tiap aset masuk ke kolom yang paling
+  // pendek sehingga kotak vertikal & horizontal saling mengisi tanpa sel
+  // kosong besar. Implementasi pakai CSS multi-column (column-count) —
+  // browser membagi item ke kolom secara otomatis, urutan tetap "ke bawah
+  // dulu" per kolom supaya daftar aset tak terasa acak.
+  function packGallery(box) {
+    if (!box) return;
+    const items = [...box.children];
+    if (!items.length) return;
+    const cs = getComputedStyle(box);
+    const gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
+    // Jumlah kolom: pakai nilai computed gridTemplateColumns kalau sudah jadi
+    // daftar piksel. Kalau container sudah ber-mode multi-column, kita tetap
+    // ambil jumlah kolom dari class packed sebelumnya.
+    let cols = 0;
+    const colsRaw = (cs.gridTemplateColumns || '').trim();
+    if (colsRaw && !colsRaw.includes('repeat(') && !colsRaw.includes('auto-fill') && !colsRaw.includes('none')) {
+      cols = colsRaw.split(/\s+/).filter((c) => c && c !== 'none').length;
+    }
+    if (!cols) {
+      // Fallback: hitung dari lebar & lebar kolom minimum (dari CSS var/rule).
+      const minCol = parseFloat(getComputedStyle(box).getPropertyValue('--st-gal-mincol')) || 104;
+      cols = Math.max(1, Math.floor((box.clientWidth + gap) / (minCol + gap)));
+    }
+    if (cols < 2) return;
+    const colW = (box.clientWidth - gap * (cols - 1)) / cols;
+    if (!(colW > 0)) return;
+    // Container jadi multi-column; tiap item jadi blok full-width kolom.
+    box.classList.add('st-gallery--packed');
+    box.style.columnCount = String(cols);
+    box.style.columnGap = gap + 'px';
+    items.forEach((it) => {
+      const ratio = parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1;
+      // Rasio CSS = lebar/tinggi -> tinggi = lebar / rasio.
+      // D-255: tinggi dibatasi supaya aset portrait (9:16) tidak bikin kolom
+      // terlalu panjang & thumbnail tetap COMPACT. Potret yang melebihi batas
+      // di-letterbox (object-fit:contain) — isi tetap utuh, tidak terpotong.
+      const raw = colW / ratio;
+      const maxH = Math.round(colW * 1.55);
+      const h = Math.round(Math.min(raw, maxH));
+      it.style.height = h + 'px';
+      it.style.gridColumn = '';
+      it.style.gridRow = '';
+      it.style.breakInside = 'avoid';
+    });
   }
   function renderGallery() {
     const box = $('stGallery'); if (!box) return;
@@ -467,10 +560,51 @@
     box.classList.remove('st-hidden');
     empty?.classList.add('st-hidden');
     box.innerHTML = assets.map(assetCardHtml).join('');
+    // D-255: klik -> preview ukuran asli (lightbox) + autoplay video di HP.
     box.querySelectorAll('[data-asset-open]').forEach((b) => b.addEventListener('click', () => {
       const a = assets.find((x) => x.id === b.dataset.assetOpen);
-      if (a) openPreview(a);
+      if (!a) return;
+      // HP: klik = putar video di tempat (loop) TANPA membuka lightbox,
+      // lalu klik kedua membuka preview ukuran aslinya.
+      if (a.media_type === 'video' && isMobileLayout()) {
+        const playing = b.classList.contains('is-playing');
+        if (playing) {
+          pauseThumbVideo(b);
+          openPreview(a);
+          return;
+        }
+        pauseAllThumbVideos(b);
+        playThumbVideo(b);
+        return;
+      }
+      openPreview(a);
     }));
+    // D-255: PC — kursor di atas thumbnail -> video diputar.
+    box.querySelectorAll('.st-gal-item').forEach((b) => {
+      b.addEventListener('pointerenter', () => {
+        if (isMobileLayout()) return; // HP pakai klik
+        playThumbVideo(b);
+      });
+      b.addEventListener('pointerleave', () => {
+        if (isMobileLayout()) return; // HP: biarkan tetap jalan sampai diklik lagi
+        pauseThumbVideo(b);
+      });
+    });
+    // D-255: susun ulang packing (vertikal/horizontal saling mengisi).
+    // Ditunda satu frame supaya layout grid sudah terhitung (clientWidth != 0).
+    const schedulePack = () => {
+      if (window.requestAnimationFrame) window.requestAnimationFrame(() => packGallery(box));
+      else setTimeout(() => packGallery(box), 0);
+    };
+    schedulePack();
+    if (!window.__stGalleryPacked) {
+      window.__stGalleryPacked = true;
+      let rt = 0;
+      window.addEventListener('resize', () => {
+        clearTimeout(rt);
+        rt = setTimeout(() => packGallery($('stGallery')), 120);
+      });
+    }
   }
   async function loadAssets() {
     try {
@@ -502,9 +636,15 @@
   function openPreview(a) {
     const box = $('stLightbox'); if (!box) return;
     const isVideo = a.media_type === 'video';
+    // D-255: video di preview autoplay + loop (tanpa harus tekan play),
+    // berhenti saat lightbox ditutup.
     const media = isVideo
-      ? '<video src="' + esc(a.url) + '" controls autoplay playsinline class="st-lb-media"></video>'
+      ? '<video src="' + esc(a.url) + '" controls autoplay loop playsinline class="st-lb-media"></video>'
       : '<img src="' + esc(a.url) + '" alt="' + esc(a.file_name || '') + '" class="st-lb-media">';
+    // D-255: tampilkan UKURAN ASLI aset (bukan hanya di-cap di thumbnail).
+    const sizeInfo = (a.width && a.height)
+      ? (a.width + ' × ' + a.height + ' px')
+      : 'Ukuran asli tidak diketahui';
     box.innerHTML =
       '<div class="st-lb-backdrop" data-lb-close="1"></div>'
       + '<div class="st-lb-panel" role="dialog" aria-modal="true">'
@@ -512,6 +652,11 @@
       + '<span>' + esc(a.kind === 'generate' ? 'Hasil generate' : 'Upload') + (a.width ? ' · ' + a.width + '×' + a.height : '') + (a.duration_ms ? ' · ' + Math.round(a.duration_ms / 1000) + ' detik' : '') + '</span></div>'
       + '<button type="button" class="st-lb-x" data-lb-close="1" aria-label="Tutup">' + icon('x') + '</button></div>'
       + '<div class="st-lb-body">' + media + '</div>'
+      // D-255: baris informasi ukuran asli (klik thumbnail -> lihat ukuran).
+      + '<div class="st-lb-meta"><span class="st-lb-meta-ico">' + icon('maximize') + '</span>'
+      + '<span>Ukuran asli: <b>' + esc(sizeInfo) + '</b></span>'
+      + (a.media_type === 'video' ? '<span class="st-lb-meta-hint">Video diputar otomatis</span>' : '')
+      + '</div>'
       + (a.prompt ? '<p class="st-lb-prompt">' + esc(a.prompt) + '</p>' : '')
       + '<div class="st-lb-actions">'
       + '<a class="st-act" href="' + esc(a.url) + '" download="' + esc(a.file_name || 'aset') + '">' + icon('download') + ' Unduh</a>'

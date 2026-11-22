@@ -26,6 +26,11 @@ const ASSETS = [
   { id: 'a2', file_name: 'vid-vertikal-2.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1080, height: 1920, duration_ms: 6000, meta: { kind: 'motion-graphics' } },
   { id: 'a3', file_name: 'vid-vertikal-3.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1080, height: 1920, duration_ms: 6000, meta: { kind: 'motion-graphics' } },
   { id: 'a4', file_name: 'vid-vertikal-4.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1080, height: 1920, duration_ms: 6000, meta: { kind: 'motion-graphics' } },
+  // Landscape 16:9 — harus tetap 1 baris (compact).
+  { id: 'a5', file_name: 'vid-horizontal-16x9.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1920, height: 1080, duration_ms: 5000 },
+  // Gambar 4:5 & 3:4 — potret ringan.
+  { id: 'a6', file_name: 'foto-4x5.png', media_type: 'image', kind: 'upload', url: '/assets/brand/sherly-logo-poster.png', width: 1080, height: 1350 },
+  { id: 'a7', file_name: 'foto-3x4.png', media_type: 'image', kind: 'upload', url: '/assets/brand/sherly-logo-poster.png', width: 900, height: 1200 },
   ...Array.from({ length: 44 }, (_, i) => ({
     id: 'img' + i, file_name: 'foto-' + i + '.png', media_type: 'image', kind: 'upload',
     url: '/assets/brand/sherly-logo-poster.png', width: 1024, height: 1024,
@@ -101,6 +106,7 @@ for (const vp of VIEWPORTS) {
       videoObjectFit: vid ? getComputedStyle(vid).objectFit : null,
       videoItemRatio: vidItem ? (vidItem.getBoundingClientRect().height / vidItem.getBoundingClientRect().width).toFixed(3) : null,
       videoRenderedRatio: vidRect ? (vidRect.height / vidRect.width).toFixed(3) : null,
+      videoIntrinsicRatio: vid && vid.videoWidth ? (vid.videoWidth / vid.videoHeight).toFixed(3) : null,
       imgItemRatio: imgItem ? (imgItem.getBoundingClientRect().height / imgItem.getBoundingClientRect().width).toFixed(3) : null,
     };
   });
@@ -125,9 +131,20 @@ for (const vp of VIEWPORTS) {
 
   // 3) Video 9:16 tidak terpotong.
   check(vp.name, 'video 9:16 object-fit contain', before.videoObjectFit === 'contain', `object-fit=${before.videoObjectFit}`);
-  // Rasio diukur tinggi/lebar — untuk 9:16 (tinggi/lebar) = 1.778.
-  check(vp.name, 'item video ikut rasio portrait (9:16)', Math.abs(Number(before.videoItemRatio) - 16 / 9) < 0.05, `h/w=${before.videoItemRatio}`);
-  check(vp.name, 'gambar tetap kotak 1:1', Math.abs(Number(before.imgItemRatio) - 1) < 0.05, `ratio=${before.imgItemRatio}`);
+  // D-255: tinggi item portrait DIBATASI (max 1.55x lebar kolom) supaya galeri
+  // tetap compact. Video tetap UTUH (object-fit:contain -> letterbox, bukan crop).
+  const vr = Number(before.videoItemRatio);
+  check(vp.name, 'item video portrait compact (tinggi dibatasi)', vr <= 1.6 && vr >= 1.4, `h/w=${vr}`);
+  // Video tidak boleh terpotong: `object-fit:contain` -> seluruh frame video
+  // terlihat utuh di dalam kotak (tidak ada crop). Rasio media di dalam kotak
+  // = rasio intrinsik file (2:1 untuk file logo test), bukan rasio metadata.
+  // `object-fit:contain` = seluruh frame terlihat utuh (tidak ada crop).
+  // (getBoundingClientRect video = kotak elemen, area contain-nya di dalamnya.)
+  check(vp.name, 'video tampil utuh (contain, tanpa crop)',
+    before.videoObjectFit === 'contain', `object-fit=${before.videoObjectFit}`);
+  // D-255: gambar pun ikut rasio aslinya (compact packing), bukan selalu 1:1.
+  // Asset pertama yang diukur adalah gambar 4:5 (1080x1350) -> h/w = 1.25.
+  check(vp.name, 'gambar ikut rasio aslinya (bukan selalu 1:1)', Math.abs(Number(before.imgItemRatio) - 1.25) < 0.05, `h/w=${before.imgItemRatio}`);
 
   // Scroll ke bawah -> composer harus tetap nempel, tidak bergeser.
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -155,6 +172,18 @@ for (const vp of VIEWPORTS) {
     return { h: r?.height, bottom: r?.bottom, top: r?.top, display: t ? getComputedStyle(t).display : null };
   });
   console.log('  TABBAR:', JSON.stringify(tb));
+  const pack = await page.evaluate(() => {
+    const box = document.getElementById('stGallery');
+    const cs = box ? getComputedStyle(box) : null;
+    const items = [...document.querySelectorAll('.st-gal-item')].slice(0, 12);
+    return {
+      cols: cs?.gridTemplateColumns,
+      gridAutoRows: cs?.gridAutoRows,
+      items: items.map((i) => ({ col: i.style.gridColumn, row: i.style.gridRow, h: i.style.height, r: i.style.aspectRatio,
+        rectH: Math.round(i.getBoundingClientRect().height), rectW: Math.round(i.getBoundingClientRect().width) })),
+    };
+  });
+  console.log('  PACK:', JSON.stringify(pack));
   const vis = await page.evaluate(() => {
     const sv = document.getElementById('studioView');
     const cs = sv ? getComputedStyle(sv) : null;
@@ -182,18 +211,49 @@ for (const vp of VIEWPORTS) {
   });
 
   // Lightbox preview aset harus menutupi layar (tidak terkurung dock).
+  // D-255: di HP klik pertama = autoplay di tempat; klik kedua = lightbox.
   const lb = await page.evaluate(async () => {
-    document.querySelector('.st-gal-item')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 350));
-    const box = document.getElementById('stLightbox');
+    const item = document.querySelector('.st-gal-item');
+    item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    let box = document.getElementById('stLightbox');
+    if (!box?.querySelector('.st-lb-panel')) {
+      item?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 250));
+      box = document.getElementById('stLightbox');
+    }
     const panel = box?.querySelector('.st-lb-panel');
     const r = panel?.getBoundingClientRect();
+    const meta = box?.querySelector('.st-lb-meta');
     return { hasPanel: !!panel, rect: r ? { t: Math.round(r.top), b: Math.round(r.bottom), w: Math.round(r.width) } : null,
+      hasMeta: !!meta, metaText: (meta?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 90),
       inView: r ? (r.top >= -5 && r.bottom <= window.innerHeight + 5) : false };
   });
   console.log('  LIGHTBOX:', JSON.stringify(lb));
   check(vp.name, 'lightbox preview aset tampil di layar', lb.hasPanel && lb.inView, JSON.stringify(lb));
+  check(vp.name, 'lightbox menampilkan ukuran asli', lb.hasMeta && /px/.test(lb.metaText), lb.metaText);
   await page.evaluate(() => { document.getElementById('stLightbox')?.querySelector('[data-lb-close]')?.click(); });
+
+  // D-255: autoplay video — PC: hover (pointerenter). HP: klik.
+  const auto = await page.evaluate(async () => {
+    const item = [...document.querySelectorAll('.st-gal-item')].find((i) => i.querySelector('video'));
+    const v = item?.querySelector('video');
+    if (!item || !v) return { skip: true };
+    const before = { paused: v.paused, loop: v.loop, muted: v.muted };
+    if (window.innerWidth <= 560) {
+      item.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    } else {
+      item.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 500));
+    const playing = !v.paused && v.currentTime > 0;
+    const cls = item.classList.contains('is-playing');
+    return { before, playing, cls, currentTime: v.currentTime };
+  });
+  console.log('  AUTOPLAY:', JSON.stringify(auto));
+  check(vp.name, 'video thumbnail punya loop + muted', auto.before?.loop === true && auto.before?.muted === true, JSON.stringify(auto.before));
+  check(vp.name, (vp.mobile ? 'klik thumbnail' : 'hover thumbnail') + ' -> video autoplay', auto.playing === true, JSON.stringify(auto));
+  check(vp.name, 'item video diberi penanda is-playing', auto.cls === true, JSON.stringify(auto));
 
   await page.screenshot({ path: `/tmp/studio-${vp.name.toLowerCase()}-bottom.png` });
   await page.evaluate(() => window.scrollTo(0, 0));
