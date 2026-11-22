@@ -4,6 +4,11 @@
 -- 1) Bucket baru "studio-assets" (private) untuk foto & video aset Studio.
 -- 2) Kolom tambahan di public.assets (aset hasil generate maupun upload).
 -- 3) Tabel public.sherly_video_tasks untuk proses generate video (task Kie + progres).
+--
+-- D-263: bucket & policy "studio asset owner insert" ini juga dipakai jalur
+-- upload LANGSUNG dari browser ke Storage (signed upload URL) untuk file > 4,5 MB
+-- (batas request body Vercel). Syaratnya: path WAJIB diawali user id — sudah
+-- dipenuhi oleh assetPath() di server/studio-assets.js.
 
 -- ===== 1) Bucket studio-assets =====
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

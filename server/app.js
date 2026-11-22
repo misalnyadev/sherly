@@ -18,6 +18,7 @@ import { parseMentions, buildCharacterPromptBlock, resolveCharacterReferences, s
 import {
   saveAsset, saveGeneratedAsset, listAssets, signedAsset, deleteAsset, getAsset,
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
+  STUDIO_BUCKET, createAssetUploadTicket, registerUploadedAsset,
 } from './studio-assets.js';
 import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUploadBase64 } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
@@ -695,6 +696,61 @@ app.post('/api/studio/assets', requireUser, requireAdmin, assetUpload, async (re
     res.status(201).json({ asset: await signedAsset(asset, req.supabase) });
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal mengunggah aset.' });
+  }
+});
+
+// ===== D-263: Upload aset LANGSUNG ke Supabase Storage =====
+//
+// Vercel serverless membatasi request body 4,5 MB (batas infrastruktur,
+// tidak bisa dinaikkan lewat vercel.json). File > 4,5 MB selalu ditolak 413
+// sebelum sampai ke route Express.
+//
+// Jalur baru (hanya untuk file besar):
+//   1. POST /api/studio/assets/upload-ticket  -> server buat signed upload
+//      URL + token (metadata kecil, aman lewat server).
+//   2. Browser PUT file langsung ke Supabase Storage (tidak lewat Vercel).
+//   3. POST /api/studio/assets/direct          -> server catat baris `assets`
+//      (JSON kecil) memakai path hasil upload.
+//
+// File kecil tetap lewat multipart biasa (lebih sederhana & cepat).
+
+app.post('/api/studio/assets/upload-ticket', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const ticket = await createAssetUploadTicket(req.supabase, req.user.id, {
+      fileName: String(req.body?.fileName || 'aset'),
+      mime: String(req.body?.mime || ''),
+    });
+    res.json({
+      ok: true,
+      ticket,
+      // Batas file bucket (storage.buckets.file_size_limit) = 25 MB.
+      maxBytes: MAX_ASSET_BYTES,
+      bucket: STUDIO_BUCKET,
+      storageUrl: String(process.env.SUPABASE_URL || '').replace(/\/+$/, ''),
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menyiapkan upload.' });
+  }
+});
+
+app.post('/api/studio/assets/direct', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const path = String(req.body?.path || '');
+    if (!path) return res.status(400).json({ ok: false, error: 'Path aset wajib diisi.' });
+    const asset = await registerUploadedAsset(req.supabase, req.user.id, {
+      path,
+      fileName: String(req.body?.fileName || path.split('/').pop() || 'aset'),
+      mime: String(req.body?.mime || ''),
+      width: req.body?.width,
+      height: req.body?.height,
+      durationMs: req.body?.durationMs,
+      prompt: req.body?.prompt,
+      meta: req.body?.meta,
+      kind: req.body?.kind,
+    });
+    res.status(201).json({ ok: true, asset: await signedAsset(asset, req.supabase) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menyimpan aset.' });
   }
 });
 

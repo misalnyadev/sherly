@@ -2949,7 +2949,7 @@ test('D-256: galeri dipisah jadi baris Vertikal & Horizontal (ala Beranda)', () 
   assert.ok(body.includes('isPortraitRatio(assetRatio(a))'), 'aset dipisah berdasarkan rasio');
 });
 
-test('D-256: HP 3 grid vertikal & 2 grid horizontal', () => {
+test('D-256: HP 3 grid vertikal & 3 grid horizontal', () => {
   const css = readFileSync('public/index.html', 'utf8');
   // Vertikal: kolom minimum kecil (3 kolom muat di HP).
   // D-261: aturan sekarang juga punya --st-gal-maxcol.
@@ -2958,18 +2958,18 @@ test('D-256: HP 3 grid vertikal & 2 grid horizontal', () => {
   assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px')
     .includes('.st-gal-row--vertical{--st-gal-mincol:96px'),
     'vertikal HP mincol 96px (3 grid)');
-  // Horizontal: kolom minimum lebih lebar (2 kolom di HP).
+  // Horizontal: D-263 menaikkan dari 2 -> 3 grid di HP (mincol 115px).
   assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:150px;'),
     'aturan baris horizontal harus ada');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
-    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
-    'horizontal HP mincol 132px (2 grid)');
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:115px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:115px'),
+    'horizontal HP mincol 115px (3 grid, D-263)');
   // Media query HP override.
   assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px')
     .includes('.st-gal-row--vertical{--st-gal-mincol:96px'),
     'media query HP untuk baris vertikal harus ada');
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
-    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:115px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:115px'),
     'media query HP untuk baris horizontal harus ada');
 });
 
@@ -3308,10 +3308,10 @@ test('D-262: PC horizontal 4 grid (bukan 5) — ukuran lebih seimbang', () => {
   // Batas lebar kolom tetap 260px (4 kolom x 254px muat di 1052px).
   assert.ok(/\.st-gal-row--horizontal\{--st-gal-mincol:150px;--st-gal-maxcol:260px\}/.test(css),
     'horizontal maxcol tetap 260px');
-  // HP tetap 2 grid (D-256) — tidak ikut berubah.
-  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px')
-    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px'),
-    'HP horizontal tetap mincol 132px (2 grid)');
+  // D-263: HP horizontal dinaikkan jadi 3 grid (mincol 115px) — PC tetap 4.
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:115px')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:115px'),
+    'HP horizontal mincol 115px (3 grid, D-263)');
 });
 
 test('D-262: harness-layout mengecek PC horizontal 4 grid', () => {

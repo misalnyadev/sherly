@@ -1121,10 +1121,12 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-256: HORIZONTAL — kolom lebih lebar (HP 2 grid).
    D-262: di PC horizontal jadi 4 GRID (bukan 5) supaya ukurannya lebih
    seimbang — tiap kartu lebih lebar & thumbnail lebih besar, gallery
-   tetap PENUH (sisa ruang diserap kolom, lihat --st-gal-maxcol). */
+   tetap PENUH (sisa ruang diserap kolom, lihat --st-gal-maxcol).
+   D-263: di HP horizontal jadi 3 GRID (dari 2) -> mincol 115px:
+   floor((364+9)/(115+9)) = 3 kolom selebar 115px, baris tetap penuh. */
 .st-gal-row--horizontal{--st-gal-mincol:150px;--st-gal-maxcol:260px}
 @media(min-width:900px){.st-gal-row--horizontal{--st-gal-mincol:220px;--st-gal-maxcol:260px}}
-@media(max-width:560px){.st-gal-row--horizontal{--st-gal-mincol:132px;--st-gal-maxcol:260px}}
+@media(max-width:560px){.st-gal-row--horizontal{--st-gal-mincol:115px;--st-gal-maxcol:260px}}
 /* D-258: MASONRY sejati — tiap baris jadi container relatif & tiap kolom
    jadi wrapper absolut yang ditumpuk dari atas. JS mengisi kolom yang
    paling rendah dulu, lalu menyamakan tinggi semua kolom -> TIDAK ada lagi

@@ -243,7 +243,7 @@ for (const vp of VIEWPORTS) {
     `vert=${before.verticalCols} horz=${before.horizontalCols}`);
   if (vp.name === 'HP') {
     check(vp.name, 'HP vertikal = 3 grid', before.verticalCols === 3, `vert=${before.verticalCols}`);
-    check(vp.name, 'HP horizontal = 2 grid', before.horizontalCols === 2, `horz=${before.horizontalCols}`);
+    check(vp.name, 'HP horizontal = 3 grid (D-263)', before.horizontalCols === 3, `horz=${before.horizontalCols}`);
   }
   // D-261: di PC jumlah kolom ikut lebar halaman (vertikal ~7, horizontal ~5)
   // dan baris HARUS PENUH — tidak ada ruang kosong besar di kanan.

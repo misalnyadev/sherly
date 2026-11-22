@@ -940,6 +940,17 @@
   /** Unggah aset dari perangkat. */
   async function uploadAsset(file) {
     if (!file) return;
+    // D-263: batas request body Vercel = 4,5 MB (batas infrastruktur, tidak
+    // bisa dinaikkan). File yang lebih besar harus diunggah LANGSUNG ke
+    // Supabase Storage supaya tidak ditolak 413 oleh platform.
+    const DIRECT_UPLOAD_MIN = 4 * 1024 * 1024; // 4 MB -> pakai jalur langsung
+    if (file.size >= DIRECT_UPLOAD_MIN) {
+      try { await uploadAssetDirect(file); return; }
+      catch (e) {
+        window.toast?.(e.message || 'Gagal mengunggah aset.');
+        return;
+      }
+    }
     const fd = new FormData();
     fd.append('file', file);
     // D-257: kirim dimensi kalau bisa dibaca di browser. Batas waktu pendek
@@ -965,7 +976,9 @@
       if (!d) {
         // Balasan non-JSON -> pesan yang bisa dibaca user.
         if (r.status === 413) {
-          throw new Error('File terlalu besar untuk diunggah (maks 4,5 MB). Compres dulu, lalu coba lagi.');
+          // D-263: file besar sudah lewat jalur langsung (Supabase Storage),
+          // jadi 413 di sini berarti file STILL kebesaran atau server menolak.
+          throw new Error('File ditolak server (terlalu besar). Maks 25 MB — kalau file lebih besar, kompres dulu.');
         }
         if (r.status === 401 || r.status === 403) {
           throw new Error('Sesi habis. Muat ulang halaman lalu coba lagi.');
@@ -975,6 +988,96 @@
       if (!r.ok) throw new Error(d?.error || 'Gagal mengunggah aset.');
       if (d?.asset) { assets.unshift(d.asset); renderGallery(); window.toast?.('Aset ditambahkan ke galeri ✨'); }
     } catch (e) { window.toast?.(e.message || 'Gagal mengunggah aset.'); }
+  }
+
+  // ===== D-263: Upload aset LANGSUNG ke Supabase Storage =====
+  //
+  // File besar (> 4 MB) TIDAK boleh lewat server Vercel (batas body 4,5 MB).
+  // Alurnya:
+  //   1. Minta "upload ticket" ke server -> signed upload URL + token.
+  //   2. PUT file langsung ke Supabase Storage (bypass Vercel sepenuhnya).
+  //   3. Kirim metadata kecil ke server -> baris tabel `assets` dibuat.
+  //
+  // Bucket `studio-assets` private; RLS "studio asset owner insert" memakai
+  // folder awal = user id, dan token signed dibuat server dengan token user.
+  //
+  // Helper generik: dipakai upload aset biasa & hasil render Motion Graphics.
+  // Mengembalikan objek aset yang sudah tercatat di server.
+  async function uploadBlobDirect(blob, fileName, mime, extra = {}) {
+    const t = (await window.sherlyGetAccessToken?.()) || '';
+    if (!t) throw new Error('Sesi habis. Muat ulang halaman lalu coba lagi.');
+    // 1) Ticket (JSON kecil -> aman lewat Vercel).
+    const tr = await fetch('/api/studio/assets/upload-ticket', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({ fileName: fileName || 'aset', mime: mime || '' }),
+    });
+    const tRaw = await tr.text();
+    let td = null;
+    try { td = tRaw ? JSON.parse(tRaw) : null; } catch { td = null; }
+    if (!tr.ok || !td?.ticket?.token) {
+      throw new Error(td?.error || 'Gagal menyiapkan upload (HTTP ' + tr.status + ').');
+    }
+    const { path, token } = td.ticket;
+    const maxBytes = Number(td.maxBytes) || (25 * 1024 * 1024);
+    if (blob.size > maxBytes) {
+      throw new Error('File terlalu besar untuk diunggah (maks ' + (maxBytes / 1024 / 1024).toFixed(0) + ' MB).');
+    }
+    // 2) PUT langsung ke Supabase Storage.
+    //    Protokol sama persis dengan SDK @supabase/storage-js:
+    //    PUT {SUPABASE_URL}/storage/v1/object/upload/sign/{bucket}/{path}?token=...
+    //    Body = FormData berisi field `cacheControl` + file (nama field kosong).
+    const base = String(td.storageUrl || '').replace(/\/+$/, '');
+    if (!base) throw new Error('Alamat penyimpanan belum dikonfigurasi.');
+    const putUrl = base + '/storage/v1/object/upload/sign/' + td.bucket + '/' + path
+      + '?token=' + encodeURIComponent(token);
+    const up = new FormData();
+    up.append('cacheControl', '3600');
+    up.append('', blob, fileName || 'aset');
+    const pr = await fetch(putUrl, {
+      method: 'PUT',
+      headers: { 'x-upsert': 'false' },
+      body: up,
+    });
+    if (!pr.ok) {
+      let msg = '';
+      try { msg = (await pr.text()).slice(0, 200); } catch { /* abaikan */ }
+      throw new Error('Gagal mengunggah file ke penyimpanan (HTTP ' + pr.status + '). ' + msg);
+    }
+    // 3) Catat metadata (JSON kecil).
+    const dr = await fetch('/api/studio/assets/direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({
+        path, fileName: fileName || 'aset', mime: mime || '',
+        ...extra,
+      }),
+    });
+    const dRaw = await dr.text();
+    let dd = null;
+    try { dd = dRaw ? JSON.parse(dRaw) : null; } catch { dd = null; }
+    if (!dr.ok || !dd?.asset) {
+      throw new Error(dd?.error || 'Gagal mencatat aset (HTTP ' + dr.status + ').');
+    }
+    return dd.asset;
+  }
+
+  /** Unggah satu aset dari perangkat (atau hasil render) via jalur langsung. */
+  async function uploadAssetDirect(file) {
+    // D-257: kirim dimensi kalau bisa dibaca di browser (batas waktu pendek).
+    let dim = null;
+    try {
+      dim = await Promise.race([
+        readFileSize(file),
+        new Promise((r) => setTimeout(() => r(null), 2500)),
+      ]);
+    } catch { /* biarkan server menebak */ }
+    const asset = await uploadBlobDirect(file, file.name || 'aset', file.type || '', {
+      width: dim?.width, height: dim?.height,
+    });
+    assets.unshift(asset);
+    renderGallery();
+    window.toast?.('Aset ditambahkan ke galeri ✨');
   }
 
   // ===== D-196: Header Aset (ala Google Flow) =====
@@ -2658,11 +2761,12 @@
           renderMotionProgress();
         },
       });
-      // Upload hasil render sebagai aset (multipart — Blob langsung, tanpa base64).
-      const fd = new FormData();
-      fd.append('file', result.blob, 'motion-graphics-' + tpl.id + '.mp4');
-      fd.append('prompt', String(props.title || props.value || props.captionsText || ''));
-      fd.append('meta', JSON.stringify({
+      // Upload hasil render sebagai aset.
+      // D-263: video besar (> 4 MB) TIDAK boleh lewat server Vercel (batas
+      // body 4,5 MB) -> pakai jalur LANGSUNG ke Supabase Storage.
+      const mgFileName = 'motion-graphics-' + tpl.id + '.mp4';
+      const mgPrompt = String(props.title || props.value || props.captionsText || '');
+      const mgMeta = {
         kind: 'motion-graphics',
         template: tpl.id,
         templateLabel: tpl.label,
@@ -2670,20 +2774,33 @@
         width: result.width,
         height: result.height,
         renderer: 'client',
-      }));
-      fd.append('width', String(result.width));
-      fd.append('height', String(result.height));
-      fd.append('durationMs', String(result.durationMs));
-      const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeadersMultipart(), body: fd});
-      const ud = await up.json().catch(() => ({}));
-      if (!up.ok) {
-        // D-252: platform (Vercel) menolak body > 4,5 MB -> 413 tanpa pesan.
-        if (up.status === 413) {
-          throw new Error('Video terlalu besar untuk dikirim ke server. Pilih durasi lebih pendek lalu render ulang.');
+      };
+      let mgAsset = null;
+      if (result.blob.size >= 4 * 1024 * 1024) {
+        mgAsset = await uploadBlobDirect(result.blob, mgFileName, 'video/mp4', {
+          prompt: mgPrompt, meta: mgMeta, kind: 'generate',
+          width: result.width, height: result.height, durationMs: result.durationMs,
+        });
+      } else {
+        const fd = new FormData();
+        fd.append('file', result.blob, mgFileName);
+        fd.append('prompt', mgPrompt);
+        fd.append('meta', JSON.stringify(mgMeta));
+        fd.append('width', String(result.width));
+        fd.append('height', String(result.height));
+        fd.append('durationMs', String(result.durationMs));
+        const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeadersMultipart(), body: fd});
+        const ud = await up.json().catch(() => ({}));
+        if (!up.ok) {
+          // D-252: platform (Vercel) menolak body > 4,5 MB -> 413 tanpa pesan.
+          if (up.status === 413) {
+            throw new Error('Video terlalu besar untuk dikirim ke server. Pilih durasi lebih pendek lalu render ulang.');
+          }
+          throw new Error(ud.error || 'Gagal menyimpan video ke galeri.');
         }
-        throw new Error(ud.error || 'Gagal menyimpan video ke galeri.');
+        mgAsset = ud.asset;
       }
-      if (ud.asset) { assets.unshift(ud.asset); renderGallery(); }
+      if (mgAsset) { assets.unshift(mgAsset); renderGallery(); }
       motionTask = null;
       renderMotionProgress();
       resetGenerateButtons();

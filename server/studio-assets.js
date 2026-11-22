@@ -109,9 +109,85 @@ export async function saveGeneratedAsset(supabase, userId, { data, mime, prompt,
   }, { kind: 'generate', prompt, meta, width, height, durationMs });
 }
 
+// ===== D-263: Upload langsung ke Supabase Storage (bypass batas Vercel) =====
+//
+// Vercel serverless punya batas request body 4,5 MB yang TIDAK bisa Dinaikkan
+// (batas infrastruktur, bukan setting aplikasi). File yang lebih besar akan
+// ditolak platform dengan 413 sebelum sampai ke route Express.
+//
+// Solusi: browser mengunggah file LANGSUNG ke Supabase Storage memakai
+// "signed upload URL" (token sekali pakai yang dibuat server). Yang lewat
+// server hanya metadata kecil (JSON) untuk membuat baris tabel `assets`.
+//
+// Bucket `studio-assets` sudah punya RLS "studio asset owner insert":
+//   bucket_id = 'studio-assets' AND foldername(name)[1] = auth.uid()
+// → path WAJIB diawali userId. Signed URL dibuat server memakai token user
+//   yang sama, jadi RLS tetap berlaku.
+
+/** Susun path Storage untuk aset (harus diawali userId demi RLS). */
+export function assetPath(userId, fileName, mime) {
+  const name = safeFileName(fileName);
+  const ext = extForMime(mime);
+  return `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${name}.${ext}`;
+}
+
+/**
+ * Buat signed upload URL + token supaya browser bisa PUT file langsung ke
+ * Supabase Storage tanpa melewati batas 4,5 MB Vercel.
+ * @returns {{ path: string, token: string, signedUrl: string }}
+ */
+export async function createAssetUploadTicket(supabase, userId, { fileName, mime }) {
+  const cleanMime = ASSET_MIME.includes(String(mime || '').toLowerCase())
+    ? String(mime).toLowerCase()
+    : null;
+  if (!cleanMime) {
+    throw Object.assign(new Error('Format aset harus JPG, PNG, WebP, GIF, MP4, WebM, atau MOV.'), { status: 400 });
+  }
+  const path = assetPath(userId, fileName, cleanMime);
+  const { data, error } = await supabase.storage.from(STUDIO_BUCKET).createSignedUploadUrl(path);
+  if (error || !data?.token) {
+    throw Object.assign(new Error('Gagal menyiapkan upload: ' + (error?.message || 'token kosong')), { status: 500 });
+  }
+  return { path, token: data.token, signedUrl: data.signedUrl || null };
+}
+
+/**
+ * Catat aset yang SUDAH terunggah langsung ke Storage (jalur D-263).
+ * File tidak ikut lewat server — cukup path-nya.
+ */
+export async function registerUploadedAsset(supabase, userId, { path, fileName, mime, width, height, durationMs, prompt, meta, kind }) {
+  const cleanMime = ASSET_MIME.includes(String(mime || '').toLowerCase())
+    ? String(mime).toLowerCase()
+    : 'application/octet-stream';
+  // Path WAJIB di folder user (RLS "studio asset owner insert").
+  if (!String(path || '').startsWith(userId + '/')) {
+    throw Object.assign(new Error('Path aset tidak valid.'), { status: 400 });
+  }
+  const mediaType = mediaKind(cleanMime);
+  const row = {
+    user_id: userId,
+    file_path: path,
+    file_name: String(fileName || path.split('/').pop() || 'aset').slice(0, 200),
+    media_type: mediaType,
+    alt_text: String(prompt || '').slice(0, 400),
+    kind: kind === 'generate' ? 'generate' : 'upload',
+    prompt: String(prompt || '').slice(0, 2000),
+    meta: meta && typeof meta === 'object' ? meta : {},
+    width: Number.isFinite(Number(width)) && Number(width) > 0 ? Number(width) : null,
+    height: Number.isFinite(Number(height)) && Number(height) > 0 ? Number(height) : null,
+    duration_ms: Number.isFinite(Number(durationMs)) ? Math.round(Number(durationMs)) : null,
+  };
+  const { data, error } = await supabase.from('assets').insert(row).select('*').single();
+  if (error) {
+    // File sudah ada di Storage tapi baris gagal -> jangan simpan file yatim.
+    await supabase.storage.from(STUDIO_BUCKET).remove([path]).catch(() => {});
+    throw Object.assign(new Error('Gagal mencatat aset: ' + error.message), { status: 500 });
+  }
+  return data;
+}
+
 /** Daftar aset milik user (terbaru dulu) + signed URL. */
-export async function listAssets(supabase, userId) {
-  const { data, error } = await supabase
+export async function listAssets(supabase, userId) {  const { data, error } = await supabase
     .from('assets').select('*').eq('user_id', userId)
     .order('created_at', { ascending: false }).limit(200);
   if (error) throw Object.assign(new Error(error.message), { status: 400 });
