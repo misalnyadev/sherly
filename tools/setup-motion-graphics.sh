@@ -27,6 +27,14 @@ echo "▸ Memastikan dependency repo utama terpasang…"
 cd "$ROOT"
 npm install --no-audit --no-fund
 
+# D-251: bundle mediabunny disalin ke public/vendor/ supaya render di browser
+# bisa jalan tanpa bundler (Vercel menyajikan public/ apa adanya).
+echo ""
+echo "▸ Menyalin bundle mediabunny ke public/vendor…"
+mkdir -p "$ROOT/public/vendor"
+cp "$ROOT/node_modules/mediabunny/dist/bundles/mediabunny.min.mjs" "$ROOT/public/vendor/mediabunny.min.mjs"
+echo "  ✓ public/vendor/mediabunny.min.mjs"
+
 echo ""
 echo "✓ Selesai. Sub-project Remotion siap di $MG_DIR"
 echo ""

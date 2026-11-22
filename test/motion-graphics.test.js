@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -200,17 +201,18 @@ test('D-249: mode Motion Graphics ada di CONTENT_TYPES', () => {
   assert.match(studioJs, /\['motion',\s*'Motion Graphics',\s*'film'\]/);
 });
 
-test('D-249: mode Motion Graphics SELALU tampil (status, bukan hilang)', () => {
-  // D-249: user harus bisa lihat mode-nya walau renderer belum siap —
-  // bar isian menampilkan "Menyiapkan…". Mode yang hilang diam-diam bikin
-  // user bingung ("motion graphics dimana ya?").
+test('D-251: mode Motion Graphics SELALU tampil (pilihan, bukan hilang)', () => {
+  // D-251: render utama di browser, jadi mode tidak lagi bergantung status
+  // renderer server. Mode yang hilang diam-diam bikin user bingung.
   assert.match(studioJs, /function availableContentTypes\(\)/);
   assert.match(studioJs, /return CONTENT_TYPES\.slice\(\);/);
   assert.doesNotMatch(studioJs, /CONTENT_TYPES\.filter\(\(\[v\]\) => v !== 'motion'/);
-  // Status 'installing' -> polling ulang tiap 3 detik.
+  // Status 'installing' -> polling ulang tiap 3 detik (fallback server).
   assert.match(studioJs, /motionStatus === 'installing'[\s\S]*?setTimeout\(\(\) => \{ loadMotionTemplates\(\); \}, 3000\)/);
-  // Bar isian menampilkan status saat renderer belum siap.
-  assert.match(studioJs, /if \(!motionAvailable\) \{[\s\S]*?st-motion-status/);
+  // Bar isian TIDAK lagi menampilkan spinner "Menyiapkan…" (bikin beku di Vercel).
+  assert.doesNotMatch(studioJs, /st-motion-status/);
+  // Tapi tetap ada catatan renderer (jelas-jelas, bukan diam).
+  assert.match(studioJs, /st-motion-note/);
 });
 
 test('D-249: UI punya tombol Render + bar template + bar progres', () => {
@@ -243,9 +245,9 @@ test('D-249: health endpoint melaporkan status renderer Motion Graphics', () => 
 
 test('D-249: server auto-install dependency Remotion kalau belum ada', () => {
   // User tidak perlu ingat `npm run setup` — server pasang sendiri sekali
-  // di background, UI nampilin "Menyiapkan…".
+  // di background (hanya di server non-serverless).
   assert.match(appJs, /ensureMotionGraphicsInstalled\(\)\.catch\(\(\) => \{\}\)/);
-  assert.match(appJs, /status: availability\.ok \? 'ready' : install\.status === 'installing' \? 'installing'/);
+  assert.match(appJs, /availability\.status === 'serverless' \? 'serverless'/);
   const mg = readFileSync('server/motion-graphics.js', 'utf8');
   assert.match(mg, /export function ensureMotionGraphicsInstalled\(\)/);
   assert.match(mg, /spawn\('npm', \['install', '--no-audit', '--no-fund'\]/);
@@ -266,4 +268,53 @@ test('D-249: ada script setup yang PASANG kedua node_modules (root + motion-grap
   assert.match(pkg.scripts.setup, /npm install --prefix motion-graphics/);
   // Server motion-graphics wajib ikut dicek syntax-nya.
   assert.match(pkg.scripts.check, /node --check server\/motion-graphics\.js/);
+});
+
+// ===== D-251: render di browser (Canvas 2D + WebCodecs) =====
+//
+// Jalur utama Motion Graphics pindah ke browser supaya deployment Vercel
+// serverless (filesystem read-only, fungsi <= 60 detik) tetap bisa render
+// tanpa server render terpisah dan tanpa biaya bulanan.
+
+test('D-251: ada route POST untuk menyimpan hasil render client-side', () => {
+  assert.match(appJs, /app\.post\('\/api\/studio\/motion-graphics\/asset', requireUser, requireAdmin, assetUpload/);
+  // Route harus disimpan sebagai aset 'generate' dengan meta motion-graphics.
+  assert.match(appJs, /kind: 'motion-graphics'/);
+  assert.match(appJs, /renderer: 'client'/);
+});
+
+test('D-251: server认出 lingkungan serverless dan tidak auto-install Remotion', () => {
+  const mg = readFileSync('server/motion-graphics.js', 'utf8');
+  assert.match(mg, /export function isServerlessRuntime\(\)/);
+  assert.match(mg, /process\.env\.VERCEL/);
+  assert.match(mg, /process\.env\.AWS_LAMBDA_FUNCTION_NAME/);
+  // Auto-install harus dilewati di serverless (fs read-only).
+  assert.match(mg, /if \(isServerlessRuntime\(\)\) \{[\s\S]{0,400}installState\.status = 'serverless'/);
+  // Probe availability juga harus melaporkan status 'serverless'.
+  assert.match(mg, /status: 'serverless'/);
+});
+
+test('D-251: template Motion Graphics selalu dikirim walau renderer server tak ada', () => {
+  // Render client-side butuh katalog template + field.
+  assert.match(appJs, /templates: MG_TEMPLATES,/);
+});
+
+test('D-251: UI memakai render client-side lalu upload hasil ke route aset', () => {
+  assert.match(studioJs, /import\('\.\/motion-graphics\.js'\)/);
+  assert.match(studioJs, /fetch\('\/api\/studio\/motion-graphics\/asset', \{method: 'POST'/);
+  // Tidak boleh lagi menampilkan status "Menyiapkan renderer video…" yang
+  // membeku di Vercel.
+  assert.doesNotMatch(studioJs, /Menyiapkan renderer video/);
+});
+
+test('D-251: bundle mediabunny tersedia sebagai vendor ESM', () => {
+  assert.ok(fs.existsSync('public/vendor/mediabunny.min.mjs'), 'vendor mediabunny harus ada');
+  const src = readFileSync('public/vendor/mediabunny.min.mjs', 'utf8');
+  assert.ok(src.length > 100_000, 'bundle harus berisi kode mediabunny');
+  assert.match(src, /export\s*\{/);
+});
+
+test('D-251: package.json punya dependency mediabunny', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  assert.ok(pkg.dependencies?.mediabunny, 'mediabunny harus jadi dependency root');
 });

@@ -51,7 +51,9 @@ function makeFetch(opts = {}) {
     if (u.includes('/api/studio/motion-graphics/templates')) {
       return { ok: true, json: async () => ({
         ok: true, available: mgAvailable, status: mgStatus, reason: mgReason,
-        templates: mgAvailable ? MG_TEMPLATES : [],
+        // D-251: katalog template selalu dikirim — render client-side butuh
+        // template & field walau renderer server tidak tersedia.
+        templates: MG_TEMPLATES,
       }) };
     }
     if (u.includes('/api/studio/motion-graphics') && (init.method || 'GET') === 'POST') {
@@ -124,40 +126,39 @@ test('D-249: mode Motion Graphics TETAP tampil saat renderer belum siap', async 
   assert.ok(kinds.includes('motion'), 'mode motion harus tetap terlihat walau renderer belum siap');
 });
 
-test('D-249: renderer belum siap -> bar isian nampilin status "Menyiapkan…" (bukan kosong)', async () => {
+test('D-251: renderer server belum siap -> bar isian tetap bisa dipakai (render di browser)', async () => {
   const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'installing' }));
   await win.renderStudio();
   await wait(150);
   await pickTypeWithPanel(win, doc, 'motion');
   const bar = doc.getElementById('stMotionBar');
   assert.ok(!bar.classList.contains('st-hidden'), 'bar harus tetap tampil');
-  assert.match(bar.innerHTML, /st-motion-status/, 'harus ada bar status');
-  assert.match(bar.innerHTML, /Menyiapkan|Menyiapkan renderer/, 'status harus menjelaskan renderer sedang disiapkan');
-  // Kolom isian belum ada karena template belum bisa dipakai.
-  assert.ok(!doc.getElementById('stMotionField-title'), 'kolom isian belum tampil sebelum renderer siap');
+  // D-251: TIDAK lagi status "Menyiapkan…" yang membeku — kolom isian langsung
+  // tampil karena render dilakukan di browser.
+  assert.doesNotMatch(bar.innerHTML, /Menyiapkan renderer video/, 'tidak boleh lagi menunggu renderer server');
+  assert.ok(doc.getElementById('stMotionField-title'), 'kolom isian harus tampil -- BAR: ' + bar.innerHTML.slice(0, 200) + ' | hidden=' + bar.classList.contains('st-hidden'));
+  assert.match(bar.innerHTML, /st-motion-note/, 'harus ada catatan renderer');
 });
 
-test('D-249: renderer gagal -> status menampilkan alasannya', async () => {
-  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'failed', mgReason: 'npm install gagal'}));
+test('D-251: renderer server gagal -> mode tetap bisa dipakai (render di browser)', async () => {
+  const { win, doc } = buildStudio(makeFetch({ mgAvailable: false, mgStatus: 'failed', mgReason: 'npm install gagal' }));
   await win.renderStudio();
   await wait(150);
   await pickTypeWithPanel(win, doc, 'motion');
   const bar = doc.getElementById('stMotionBar');
-  assert.match(bar.innerHTML, /npm install gagal/, 'harus tampilkan alasan kegagalan');
-  assert.match(bar.innerHTML, /st-motion-status-err/, 'harus pakai style error');
+  assert.ok(doc.getElementById('stMotionField-title'), 'kolom isian harus tetap tampil');
+  assert.doesNotMatch(bar.innerHTML, /st-motion-status-err/, 'tidak lagi menampilkan error renderer server');
 });
 
-test('D-249: renderer belum siap -> tombol Render tidak request ke server', async () => {
-  const fetchImpl = makeFetch({ mgAvailable: false, mgStatus: 'installing' });
-  const { win, doc } = buildStudio(fetchImpl);
+test('D-251: catatan renderer menjelaskan render di browser', async () => {
+  const { win, doc } = buildStudio(makeFetch({ mgAvailable: true }));
   await win.renderStudio();
   await wait(150);
   await pickTypeWithPanel(win, doc, 'motion');
-  doc.getElementById('stMotionBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  await wait(120);
-  const post = fetchImpl.calls.find((c) => c.method === 'POST' && c.url.includes('/api/studio/motion-graphics'));
-  assert.ok(!post, 'tidak boleh request render kalau renderer belum siap');
-  assert.match(doc.getElementById('toast').textContent, /disiapkan|n上台|siap/i, 'harus ada pesan ke user');
+  const bar = doc.getElementById('stMotionBar');
+  assert.match(bar.innerHTML, /st-motion-note/, 'harus ada catatan renderer');
+  // Catatan harus menyebut browser (atau, di jsdom, kegagalan muat modul).
+  assert.match(bar.innerHTML, /browser|modul render/i, 'catatan harus menjelaskan batasan renderer');
 });
 
 test('D-249: pilih Motion Graphics -> bar template tampil + tombol Render muncul', async () => {
