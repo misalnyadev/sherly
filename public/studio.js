@@ -508,45 +508,44 @@
   // kosong besar. Implementasi pakai CSS multi-column (column-count) —
   // browser membagi item ke kolom secara otomatis, urutan tetap "ke bawah
   // dulu" per kolom supaya daftar aset tak terasa acak.
+  // D-256: Galeri dipisah jadi 2 baris ala Beranda — VERTIKAL & HORIZONTAL.
+  // Tiap baris punya jumlah kolom sendiri (HP: 3 grid vertikal, 2 grid
+  // horizontal). Item dibuat blok utuh (`break-inside:avoid`) dengan tinggi
+  // mengikuti rasio aset, lalu tinggi portrait dibatasi supaya kolomnya
+  // tetap ringkas.
   function packGallery(box) {
     if (!box) return;
-    const items = [...box.children];
-    if (!items.length) return;
-    const cs = getComputedStyle(box);
-    const gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
-    // Jumlah kolom: pakai nilai computed gridTemplateColumns kalau sudah jadi
-    // daftar piksel. Kalau container sudah ber-mode multi-column, kita tetap
-    // ambil jumlah kolom dari class packed sebelumnya.
-    let cols = 0;
-    const colsRaw = (cs.gridTemplateColumns || '').trim();
-    if (colsRaw && !colsRaw.includes('repeat(') && !colsRaw.includes('auto-fill') && !colsRaw.includes('none')) {
-      cols = colsRaw.split(/\s+/).filter((c) => c && c !== 'none').length;
-    }
-    if (!cols) {
-      // Fallback: hitung dari lebar & lebar kolom minimum (dari CSS var/rule).
-      const minCol = parseFloat(getComputedStyle(box).getPropertyValue('--st-gal-mincol')) || 104;
-      cols = Math.max(1, Math.floor((box.clientWidth + gap) / (minCol + gap)));
-    }
-    if (cols < 2) return;
-    const colW = (box.clientWidth - gap * (cols - 1)) / cols;
-    if (!(colW > 0)) return;
-    // Container jadi multi-column; tiap item jadi blok full-width kolom.
-    box.classList.add('st-gallery--packed');
-    box.style.columnCount = String(cols);
-    box.style.columnGap = gap + 'px';
-    items.forEach((it) => {
-      const ratio = parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1;
-      // Rasio CSS = lebar/tinggi -> tinggi = lebar / rasio.
-      // D-255: tinggi dibatasi supaya aset portrait (9:16) tidak bikin kolom
-      // terlalu panjang & thumbnail tetap COMPACT. Potret yang melebihi batas
-      // di-letterbox (object-fit:contain) — isi tetap utuh, tidak terpotong.
-      const raw = colW / ratio;
-      const maxH = Math.round(colW * 1.55);
-      const h = Math.round(Math.min(raw, maxH));
-      it.style.height = h + 'px';
-      it.style.gridColumn = '';
-      it.style.gridRow = '';
-      it.style.breakInside = 'avoid';
+    const rows = box.querySelectorAll('.st-gal-row');
+    rows.forEach((row) => {
+      const items = [...row.children].filter((el) => el.classList?.contains('st-gal-item'));
+      if (!items.length) return;
+      const cs = getComputedStyle(row);
+      const gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
+      // D-256: jumlah kolom dihitung dari lebar baris & lebar kolom minimum
+      // (--st-gal-mincol). Sengaja TIDAK pakai `gridTemplateColumns` computed:
+      // begitu baris di-mode-kan jadi multi-column, nilai itu berubah & hasil
+      // hitungan jadi tidak konsisten antar-sesi.
+      // D-256: baris yang belum punya lebar (view tersembunyi) dilewati;
+      // packing diulang oleh ResizeObserver begitu lebar nyata tersedia.
+      if (!row.clientWidth) return;
+      const minCol = parseFloat(cs.getPropertyValue('--st-gal-mincol')) || 104;
+      const cols = Math.max(1, Math.floor((row.clientWidth + gap) / (minCol + gap)));
+      if (cols < 2) return;
+      const colW = (row.clientWidth - gap * (cols - 1)) / cols;
+      if (!(colW > 0)) return;
+      row.classList.add('st-gal-row--packed');
+      row.style.columnCount = String(cols);
+      row.style.columnGap = gap + 'px';
+      items.forEach((it) => {
+        const ratio = parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1;
+        // Rasio CSS = lebar/tinggi -> tinggi = lebar / rasio.
+        // D-256: tinggi mengikuti rasio aset (thumbnail mengikuti aslinya,
+        // dipotong rapi dengan `cover` seperti kartu Beranda). Aset utuh
+        // tetap bisa dilihat lewat preview (`contain`).
+        const h = Math.round(colW / ratio);
+        it.style.height = h + 'px';
+        it.style.breakInside = 'avoid';
+      });
     });
   }
   function renderGallery() {
@@ -559,7 +558,23 @@
     }
     box.classList.remove('st-hidden');
     empty?.classList.add('st-hidden');
-    box.innerHTML = assets.map(assetCardHtml).join('');
+    // D-256: pisahkan aset per orientasi — VERTIKAL & HORIZONTAL, masing-masing
+    // jadi baris grid sendiri (ala "Produksi Terbaru" di Beranda).
+    // HP: 3 grid untuk vertikal, 2 grid untuk horizontal.
+    const vert = [], horz = [];
+    assets.forEach((a) => {
+      (isPortraitRatio(assetRatio(a)) ? vert : horz).push(a);
+    });
+    const rowHtml = (title, ico, list, mod) => {
+      if (!list.length) return '';
+      return '<section class="st-gal-row-wrap">'
+        + '<div class="st-gal-row-head"><h3>' + icon(ico) + esc(title) + '</h3>'
+        + '<span class="st-gal-row-count">' + list.length + ' aset</span></div>'
+        + '<div class="st-gal-row ' + mod + '">' + list.map(assetCardHtml).join('') + '</div>'
+        + '</section>';
+    };
+    box.innerHTML = rowHtml('Vertikal', 'smartphone', vert, 'st-gal-row--vertical')
+      + rowHtml('Horizontal', 'monitor', horz, 'st-gal-row--horizontal');
     // D-255: klik -> preview ukuran asli (lightbox) + autoplay video di HP.
     box.querySelectorAll('[data-asset-open]').forEach((b) => b.addEventListener('click', () => {
       const a = assets.find((x) => x.id === b.dataset.assetOpen);
@@ -590,7 +605,7 @@
         pauseThumbVideo(b);
       });
     });
-    // D-255: susun ulang packing (vertikal/horizontal saling mengisi).
+    // D-256: susun ulang packing (vertikal/horizontal saling mengisi).
     // Ditunda satu frame supaya layout grid sudah terhitung (clientWidth != 0).
     const schedulePack = () => {
       if (window.requestAnimationFrame) window.requestAnimationFrame(() => packGallery(box));
@@ -604,6 +619,16 @@
         clearTimeout(rt);
         rt = setTimeout(() => packGallery($('stGallery')), 120);
       });
+      // D-256: galeri sering dirender saat studionya belum tampil (view
+      // tersembunyi => clientWidth 0). ResizeObserver memancing packing ulang
+      // begitu baris dapat lebar nyata.
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+          clearTimeout(rt);
+          rt = setTimeout(() => packGallery($('stGallery')), 60);
+        });
+        ro.observe(box);
+      }
     }
   }
   async function loadAssets() {

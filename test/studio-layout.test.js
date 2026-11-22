@@ -2778,11 +2778,13 @@ test('D-254: aset portrait (video 9:16) tidak terpotong — rasio item ikut meta
   assert.ok(!img.classList.contains('st-gal-item--portrait'), 'gambar 1:1 bukan portrait');
   assert.ok(/aspect-ratio:1/.test(img.getAttribute('style') || ''),
     'gambar 1:1 harus tetap rasio 1, dapat ' + img.getAttribute('style'));
-  // CSS: media portrait pakai contain (bukan cover) supaya tidak terpotong.
+  // D-256: kartu galeri ala Beranda -> thumbnail dipotong rapi (`cover`),
+  // aset UTUH tetap bisa dilihat lewat preview (`contain`).
   const css = readFileSync('public/index.html', 'utf8');
-  const rule = css.match(/\.st-gal-item--portrait \.st-gal-thumb img,\s*\.st-gal-item--portrait \.st-gal-thumb video\{([^}]*)\}/s);
-  assert.ok(rule, 'aturan media portrait tidak ada');
-  assert.ok(rule[1].includes('object-fit:contain'), 'media portrait harus object-fit:contain');
+  assert.ok(/\.st-gal-thumb img,\s*\.st-gal-thumb video\{[^}]*object-fit:cover/.test(css),
+    'media thumbnail harus object-fit:cover');
+  assert.ok(css.includes('.st-lb-body .st-lb-media{object-fit:contain'),
+    'media preview harus object-fit:contain (aset utuh)');
 });
 
 test('D-254: fallback rasio video 9:16 saat metadata width/height kosong', () => {
@@ -2816,16 +2818,16 @@ test('D-254: galeri & composer — dock terpisah dari stage di markup studio.js'
 test('D-255: galeri pakai masonry multi-column (vertikal & horizontal saling isi)', () => {
   const css = readFileSync('public/index.html', 'utf8');
   // Mode packed: container jadi multi-column, item = blok utuh.
-  assert.ok(css.includes('.st-gallery--packed{display:block'), 'mode packed gallery harus ada');
+  assert.ok(css.includes('.st-gal-row--packed{display:block'), 'mode packed baris harus ada');
   assert.ok(css.includes('break-inside:avoid'), 'item galeri tidak boleh terpotong antar kolom');
   // Jarak diatur lewat CSS var (bisa user atur sendiri).
   assert.ok(css.includes('--st-gal-gap'), 'jarak galeri harus pakai CSS var');
   assert.ok(css.includes('--st-gal-mincol'), 'lebar kolom minimal harus pakai CSS var');
   // Thumbnail lebih kecil dari sebelumnya (D-247: 180px PC / 112px HP).
-  assert.ok(/min-width:900px\)\{\.st-gallery\{[^}]*minmax\(132px/.test(css),
-    'kolom galeri PC harus lebih kecil (132px)');
-  assert.ok(/max-width:560px\)\{\.st-gallery\{[^}]*minmax\(96px/.test(css),
-    'kolom galeri HP harus lebih kecil (96px)');
+  assert.ok(/min-width:900px\)\{\.st-gal-row--vertical\{--st-gal-mincol:132px/.test(css),
+    'kolom vertikal PC harus 132px');
+  assert.ok(/max-width:560px\)\{\.st-gal-row--vertical\{--st-gal-mincol:96px/.test(css),
+    'kolom vertikal HP harus 96px');
 });
 
 test('D-255: packing gallery dihitung dari rasio aset & tinggi dibatasi (compact)', () => {
@@ -2835,12 +2837,11 @@ test('D-255: packing gallery dihitung dari rasio aset & tinggi dibatasi (compact
   const body = fn.slice(0, fn.indexOf('\n  }'));
   // Tinggi item = lebar kolom / rasio.
   assert.ok(body.includes('colW / ratio'), 'tinggi item harus dihitung dari rasio');
-  // Dibatasi supaya portrait tidak bikin kolom terlalu panjang.
-  assert.ok(body.includes('maxH'), 'tinggi item harus dibatasi');
-  assert.ok(body.includes('colW * 1.55'), 'batas tinggi portrait harus 1.55x lebar kolom');
-  // Mode multi-column.
+  // D-256: tinggi ikut rasio aset (tidak lagi dibatasi 1.55x).
+  assert.ok(!body.includes('maxH'), 'tinggi item tidak lagi dibatasi');
+  // Mode multi-column per baris.
   assert.ok(body.includes('columnCount'), 'harus memakai column-count');
-  assert.ok(body.includes("st-gallery--packed"), 'harus menandai mode packed');
+  assert.ok(body.includes("st-gal-row--packed"), 'harus menandai mode packed');
   // Dijalankan setelah layout terhitung (requestAnimationFrame).
   assert.ok(studio.includes('requestAnimationFrame'), 'packing harus dijadwalkan setelah layout');
   // Resize -> packing diulang.
@@ -2850,12 +2851,12 @@ test('D-255: packing gallery dihitung dari rasio aset & tinggi dibatasi (compact
 test('D-255: tinggi item portrait dibatasi tapi video tetap utuh (contain)', () => {
   const css = readFileSync('public/index.html', 'utf8');
   // Aset portrait tetap pakai contain -> tidak ada crop.
-  const rule = css.match(/\.st-gal-item--portrait \.st-gal-thumb img,\s*\.st-gal-item--portrait \.st-gal-thumb video\{([^}]*)\}/s);
-  assert.ok(rule, 'aturan media portrait tidak ada');
-  assert.ok(rule[1].includes('object-fit:contain'), 'media portrait harus object-fit:contain');
-  // Latar gelap untuk letterbox.
-  assert.ok(/\.st-gal-item--portrait \.st-gal-thumb\{[^}]*background:#070b14/.test(css),
-    'latar portrait harus gelap');
+  // D-256: kartu galeri sekarang ala Beranda — thumbnail dipotong rapi
+  // (`cover`), dan aset UTUH dilihat lewat preview (`contain`).
+  assert.ok(/\.st-gal-thumb img,\s*\.st-gal-thumb video\{[^}]*object-fit:cover/.test(css),
+    'media thumbnail harus object-fit:cover');
+  assert.ok(css.includes('.st-lb-body .st-lb-media{object-fit:contain'),
+    'media preview harus contain (aset utuh)');
 });
 
 test('D-255: video thumbnail punya loop + muted (autoplay tanpa suara)', () => {
@@ -2917,4 +2918,84 @@ test('D-255: tooltip thumbnail menampilkan ukuran aset', () => {
   assert.ok(body.includes('a.width'), 'tooltip harus memakai lebar aset');
   assert.ok(body.includes('a.height'), 'tooltip harus memakai tinggi aset');
   assert.ok(body.includes('x'), 'tooltip harus menyatukan ukuran');
+});
+
+// ===== D-256: pola galeri ala Beranda — baris VERTIKAL & HORIZONTAL terpisah =====
+
+test('D-256: galeri dipisah jadi baris Vertikal & Horizontal (ala Beranda)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const rf = studio.slice(studio.indexOf('function renderGallery('));
+  const body = rf.slice(0, rf.indexOf('\n  }'));
+  assert.ok(body.includes("st-gal-row--vertical"), 'baris vertikal harus ada');
+  assert.ok(body.includes("st-gal-row--horizontal"), 'baris horizontal harus ada');
+  assert.ok(body.includes("rowHtml('Vertikal'"), 'harus ada judul baris Vertikal');
+  assert.ok(body.includes("rowHtml('Horizontal'"), 'harus ada judul baris Horizontal');
+  // Pengelompokan berdasarkan rasio.
+  assert.ok(body.includes('isPortraitRatio(assetRatio(a))'), 'aset dipisah berdasarkan rasio');
+});
+
+test('D-256: HP 3 grid vertikal & 2 grid horizontal', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Vertikal: kolom minimum kecil (3 kolom muat di HP).
+  assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:104px}'),
+    'aturan baris vertikal harus ada');
+  assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
+    'vertikal HP mincol 96px (3 grid)');
+  // Horizontal: kolom minimum lebih lebar (2 kolom di HP).
+  assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:150px}'),
+    'aturan baris horizontal harus ada');
+  assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
+    'horizontal HP mincol 132px (2 grid)');
+  // Media query HP override.
+  assert.ok(/max-width:560px\)\{\.st-gal-row--vertical\{--st-gal-mincol:96px/.test(css),
+    'media query HP untuk baris vertikal harus ada');
+  assert.ok(/max-width:560px\)\{\.st-gal-row--horizontal\{--st-gal-mincol:132px/.test(css),
+    'media query HP untuk baris horizontal harus ada');
+});
+
+test('D-256: kartu galeri ala Beranda (cover, border, hover)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Thumbnail pakai cover (potong rapi) seperti kartu "Produksi Terbaru".
+  assert.ok(/\.st-gal-thumb img,\s*\.st-gal-thumb video\{[^}]*object-fit:cover/.test(css),
+    'thumbnail harus object-fit:cover');
+  // Judul baris dengan garis pemisah seperti section-head Beranda.
+  assert.ok(css.includes('.st-gal-row-head h3{'), 'judul baris harus ada');
+  assert.ok(css.includes('.st-gal-row-head::after{'), 'garis pemisah judul baris harus ada');
+  // Ikon orientasi baru.
+  assert.ok(css.includes("'smartphone':'"), "ICONS harus punya ikon 'smartphone'");
+  assert.ok(css.includes("'monitor':'"), "ICONS harus punya ikon 'monitor'");
+});
+
+test('D-256: packing per baris pakai column-count & tinggi ikut rasio', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes("querySelectorAll('.st-gal-row')"), 'packing harus per baris');
+  assert.ok(body.includes('columnCount'), 'baris harus jadi multi-column');
+  assert.ok(body.includes('st-gal-row--packed'), 'harus menandai baris packed');
+  assert.ok(body.includes('colW / ratio'), 'tinggi item harus ikut rasio aset');
+  // Jumlah kolom dihitung dari lebar baris & mincol (bukan gridTemplateColumns).
+  assert.ok(body.includes('--st-gal-mincol'), 'jumlah kolom harus dari --st-gal-mincol');
+  assert.ok(body.includes('row.clientWidth'), 'lebar baris dipakai untuk hitung kolom');
+  // Baris yang belum punya lebar dilewati (view tersembunyi).
+  assert.ok(body.includes('if (!row.clientWidth) return;'), 'baris tanpa lebar harus dilewati');
+});
+
+test('D-256: packing diulang saat view jadi terlihat (ResizeObserver)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('ResizeObserver'), 'harus pakai ResizeObserver');
+  assert.ok(studio.includes('ro.observe(box)'), 'galeri harus diobservasi');
+  assert.ok(studio.includes("window.addEventListener('resize'"), 'packing diulang saat resize');
+});
+
+test('D-256: aset utuh tetap bisa dilihat lewat preview (contain)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Lightbox tetap contain -> ukuran asli utuh, tidak dipotong.
+  assert.ok(css.includes('.st-lb-body .st-lb-media{object-fit:contain'),
+    'media preview harus contain (ukuran asli utuh)');
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function openPreview('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('st-lb-meta'), 'preview harus menampilkan ukuran asli');
+  assert.ok(body.includes('autoplay loop playsinline'), 'video preview autoplay + loop');
 });

@@ -107,6 +107,32 @@ for (const vp of VIEWPORTS) {
       videoItemRatio: vidItem ? (vidItem.getBoundingClientRect().height / vidItem.getBoundingClientRect().width).toFixed(3) : null,
       videoRenderedRatio: vidRect ? (vidRect.height / vidRect.width).toFixed(3) : null,
       videoIntrinsicRatio: vid && vid.videoWidth ? (vid.videoWidth / vid.videoHeight).toFixed(3) : null,
+      // D-256: baris galeri di-mode-kan masonry (multi-column) -> jumlah kolom
+      // dibaca dari `columnCount`.
+      verticalCols: (() => {
+        const r = document.querySelector('.st-gal-row--vertical');
+        if (!r) return 0;
+        const cc = parseInt(getComputedStyle(r).columnCount, 10);
+        return Number.isFinite(cc) && cc > 0 ? cc : 0;
+      })(),
+      horizontalCols: (() => {
+        const r = document.querySelector('.st-gal-row--horizontal');
+        if (!r) return 0;
+        const cc = parseInt(getComputedStyle(r).columnCount, 10);
+        return Number.isFinite(cc) && cc > 0 ? cc : 0;
+      })(),
+      rowHeights: (() => {
+        const r = document.querySelector('.st-gal-row--vertical');
+        return r ? Math.round(r.getBoundingClientRect().height) : 0;
+      })(),
+      rowWidths: {
+        v: (() => { const r = document.querySelector('.st-gal-row--vertical'); return r ? Math.round(r.clientWidth) : 0; })(),
+        h: (() => { const r = document.querySelector('.st-gal-row--horizontal'); return r ? Math.round(r.clientWidth) : 0; })(),
+      },
+      minCols: {
+        v: getComputedStyle(document.querySelector('.st-gal-row--vertical')).getPropertyValue('--st-gal-mincol'),
+        h: getComputedStyle(document.querySelector('.st-gal-row--horizontal')).getPropertyValue('--st-gal-mincol'),
+      },
       imgItemRatio: imgItem ? (imgItem.getBoundingClientRect().height / imgItem.getBoundingClientRect().width).toFixed(3) : null,
     };
   });
@@ -129,19 +155,20 @@ for (const vp of VIEWPORTS) {
   const base = vp.mobile ? baseHP : basePC;
   check(vp.name, 'composer nempel bawah (sebelum scroll)', Math.abs(before.composerBottom - base) < 30, `bottom=${before.composerBottom} vs ${base} (tabbar=${tabbarH})`);
 
-  // 3) Video 9:16 tidak terpotong.
-  check(vp.name, 'video 9:16 object-fit contain', before.videoObjectFit === 'contain', `object-fit=${before.videoObjectFit}`);
-  // D-255: tinggi item portrait DIBATASI (max 1.55x lebar kolom) supaya galeri
-  // tetap compact. Video tetap UTUH (object-fit:contain -> letterbox, bukan crop).
+  // 3) D-256: thumbnail potong rapi (cover) seperti kartu Beranda; aset utuh
+  //    dilihat lewat preview (contain).
+  check(vp.name, 'thumbnail object-fit cover (kartu ala Beranda)', before.videoObjectFit === 'cover', `object-fit=${before.videoObjectFit}`);
+  // D-256: dua baris ala Beranda — HP: 3 grid vertikal, 2 grid horizontal.
+  check(vp.name, 'baris VERTIKAL & HORIZONTAL terpisah ada',
+    before.verticalCols > 0 && before.horizontalCols > 0,
+    `vert=${before.verticalCols} horz=${before.horizontalCols}`);
+  if (vp.name === 'HP') {
+    check(vp.name, 'HP vertikal = 3 grid', before.verticalCols === 3, `vert=${before.verticalCols}`);
+    check(vp.name, 'HP horizontal = 2 grid', before.horizontalCols === 2, `horz=${before.horizontalCols}`);
+  }
+  // D-256: tinggi item portrait mengikuti rasio aset (9:16 -> h/w 1.778).
   const vr = Number(before.videoItemRatio);
-  check(vp.name, 'item video portrait compact (tinggi dibatasi)', vr <= 1.6 && vr >= 1.4, `h/w=${vr}`);
-  // Video tidak boleh terpotong: `object-fit:contain` -> seluruh frame video
-  // terlihat utuh di dalam kotak (tidak ada crop). Rasio media di dalam kotak
-  // = rasio intrinsik file (2:1 untuk file logo test), bukan rasio metadata.
-  // `object-fit:contain` = seluruh frame terlihat utuh (tidak ada crop).
-  // (getBoundingClientRect video = kotak elemen, area contain-nya di dalamnya.)
-  check(vp.name, 'video tampil utuh (contain, tanpa crop)',
-    before.videoObjectFit === 'contain', `object-fit=${before.videoObjectFit}`);
+  check(vp.name, 'item video portrait ikut rasio 9:16', Math.abs(vr - 16 / 9) < 0.08, `h/w=${vr}`);
   // D-255: gambar pun ikut rasio aslinya (compact packing), bukan selalu 1:1.
   // Asset pertama yang diukur adalah gambar 4:5 (1080x1350) -> h/w = 1.25.
   check(vp.name, 'gambar ikut rasio aslinya (bukan selalu 1:1)', Math.abs(Number(before.imgItemRatio) - 1.25) < 0.05, `h/w=${before.imgItemRatio}`);
@@ -259,6 +286,18 @@ for (const vp of VIEWPORTS) {
   await page.evaluate(() => window.scrollTo(0, 0));
   await new Promise((r) => setTimeout(r, 400));
   await page.screenshot({ path: `/tmp/studio-${vp.name.toLowerCase()}-top.png` });
+  // Screenshot Beranda untuk pembanding pola kartu.
+  await page.evaluate(() => {
+    document.querySelector('.layout')?.style.setProperty('display', 'grid', 'important');
+    document.getElementById('studioView')?.classList.remove('active');
+  });
+  await new Promise((r) => setTimeout(r, 500));
+  await page.screenshot({ path: `/tmp/beranda-${vp.name.toLowerCase()}.png` });
+  await page.evaluate(() => {
+    document.querySelector('.layout')?.style.setProperty('display', 'none', 'important');
+    document.getElementById('studioView')?.classList.add('active');
+  });
+  await new Promise((r) => setTimeout(r, 300));
   await page.close();
 }
 
