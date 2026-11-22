@@ -508,48 +508,117 @@
     });
   }
   // D-255: paket galeri jadi MASONRY: tiap aset masuk ke kolom yang paling
-  // pendek sehingga kotak vertikal & horizontal saling mengisi tanpa sel
-  // kosong besar. Implementasi pakai CSS multi-column (column-count) —
-  // browser membagi item ke kolom secara otomatis, urutan tetap "ke bawah
-  // dulu" per kolom supaya daftar aset tak terasa acak.
+  // pendek sehingga kotak vertikal & horizontal saling isi tanpa celah.
+  // D-258: Layout tiap baris (VERTIKAL / HORIZONTAL) diseragamkan:
+  //  1) Rasio thumbnail diseragamkan per baris (median rasio aset di baris
+  //     itu) -> semua thumbnail satu tinggi, jadi kotak-kotaknya pas dan
+  //     rapi seperti kartu ala Beranda. Aset UTUH tetap dilihat lewat
+  //     preview (`contain` + baris "Ukuran asli").
+  //  2) Jumlah kolom dihitung dari lebar baris & --st-gal-mincol, lalu item
+  //     dibagi rata ke tiap kolom (jumlah item per kolom selisih <= 1) ->
+  //     tidak ada kolom yang jauh lebih pendek => TIDAK ada kotak kosong di
+  //     bawah konten (bug yang dikreported user).
+  //  3) Posisi item dikunci lewat signature supaya klik/autoplay (yang
+  //     memicu render ulang galeri) TIDAK menggeser item -> layout stabil.
   // D-256: Galeri dipisah jadi 2 baris ala Beranda — VERTIKAL & HORIZONTAL.
   // Tiap baris punya jumlah kolom sendiri (HP: 3 grid vertikal, 2 grid
-  // horizontal). Item dibuat blok utuh (`break-inside:avoid`) dengan tinggi
-  // mengikuti rasio aset, lalu tinggi portrait dibatasi supaya kolomnya
-  // tetap ringkas.
+  // horizontal).
   function packGallery(box) {
     if (!box) return;
     const rows = box.querySelectorAll('.st-gal-row');
     rows.forEach((row) => {
-      const items = [...row.children].filter((el) => el.classList?.contains('st-gal-item'));
+      // Item bisa sudah berada di dalam wrapper kolom (packing sebelumnya).
+      const items = [...row.querySelectorAll('.st-gal-item')];
       if (!items.length) return;
       const cs = getComputedStyle(row);
       const gap = parseFloat(cs.gap || cs.rowGap || '0') || 0;
-      // D-256: jumlah kolom dihitung dari lebar baris & lebar kolom minimum
-      // (--st-gal-mincol). Sengaja TIDAK pakai `gridTemplateColumns` computed:
-      // begitu baris di-mode-kan jadi multi-column, nilai itu berubah & hasil
-      // hitungan jadi tidak konsisten antar-sesi.
       // D-256: baris yang belum punya lebar (view tersembunyi) dilewati;
       // packing diulang oleh ResizeObserver begitu lebar nyata tersedia.
       if (!row.clientWidth) return;
       const minCol = parseFloat(cs.getPropertyValue('--st-gal-mincol')) || 104;
       const cols = Math.max(1, Math.floor((row.clientWidth + gap) / (minCol + gap)));
-      if (cols < 2) return;
+      if (cols < 1) return;
       const colW = (row.clientWidth - gap * (cols - 1)) / cols;
       if (!(colW > 0)) return;
-      row.classList.add('st-gal-row--packed');
-      row.style.columnCount = String(cols);
-      row.style.columnGap = gap + 'px';
-      items.forEach((it) => {
-        const ratio = parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1;
-        // Rasio CSS = lebar/tinggi -> tinggi = lebar / rasio.
-        // D-256: tinggi mengikuti rasio aset (thumbnail mengikuti aslinya,
-        // dipotong rapi dengan `cover` seperti kartu Beranda). Aset utuh
-        // tetap bisa dilihat lewat preview (`contain`).
-        const h = Math.round(colW / ratio);
-        it.style.height = h + 'px';
-        it.style.breakInside = 'avoid';
-      });
+
+      // Rasio thumbnail seragam per baris (median rasio aset di baris itu).
+      const ratios = items.map((it) => parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1)
+        .sort((a, b) => a - b);
+      const median = ratios.length ? ratios[Math.floor(ratios.length / 2)] : 1;
+      // Rasio target dibatasi per orientasi baris supaya karakter baris tetap
+      // terjaga: baris VERTIKAL tetap portrait (maks 0.85), baris HORIZONTAL
+      // tetap melebar (min 1.3) -> video landscape tetap terlihat melebar,
+      // bukan dipotong jadi kotak.
+      const isVert = row.classList.contains('st-gal-row--vertical');
+      const targetRatio = isVert
+        ? Math.min(0.85, Math.max(0.5, median))
+        : Math.max(1.3, Math.min(2.2, median));
+      const itemH = Math.round(colW / targetRatio);
+
+      // D-258: signature -> packing hanya diulang bila isi/ukuran berubah,
+      // jadi posisi item stabil saat galeri di-render ulang (klik/autoplay).
+      const sig = items.length + '|' + Math.round(colW) + '|' + cols + '|'
+        + items.map((it) => it.dataset.assetOpen || '').join(',');
+      const sameShape = row.dataset.mgSig === sig
+        && row.getElementsByClassName('st-gal-col').length === cols;
+      if (!sameShape) {
+        row.dataset.mgSig = sig;
+        // Siapkan wrapper kolom (dipakai ulang antar-packing).
+        row.classList.add('st-gal-row--masonry');
+        let colEls = [...row.getElementsByClassName('st-gal-col')];
+        while (colEls.length < cols) {
+          const c = document.createElement('div');
+          c.className = 'st-gal-col';
+          row.appendChild(c);
+          colEls.push(c);
+        }
+        // Kolom berlebih dibuang SETELAH itemnya dipindah ke kolom lain
+        // (jika dibuang lebih dulu, aset ikut hilang).
+        const extra = colEls.splice(cols);
+        extra.forEach((c) => c.remove());
+        colEls.forEach((c, idx) => {
+          c.style.left = (idx * (colW + gap)) + 'px';
+          c.style.width = colW + 'px';
+        });
+        // D-258: bagi item ke kolom secara PROPORSIONAL (jumlah item per
+        // kolom selisih <= 1) -> semua kolom sama tinggi, tidak ada rongga
+        // besar di bawah konten.
+        // Rumus: kolom = floor(i * cols / total). Untuk total 46 & 5 kolom
+        // -> 10,9,9,9,9 (selisih 1) bukan 10,10,10,10,6.
+        // D-258: distribute item SERATA. Semua kolom dapat `base` item; sisa
+        // (`rest`) dibagi ke kolom TENGAH (bukan kolom pertama/terakhir),
+        // sehingga kolom yang lebih pendek berada di UJUNG baris -> rongga
+        // hanya muncul di sisi luar (natural, seperti grid biasa), bukan
+        // di tengah konten.
+        const total = items.length;
+        const base = Math.floor(total / cols);
+        const rest = total % cols;
+        colEls.forEach((c) => { c.innerHTML = ''; });
+        // Kolom tengah yang menerima sisa item.
+        const midCols = [];
+        for (let c = 1; c < cols - 1; c++) midCols.push(c);
+        const midStart = midCols.length
+          ? Math.floor((cols - 2) / 2)
+          : 0;
+        const midIdx = midCols.length ? midCols[midStart] : 0;
+        let i = 0;
+        for (let c = 0; c < cols; c++) {
+          const take = base + (c === midIdx ? rest : 0);
+          for (let k = 0; k < take && i < total; k++, i++) colEls[c].appendChild(items[i]);
+        }
+        // Sisa item (kalau ada) ditaruh di kolom tengah juga.
+        while (i < total) colEls[midIdx].appendChild(items[i++]);
+      }
+      // Terapkan tinggi seragam ke semua item.
+      const colEls = [...row.getElementsByClassName('st-gal-col')];
+      items.forEach((it) => { it.style.height = itemH + 'px'; });
+      // Samakan tinggi semua kolom (masonry: kolom = tinggi baris).
+      const tallest = colEls.reduce((acc, c) => {
+        let h = 0;
+        [...c.children].forEach((el) => { h += (itemH + gap); });
+        return Math.max(acc, c.children.length ? h - gap : 0);
+      }, 0);
+      row.style.height = Math.max(0, tallest) + 'px';
     });
   }
   function renderGallery() {

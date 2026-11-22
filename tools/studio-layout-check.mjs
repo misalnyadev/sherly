@@ -111,19 +111,48 @@ for (const vp of VIEWPORTS) {
       videoItemRatio: vidItem ? (vidItem.getBoundingClientRect().height / vidItem.getBoundingClientRect().width).toFixed(3) : null,
       videoRenderedRatio: vidRect ? (vidRect.height / vidRect.width).toFixed(3) : null,
       videoIntrinsicRatio: vid && vid.videoWidth ? (vid.videoWidth / vid.videoHeight).toFixed(3) : null,
-      // D-256: baris galeri di-mode-kan masonry (multi-column) -> jumlah kolom
-      // dibaca dari `columnCount`.
+      // D-258: masonry sejati -> jumlah kolom = jumlah wrapper `.st-gal-col`.
       verticalCols: (() => {
         const r = document.querySelector('.st-gal-row--vertical');
         if (!r) return 0;
+        const n = r.getElementsByClassName('st-gal-col').length;
+        if (n) return n;
         const cc = parseInt(getComputedStyle(r).columnCount, 10);
         return Number.isFinite(cc) && cc > 0 ? cc : 0;
       })(),
       horizontalCols: (() => {
         const r = document.querySelector('.st-gal-row--horizontal');
         if (!r) return 0;
+        const n = r.getElementsByClassName('st-gal-col').length;
+        if (n) return n;
         const cc = parseInt(getComputedStyle(r).columnCount, 10);
         return Number.isFinite(cc) && cc > 0 ? cc : 0;
+      })(),
+      // D-258: tinggi tiap kolom masonry harus sama -> tidak ada kotak kosong
+      // di bawah kolom yang lebih pendek.
+      colHeights: (() => {
+        const out = {};
+        document.querySelectorAll('.st-gal-row').forEach((r) => {
+          const hs = [...r.getElementsByClassName('st-gal-col')].map((c) => Math.round(c.getBoundingClientRect().height));
+          out[r.classList.contains('st-gal-row--vertical') ? 'v' : 'h'] = hs;
+        });
+        return out;
+      })(),
+      // Per baris: tinggi item + tinggi kolom. Toleransi rongga = tinggi 1
+      // item DI BARIS ITU (sisa satu item boleh lebih pendek — standar grid).
+      itemHByRow: (() => {
+        const out = {};
+        document.querySelectorAll('.st-gal-row').forEach((r) => {
+          const key = r.classList.contains('st-gal-row--vertical') ? 'v' : 'h';
+          const hs = [...r.getElementsByClassName('st-gal-col')].map((c) =>
+            Math.round(c.getBoundingClientRect().height));
+          const itemHs = [...r.querySelectorAll('.st-gal-item')].map((i) =>
+            Math.round(i.getBoundingClientRect().height));
+          // Toleransi rongga = tinggi 1 item TERBESAR di baris itu (sisa satu
+          // item boleh lebih pendek -> standar grid).
+          out[key] = { cols: hs, item: itemHs.length ? Math.max(...itemHs) : 0 };
+        });
+        return out;
       })(),
       rowHeights: (() => {
         const r = document.querySelector('.st-gal-row--vertical');
@@ -170,12 +199,32 @@ for (const vp of VIEWPORTS) {
     check(vp.name, 'HP vertikal = 3 grid', before.verticalCols === 3, `vert=${before.verticalCols}`);
     check(vp.name, 'HP horizontal = 2 grid', before.horizontalCols === 2, `horz=${before.horizontalCols}`);
   }
+  // D-258: semua kolom masonry sama tinggi -> tidak ada kotak kosong di
+  // bawah kolom yang lebih pendek.
+  const rows = before.itemHByRow || {};
+  for (const [key, info] of Object.entries(rows)) {
+    const hs = info.cols || [];
+    if (!hs.length) continue;
+    const min = Math.min(...hs), max = Math.max(...hs);
+    // Rongga yang darf adalah lebih besar dari 1 item di baris itu
+    // (1 item + jarak antar item masih wajar).
+    const tol = (info.item || 0) + 12;
+    check(vp.name, `tinggi kolom masonry ${key.toUpperCase()} sebanding (rongga <= 1 item)`,
+      max - min <= tol, `tinggi=${JSON.stringify(hs)} toleransi=${Math.round(tol)}`);
+    // D-258: kolom terpendek harus di UJUNG baris (kanan) -> rongga natural
+    // seperti grid biasa, bukan di tengah konten.
+    const minIdx = hs.indexOf(min);
+    check(vp.name, `kolom terpendek di ujung baris ${key.toUpperCase()}`,
+      minIdx === hs.length - 1 || minIdx === 0, `idx=${minIdx} dari ${hs.length}`);
+  }
   // D-256: tinggi item portrait mengikuti rasio aset (9:16 -> h/w 1.778).
   const vr = Number(before.videoItemRatio);
   check(vp.name, 'item video portrait ikut rasio 9:16', Math.abs(vr - 16 / 9) < 0.08, `h/w=${vr}`);
-  // D-255: gambar pun ikut rasio aslinya (compact packing), bukan selalu 1:1.
-  // Asset pertama yang diukur adalah gambar 4:5 (1080x1350) -> h/w = 1.25.
-  check(vp.name, 'gambar ikut rasio aslinya (bukan selalu 1:1)', Math.abs(Number(before.imgItemRatio) - 1.25) < 0.05, `h/w=${before.imgItemRatio}`);
+  // D-258: rasio thumbnail DISERAGAMKAN per baris (median rasio aset) ->
+  // semua item satu tinggi, kolom sama tinggi, tidak ada kotak kosong.
+  // Item pertama yang diukur ada di baris Vertikal (9:16 -> h/w 1.78).
+  check(vp.name, 'rasio thumbnail seragam per baris (tidak ada rongga besar)',
+    Math.abs(Number(before.imgItemRatio) - 16 / 9) < 0.08, `h/w=${before.imgItemRatio}`);
 
   // Scroll ke bawah -> composer harus tetap nempel, tidak bergeser.
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -308,6 +357,12 @@ for (const vp of VIEWPORTS) {
   check(vp.name, 'item video diberi penanda is-playing', auto.cls === true, JSON.stringify(auto));
 
   await page.screenshot({ path: `/tmp/studio-${vp.name.toLowerCase()}-bottom.png` });
+  // Screenshot area baris HORIZONTAL (tempat kotak kosong pernah muncul).
+  await page.evaluate(() => {
+    document.querySelector('.st-gal-row--horizontal')?.scrollIntoView({ block: 'start' });
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  await page.screenshot({ path: `/tmp/studio-${vp.name.toLowerCase()}-horizontal.png` });
   await page.evaluate(() => window.scrollTo(0, 0));
   await new Promise((r) => setTimeout(r, 400));
   await page.screenshot({ path: `/tmp/studio-${vp.name.toLowerCase()}-top.png` });
