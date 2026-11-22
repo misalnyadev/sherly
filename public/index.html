@@ -1097,7 +1097,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 /* D-256: pola kartu ala BERANDA — galeri dipisah jadi dua baris:
    "Vertikal" (9:16, 4:5, 3:4) & "Horizontal" (16:9, 1:1). Tiap baris punya
    jumlah kolom sendiri: HP 3 grid untuk vertikal & 2 grid untuk horizontal.
-   Jarak & ukuran kolom diatur lewat --st-gal-gap / --st-gal-mincol. */
+   D-261: di PC jumlah kolom ikut lebar halaman (galeri PENUH, ~7 kolom
+   vertikal) dan lebar tiap kolom MENGISI baris (tidak ada ruang kosong di
+   kanan). HP tetap 3 vertikal / 2 horizontal. */
 .st-gallery{display:grid;gap:16px;margin:0 0 10px;align-content:start;
   --st-gal-mincol:132px;--st-gal-gap:12px}
 /* Baris dalam galeri: grid polos, jumlah kolom diatur per orientasi. */
@@ -1112,14 +1114,14 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   background:linear-gradient(90deg,#24344e,transparent)}
 .st-gal-row-count{font-size:10px;color:var(--muted);letter-spacing:.04em;flex:none}
 /* D-256: VERTIKAL — kolom lebih sempit (HP 3 grid). */
-.st-gal-row--vertical{--st-gal-mincol:104px}
-@media(min-width:900px){.st-gal-row--vertical{--st-gal-mincol:132px}}
+.st-gal-row--vertical{--st-gal-mincol:104px;--st-gal-maxcol:180px}
+@media(min-width:900px){.st-gal-row--vertical{--st-gal-mincol:132px;--st-gal-maxcol:180px}}
 @media(max-width:560px){.st-gallery{--st-gal-gap:9px}
-  .st-gal-row--vertical{--st-gal-mincol:96px}}
+  .st-gal-row--vertical{--st-gal-mincol:96px;--st-gal-maxcol:180px}}
 /* D-256: HORIZONTAL — kolom lebih lebar (HP 2 grid). */
-.st-gal-row--horizontal{--st-gal-mincol:150px}
-@media(min-width:900px){.st-gal-row--horizontal{--st-gal-mincol:190px}}
-@media(max-width:560px){.st-gal-row--horizontal{--st-gal-mincol:132px}}
+.st-gal-row--horizontal{--st-gal-mincol:150px;--st-gal-maxcol:260px}
+@media(min-width:900px){.st-gal-row--horizontal{--st-gal-mincol:190px;--st-gal-maxcol:260px}}
+@media(max-width:560px){.st-gal-row--horizontal{--st-gal-mincol:132px;--st-gal-maxcol:260px}}
 /* D-258: MASONRY sejati — tiap baris jadi container relatif & tiap kolom
    jadi wrapper absolut yang ditumpuk dari atas. JS mengisi kolom yang
    paling rendah dulu, lalu menyamakan tinggi semua kolom -> TIDAK ada lagi

@@ -539,30 +539,44 @@
       // packing diulang oleh ResizeObserver begitu lebar nyata tersedia.
       if (!row.clientWidth) return;
       const minCol = parseFloat(cs.getPropertyValue('--st-gal-mincol')) || 104;
-      // D-259: jumlah kolom ideal dari lebar baris & lebar kolom minimum.
+      // D-261: JUMLAH KOLOM diturunkan dari lebar baris (auto-fit) — tujuan
+      // user: PC galeri memenuhi lebar halaman (kira-kira 7 kolom vertikal),
+      // HP tetap 3 vertikal / 2 horizontal (D-256).
+      // Jumlah kolom ideal = berapa kolom "mincol" yang muat di lebar baris.
       const idealCols = Math.max(1, Math.floor((row.clientWidth + gap) / (minCol + gap)));
-      // D-259: jangan buat kolom lebih banyak dari yang bisa diisi. Kalau
-      // kolom > jumlah item, tiap kolom cuma berisi 1 item -> galeri terlihat
-      // "1 baris" dan itemnya melayang (grid keliatan rata tengah).
-      // D-260: jumlah kolom dibatasi agar tiap kolom berisi >= 2 item (biar
-      // tidak terlihat "1 baris"), TAPI minimal 2 kolom supaya 1-2 aset
-      // tetap tampil BERJADIAN (bukan menumpuk ke bawah satu kolom).
-      const maxCols = Math.max(2, Math.floor(items.length / 2));
+      // D-259: jangan buat kolom LEBIH BANYAK dari jumlah item (tiap kolom
+      // harus punya >= 1 item, kalau tidak ada kolom kosong melayang).
+      // D-261: batas sebelumnya `floor(items/2)` (tiap kolom minimal 2 item)
+      // DIHAPUS — itu yang bikin galeri jadi "2 kolom" walau ruang di kanan
+      // masih kosong lebar. Sekarang minimal 2 kolom saja (D-260) supaya
+      // 1-2 aset tetap tampil BERJADIAN, bukan menumpuk ke bawah.
+      const maxCols = Math.max(2, items.length);
       const cols = Math.max(2, Math.min(idealCols, maxCols));
       if (cols < 1) return;
-      // D-259: lebar kolom TIDAK ikut melebar saat jumlah kolom dikurangi.
-      // Kalau ikut melebar, 7 aset & 3 kolom -> kolom jadi 350px (thumbnail
-      // giant, bukan "3 grid"). Lebar kolom tetap ~minCol, sisa ruang di kanan
-      // dibiarkan kosong (baris jadi lebih pendek, thumbnail tetap ramping).
-      // Lebar kolom TIDAK ikut melebar saat jumlah kolom dikurangi.
-      // Kalau ikut melebar, 7 aset & 3 kolom -> kolom jadi 350px (thumbnail
-      // giant). Lebar kolom tetap ~minCol (maksimal 1,35x minCol supaya tetap
-      // space untuk landscape), sisa ruang di kanan dibiarkan kosong.
-      const colW = Math.min(
-        (row.clientWidth - gap * (cols - 1)) / cols,
-        minCol * 1.35,
-      );
+      // D-261: LEBAR KOLOM TETAP SEBAGAI KARTU (tidak melebar gedebalkan).
+      // Dulu batas atasnya hardcoded 1,35x minCol; sekarang batas atas &
+      // bawah datang dari CSS (--st-gal-mincol / --st-gal-maxcol) supaya
+      // ukuran thumbnail bisa diatur per orientasi & per layar.
+      // Kolom TIDAK ikut melebar hanya karena jumlah kolom dikurangi —
+      // kalau iya, 2 aset di PC jadi 2 kolom selebar layar (thumbnail giant).
+      const maxCol = parseFloat(cs.getPropertyValue('--st-gal-maxcol')) || 0;
+      const avail = row.clientWidth - gap * (cols - 1);
+      let colW = avail / cols;
+      if (minCol > 0) colW = Math.max(colW, minCol);
+      if (maxCol > 0) colW = Math.min(colW, maxCol);
       if (!(colW > 0)) return;
+      // D-261: baris harus PENUH — sisa ruang di kanan diserap oleh kolom
+      // (ala CSS grid `1fr`), TAPI tanpa bikin thumbnail kegedean:
+      //  - Kalau jumlah kolom >= ideal (baris sudah cukup kolom), sisa
+      //    ruang dibagi rata ke semua kolom (dibatasi maxCol).
+      //  - Kalau kolomnya lebih sedikit dari ideal (aset sedikit), kolom
+      //    TIDAK melebar; sisa ruang dibiarkan di kanan supaya thumbnail
+      //    tetap sebesar kartu (bukan giant).
+      const leftover = row.clientWidth - (cols * colW + gap * (cols - 1));
+      if (leftover > 1 && cols >= idealCols) {
+        const extra = leftover / cols;
+        colW = Math.min(colW + extra, maxCol || Infinity);
+      }
 
       // Rasio thumbnail seragam per baris (median rasio aset di baris itu).
       const ratios = items.map((it) => parseFloat((it.style.aspectRatio || '').replace(',', '/')) || 1)
@@ -613,24 +627,27 @@
         // sehingga kolom yang lebih pendek berada di UJUNG baris -> rongga
         // hanya muncul di sisi luar (natural, seperti grid biasa), bukan
         // di tengah konten.
+        // D-261: sisa item TIDAK lagi ditumpuk semua di satu kolom tengah.
+        // Dulu: 9 aset & 7 kolom -> kolom tengah dapat 3 item (tinggi jauh
+        // lebih tinggi, baris jadi bergerigi & ada rongga besar di tengah).
+        // Sekarang sisa dibagi SATU-SATU ke kolom dari KANAN ke kiri, jadi
+        // kolom lebih tinggi berada di sisi kanan & kolom terpendek di
+        // UJUNG KIRI baris -> rongga hanya di sisi luar (natural, ala grid
+        // biasa), persis seperti D-258 (tidak ada rongga di tengah konten).
         const total = items.length;
         const base = Math.floor(total / cols);
         const rest = total % cols;
         colEls.forEach((c) => { c.innerHTML = ''; });
-        // Kolom tengah yang menerima sisa item.
-        const midCols = [];
-        for (let c = 1; c < cols - 1; c++) midCols.push(c);
-        const midStart = midCols.length
-          ? Math.floor((cols - 2) / 2)
-          : 0;
-        const midIdx = midCols.length ? midCols[midStart] : 0;
+        // Kolom mana saja yang dapat 1 item ekstra (dari kanan ke kiri).
+        const extraCols = [];
+        for (let c = cols - 1; c >= 0 && extraCols.length < rest; c--) extraCols.push(c);
         let i = 0;
         for (let c = 0; c < cols; c++) {
-          const take = base + (c === midIdx ? rest : 0);
+          const take = base + (extraCols.includes(c) ? 1 : 0);
           for (let k = 0; k < take && i < total; k++, i++) colEls[c].appendChild(items[i]);
         }
-        // Sisa item (kalau ada) ditaruh di kolom tengah juga.
-        while (i < total) colEls[midIdx].appendChild(items[i++]);
+        // Sisa item (kalau ada) ditaruh di kolom terakhir.
+        while (i < total) colEls[cols - 1].appendChild(items[i++]);
       }
       // Terapkan tinggi seragam ke semua item.
       const colEls = [...row.getElementsByClassName('st-gal-col')];

@@ -195,6 +195,23 @@ for (const vp of VIEWPORTS) {
         v: getComputedStyle(document.querySelector('.st-gal-row--vertical')).getPropertyValue('--st-gal-mincol'),
         h: getComputedStyle(document.querySelector('.st-gal-row--horizontal')).getPropertyValue('--st-gal-mincol'),
       },
+      // D-261: berapa persen lebar baris yang TERISI kolom (sisa ruang kosong
+      // di kanan = 100 - filled). PC harus ~100% (galeri memenuhi halaman).
+      fill: (() => {
+        const out = {};
+        document.querySelectorAll('.st-gal-row').forEach((r) => {
+          const key = r.classList.contains('st-gal-row--vertical') ? 'v' : 'h';
+          const cols = [...r.getElementsByClassName('st-gal-col')];
+          if (!cols.length) return;
+          const rowW = r.clientWidth;
+          const last = cols[cols.length - 1].getBoundingClientRect();
+          const first = cols[0].getBoundingClientRect();
+          const used = last.right - first.left;
+          out[key] = { rowW: Math.round(rowW), used: Math.round(used),
+            pct: rowW > 0 ? Math.round((used / rowW) * 100) : 0 };
+        });
+        return out;
+      })(),
       imgItemRatio: imgItem ? (imgItem.getBoundingClientRect().height / imgItem.getBoundingClientRect().width).toFixed(3) : null,
     };
   });
@@ -227,6 +244,21 @@ for (const vp of VIEWPORTS) {
   if (vp.name === 'HP') {
     check(vp.name, 'HP vertikal = 3 grid', before.verticalCols === 3, `vert=${before.verticalCols}`);
     check(vp.name, 'HP horizontal = 2 grid', before.horizontalCols === 2, `horz=${before.horizontalCols}`);
+  }
+  // D-261: di PC jumlah kolom ikut lebar halaman (vertikal ~7, horizontal ~5)
+  // dan baris HARUS PENUH — tidak ada ruang kosong besar di kanan.
+  if (vp.name === 'PC') {
+    check(vp.name, 'PC vertikal = 7 grid (ikut lebar halaman)', before.verticalCols === 7,
+      `vert=${before.verticalCols}`);
+    check(vp.name, 'PC horizontal = 5 grid (ikut lebar halaman)', before.horizontalCols === 5,
+      `horz=${before.horizontalCols}`);
+  }
+  // D-261: baris terisi penuh (>= 97% lebar baris) -> tidak ada ruang kosong
+  // di kanan seperti saat kolom cuma 2 di layar lebar.
+  for (const [key, f] of Object.entries(before.fill || {})) {
+    if (!f || !f.rowW) continue;
+    check(vp.name, `baris ${key.toUpperCase()} terisi penuh (tanpa ruang kosong kanan)`,
+      f.pct >= 97, `terisi ${f.pct}% (${f.used}/${f.rowW}px)`);
   }
   // D-260: jarak antar kolom & antar item harus terlihat (tidak nempel).
   const gp = before.gaps || {};
