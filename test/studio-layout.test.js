@@ -2838,12 +2838,14 @@ test('D-255: packing gallery dihitung dari rasio aset & tinggi dibatasi (compact
   const fn = studio.slice(studio.indexOf('function packGallery('));
   const body = fn.slice(0, fn.indexOf('\n  }'));
   // Tinggi item = lebar kolom / rasio.
-  assert.ok(body.includes('colW / ratio'), 'tinggi item harus dihitung dari rasio');
-  // D-256: tinggi ikut rasio aset (tidak lagi dibatasi 1.55x).
+  // D-258: tinggi item dihitung dari rasio target per baris (median rasio
+  // aset), bukan lagi per-item mentah.
+  assert.ok(body.includes('targetRatio'), 'tinggi item harus dari rasio target baris');
+  assert.ok(body.includes('colW / targetRatio'), 'tinggi item dihitung dari lebar kolom & rasio');
   assert.ok(!body.includes('maxH'), 'tinggi item tidak lagi dibatasi');
-  // Mode multi-column per baris.
-  assert.ok(body.includes('columnCount'), 'harus memakai column-count');
-  assert.ok(body.includes("st-gal-row--packed"), 'harus menandai mode packed');
+  // D-258: mode masonry kolom (bukan multi-column).
+  assert.ok(body.includes('st-gal-col'), 'harus memakai wrapper kolom');
+  assert.ok(body.includes("st-gal-row--masonry"), 'harus menandai mode masonry');
   // Dijalankan setelah layout terhitung (requestAnimationFrame).
   assert.ok(studio.includes('requestAnimationFrame'), 'packing harus dijadwalkan setelah layout');
   // Resize -> packing diulang.
@@ -2973,9 +2975,10 @@ test('D-256: packing per baris pakai column-count & tinggi ikut rasio', () => {
   const fn = studio.slice(studio.indexOf('function packGallery('));
   const body = fn.slice(0, fn.indexOf('\n  }'));
   assert.ok(body.includes("querySelectorAll('.st-gal-row')"), 'packing harus per baris');
-  assert.ok(body.includes('columnCount'), 'baris harus jadi multi-column');
-  assert.ok(body.includes('st-gal-row--packed'), 'harus menandai baris packed');
-  assert.ok(body.includes('colW / ratio'), 'tinggi item harus ikut rasio aset');
+  // D-258: masonry sejati -> wrapper kolom, bukan CSS multi-column.
+  assert.ok(body.includes('st-gal-col'), 'baris harus jadi masonry kolom');
+  assert.ok(body.includes('st-gal-row--masonry'), 'harus menandai baris masonry');
+  assert.ok(body.includes('colW / targetRatio'), 'tinggi item harus dari rasio target baris');
   // Jumlah kolom dihitung dari lebar baris & mincol (bukan gridTemplateColumns).
   assert.ok(body.includes('--st-gal-mincol'), 'jumlah kolom harus dari --st-gal-mincol');
   assert.ok(body.includes('row.clientWidth'), 'lebar baris dipakai untuk hitung kolom');
@@ -3053,4 +3056,56 @@ test('D-257: galeri mendeteksi orientasi aset lama dari metadata video', () => {
   // Dimensi disimpan ke server supaya konsisten.
   assert.ok(body.includes("method: 'PATCH'"), 'dimensi harus dikirim ke server');
   assert.ok(body.includes('renderGallery()'), 'galeri harus dirender ulang setelah orientasi diketahui');
+});
+
+// ===== D-258: galeri tanpa kotak kosong (masonry kolom seimbang) =====
+
+test('D-258: layout galeri pakai masonry kolom (bukan CSS multi-column)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Wrapper kolom dipakai (masonry sejati).
+  assert.ok(body.includes("st-gal-col"), 'harus membuat wrapper kolom');
+  assert.ok(body.includes('st-gal-row--masonry'), 'harus menandai mode masonry');
+  // Tidak lagi pakai CSS multi-column (penyebab kolom tak seimbang).
+  assert.ok(!body.includes('columnCount'), 'tidak boleh memakai columnCount lagi');
+  // Posisi kolom dihitung manual.
+  assert.ok(body.includes('c.style.left'), 'kolom harus diposisikan manual');
+  assert.ok(body.includes('c.style.width'), 'lebar kolom harus diatur manual');
+  // CSS mode masonry.
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-gal-row--masonry .st-gal-col{position:absolute'),
+    'wrapper kolom harus absolutely positioned');
+});
+
+test('D-258: rasio thumbnail diseragamkan per baris (anti rongga)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('median'), 'rasio target dihitung dari median rasio aset');
+  assert.ok(body.includes('targetRatio'), 'rasio target harus dipakai');
+  // Baris vertikal tetap portrait, horizontal tetap melebar.
+  assert.ok(body.includes('Math.min(0.85'), 'baris vertikal dibatasi portrait (maks 0.85)');
+  assert.ok(body.includes('Math.max(1.3'), 'baris horizontal dibatasi melebar (min 1.3)');
+});
+
+test('D-258: distribute item menyeimbangkan kolom & sisa di kolom tengah', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('const base = Math.floor(total / cols)'), 'jumlah item per kolom dihitung');
+  assert.ok(body.includes('const rest = total % cols'), 'sisa item dihitung');
+  assert.ok(body.includes('midIdx'), 'sisa item diberikan ke kolom tengah');
+  assert.ok(body.includes('row.style.height'), 'tinggi baris harus disetel');
+});
+
+test('D-258: posisi item stabil saat galeri render ulang (klik/autoplay)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Signature untuk mendeteksi perubahan isi/lebar.
+  assert.ok(body.includes('mgSig'), 'harus menyimpan signature packing');
+  assert.ok(body.includes('sameShape'), 'packing hanya diulang bila bentuk berubah');
+  // Signature memuat daftar id aset -> urutan item menentukan posisinya.
+  assert.ok(body.includes("it.dataset.assetOpen || ''"), 'signature harus memuat id aset');
 });
