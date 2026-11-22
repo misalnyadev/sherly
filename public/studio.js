@@ -249,6 +249,8 @@
     motionTemplateId: 'branded-intro', motionDuration: 6, motionProps: {},
   };
   let assets = [];           // D-198: galeri aset (dari server)
+  // D-264: filter jenis konten di atas galeri — 'all' | 'photo' | 'video'.
+  let galleryFilter = 'all';
   let chain = [];            // rantai adegan (lokal): frame terakhir jadi referensi gambar
   let sceneRef = null;       // { mime, data, label } gambar referensi utama (dikirim ke server)
   // D-216: semua gambar referensi aktif (dipilih lewat mention @ atau tombol lightbox).
@@ -671,11 +673,25 @@
     }
     box.classList.remove('st-hidden');
     empty?.classList.add('st-hidden');
+    // D-264: filter jenis konten — All | Foto | Video (berdasarkan jenis
+    // media aset). Hitungan selalu pakai TOTAL aset (bukan hasil filter)
+    // supaya angka di label tidak berubah-ubah saat user klik.
+    const counts = { all: assets.length, photo: 0, video: 0 };
+    assets.forEach((a) => {
+      if (a.media_type === 'video') counts.video++; else counts.photo++;
+    });
+    // Filter aktif yang valid (aset bisa berubah setelah upload/hapus).
+    if (!['all', 'photo', 'video'].includes(galleryFilter)) galleryFilter = 'all';
+    const shown = galleryFilter === 'photo'
+      ? assets.filter((a) => a.media_type !== 'video')
+      : galleryFilter === 'video'
+        ? assets.filter((a) => a.media_type === 'video')
+        : assets;
     // D-256: pisahkan aset per orientasi — VERTIKAL & HORIZONTAL, masing-masing
     // jadi baris grid sendiri (ala "Produksi Terbaru" di Beranda).
-    // HP: 3 grid untuk vertikal, 2 grid untuk horizontal.
+    // HP: 3 grid untuk vertikal, 3 grid untuk horizontal (D-263).
     const vert = [], horz = [];
-    assets.forEach((a) => {
+    shown.forEach((a) => {
       (isPortraitRatio(assetRatio(a)) ? vert : horz).push(a);
     });
     const rowHtml = (title, ico, list, mod) => {
@@ -686,8 +702,23 @@
         + '<div class="st-gal-row ' + mod + '">' + list.map(assetCardHtml).join('') + '</div>'
         + '</section>';
     };
-    box.innerHTML = rowHtml('Vertikal', 'smartphone', vert, 'st-gal-row--vertical')
-      + rowHtml('Horizontal', 'monitor', horz, 'st-gal-row--horizontal');
+    // D-264: baris filter di ATAS galeri — All | Foto | Video + jumlah aset.
+    const filterBtn = (key, label, n) =>
+      '<button type="button" class="st-gal-filter' + (galleryFilter === key ? ' is-active' : '') + '"'
+      + ' data-gal-filter="' + key + '" aria-pressed="' + (galleryFilter === key ? 'true' : 'false') + '">'
+      + esc(label) + ' <b>' + n + '</b></button>';
+    const filterBar = '<div class="st-gal-filters" role="group" aria-label="Saring aset">'
+      + filterBtn('all', 'Semua', counts.all)
+      + filterBtn('photo', 'Foto', counts.photo)
+      + filterBtn('video', 'Video', counts.video)
+      + '</div>';
+    box.innerHTML = filterBar
+      + (shown.length
+        ? rowHtml('Vertikal', 'smartphone', vert, 'st-gal-row--vertical')
+          + rowHtml('Horizontal', 'monitor', horz, 'st-gal-row--horizontal')
+        : '<div class="st-gal-empty-filter">' + icon('layout-grid')
+          + '<b>Tidak ada aset ' + (galleryFilter === 'photo' ? 'foto' : 'video') + '</b>'
+          + '<p>Buat atau unggah dulu, lalu filter ini akan terisi.</p></div>');
     // D-255: klik -> preview ukuran asli (lightbox) + autoplay video di HP.
     box.querySelectorAll('[data-asset-open]').forEach((b) => b.addEventListener('click', () => {
       const a = assets.find((x) => x.id === b.dataset.assetOpen);
@@ -706,6 +737,14 @@
         return;
       }
       openPreview(a);
+    }));
+    // D-264: klik filter jenis konten -> saring galeri (All/Foto/Video).
+    box.querySelectorAll('[data-gal-filter]').forEach((b) => b.addEventListener('click', () => {
+      const key = b.dataset.galFilter;
+      if (!['all', 'photo', 'video'].includes(key) || key === galleryFilter) return;
+      galleryFilter = key;
+      // Render ulang — renderGallery() sudah menjadwalkan packing ulang sendiri.
+      renderGallery();
     }));
     // D-257: aset lama (upload sebelum dimensi dicatat) belum punya
     // width/height -> orientasi tidak bisa ditentukan dari metadata.
