@@ -747,6 +747,7 @@ app.get('/api/studio/motion-graphics/templates', requireUser, requireAdmin, asyn
     let availability = await motionGraphicsAvailable();
     // D-249: kalau dependency Remotion belum terpasang, server pasang
     // sendiri di background (user tidak perlu ingat `npm run setup`).
+    // D-251: skip di serverless (fs read-only) — render utama di browser.
     if (!availability.ok && availability.status === 'missing') {
       ensureMotionGraphicsInstalled().catch(() => {});
       availability = await motionGraphicsAvailable();
@@ -755,9 +756,15 @@ app.get('/api/studio/motion-graphics/templates', requireUser, requireAdmin, asyn
     res.json({
       ok: true,
       available: availability.ok,
-      // Status: ready | installing | missing | failed
-      status: availability.ok ? 'ready' : install.status === 'installing' ? 'installing' : install.status === 'failed' ? 'failed' : 'missing',
-      reason: availability.ok ? null : (install.reason || availability.reason),
+      // Status: ready | installing | missing | failed | serverless
+      status: availability.ok ? 'ready'
+        : availability.status === 'serverless' ? 'serverless'
+          : install.status === 'installing' ? 'installing'
+            : install.status === 'failed' ? 'failed'
+              : install.status === 'serverless' ? 'serverless' : 'missing',
+      reason: availability.ok ? null : (availability.reason || install.reason),
+      // D-251: template selalu dikirim — render client-side butuh katalog
+      // template walaupun renderer server tidak tersedia.
       templates: MG_TEMPLATES,
     });
   } catch (error) {
@@ -787,6 +794,46 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
     res.json({ ok: true, task });
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal membuat render Motion Graphics.' });
+  }
+});
+
+// D-251: hasil render Motion Graphics yang dirender di browser (Canvas 2D +
+// WebCodecs) dikirim balik ke server sebagai MP4 lalu disimpan sebagai aset.
+// Server hanya menerima file — tidak perlu Chromium/FFmpeg, jadi jalan di
+// Vercel serverless.
+app.post('/api/studio/motion-graphics/asset', requireUser, requireAdmin, assetUpload, async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ ok: false, error: 'File video wajib diunggah.' });
+    if (file.size > MAX_ASSET_BYTES) {
+      return res.status(400).json({ ok: false, error: 'Ukuran video melebihi 25 MB.' });
+    }
+    const mime = String(file.mimetype || '').toLowerCase();
+    if (!ASSET_MIME.includes(mime)) {
+      return res.status(400).json({ ok: false, error: 'Format video harus MP4, WebM, atau MOV.' });
+    }
+    let meta = {};
+    if (typeof req.body?.meta === 'string') {
+      try { meta = JSON.parse(req.body.meta) || {}; } catch { meta = {}; }
+    } else if (req.body?.meta && typeof req.body.meta === 'object') {
+      meta = req.body.meta;
+    }
+    const asset = await saveAsset(req.supabase, req.user.id, file, {
+      kind: 'generate',
+      prompt: String(req.body?.prompt || '').slice(0, 2000),
+      altText: String(req.body?.prompt || '').slice(0, 400),
+      meta: {
+        ...meta,
+        kind: 'motion-graphics',
+        renderer: 'client',
+      },
+      width: Number(req.body?.width) || undefined,
+      height: Number(req.body?.height) || undefined,
+      durationMs: Number(req.body?.durationMs) || undefined,
+    });
+    res.status(201).json({ ok: true, asset: await signedAsset(asset, req.supabase) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menyimpan hasil Motion Graphics.' });
   }
 });
 

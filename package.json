@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "setup": "npm install && npm install --prefix motion-graphics",
-    "check": "node tools/check-html.js && node tools/check-html.js public/galeri.html && node tools/check-palette.js && node --check server/index.js && node --check server/app.js && node --check server/ai.js && node --check server/supabase.js && node --check server/vault.js && node --check server/provider-keys.js && node --check server/character-wizard.js && node --check server/storage-errors.js && node --check server/studio-characters.js && node --check server/studio-assets.js && node --check server/lipsync-models.js && node --check server/motion-graphics.js && node --check api/index.js && node --check public/ai-providers.js && node --check public/character-wizard.js && node --check public/studio.js",
+    "check": "node tools/check-html.js && node tools/check-html.js public/galeri.html && node tools/check-palette.js && node --check server/index.js && node --check server/app.js && node --check server/ai.js && node --check server/supabase.js && node --check server/vault.js && node --check server/provider-keys.js && node --check server/character-wizard.js && node --check server/storage-errors.js && node --check server/studio-characters.js && node --check server/studio-assets.js && node --check server/lipsync-models.js && node --check server/motion-graphics.js && node --check api/index.js && node --check public/ai-providers.js && node --check public/character-wizard.js && node --check public/studio.js && node --check public/motion-graphics.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
@@ -17,6 +17,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "mediabunny": "^1.66.0",
     "multer": "^2.0.2",
     "zod": "^4.1.5"
   },
@@ -24,6 +25,8 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "jsdom": "^31.0.1"
+    "@sparticuz/chromium": "^153.0.0",
+    "jsdom": "^31.0.1",
+    "puppeteer-core": "^25.18.1"
   }
 }

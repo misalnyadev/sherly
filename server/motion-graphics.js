@@ -289,11 +289,34 @@ export async function renderMotionGraphic(req, opts = {}) {
 }
 
 /**
+ * D-251: deteksi lingkungan serverless (Vercel/Lambda/Netlify functions).
+ * Di sana auto-install dependency & render headless tidak mungkin.
+ */
+export function isServerlessRuntime() {
+  return Boolean(
+    process.env.VERCEL
+    || process.env.AWS_LAMBDA_FUNCTION_NAME
+    || process.env.NETLIFY
+    || process.env.FUNCTIONS_WORKER_RUNTIME
+  );
+}
+
+/**
  * Probe apakah Motion Graphics bisa dipakai di server ini.
  * Dipakai route /api/studio/motion-graphics/templates agar UI bisa
  * menampilkan status (menyiapkan / siap / gagal).
  */
 export async function motionGraphicsAvailable() {
+  // D-251: di lingkungan serverless (Vercel) filesystem read-only dan fungsi
+  // dibatasi 60 detik -> renderer server (Chromium/FFmpeg) tidak bisa hidup.
+  // Di sana jalur utama adalah render di browser (Canvas 2D + WebCodecs).
+  if (isServerlessRuntime()) {
+    return {
+      ok: false,
+      status: 'serverless',
+      reason: 'Render di server tidak tersedia di hosting serverless — render berjalan di browser.',
+    };
+  }
   try {
     await fs.access(MG_ENTRY);
   } catch {
@@ -343,6 +366,12 @@ export function motionGraphicsInstallState() {
  */
 export function ensureMotionGraphicsInstalled() {
   if (installState.promise) return installState.promise;
+  // D-251: serverless tidak bisa memasang dependency (fs read-only).
+  if (isServerlessRuntime()) {
+    installState.status = 'serverless';
+    installState.reason = 'Render di server tidak tersedia di hosting serverless — render berjalan di browser.';
+    return Promise.resolve({ok: false, reason: installState.reason});
+  }
   // Sudah ada? tidak perlu install.
   if (fsSync.existsSync(path.join(MG_PROJECT, 'node_modules', '@remotion', 'bundler'))) {
     installState.status = 'ready';

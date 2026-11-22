@@ -254,6 +254,9 @@
   let motionStatus = 'idle';     // idle | ready | installing | missing | failed
   let motionReason = '';         // alasan kalau gagal
   let motionTask = null;         // task render Motion Graphics yang sedang berjalan
+  // D-251: renderer utama = browser (Canvas 2D + WebCodecs). null = belum dicek.
+  let motionClientSupported = null;
+  let motionClientReason = '';
   let motionTimer = null;      // polling status render
   let motionSetupTimer = null; // polling status persiapan renderer
   let motionSetupTries = 0;    // batas percobaan polling (2 menit)
@@ -910,10 +913,11 @@
     }
     renderMotionBar();
     updatePillLabels();
-    // Server sedang memasang dependency -> tunggu sampai siap.
+    // D-251: renderer utama ada di browser, jadi TIDAK perlu menunggu
+    // server menyiapkan apa pun. Polling install cukup untuk renderer server
+    // (fallback lokal), dibatasi supaya tidak berjalan tanpa henti.
     if (motionStatus === 'installing') {
       if (motionSetupTimer) clearTimeout(motionSetupTimer);
-      // Maks 40x polling (2 menit) supaya tidak berjalan tanpa henti.
       motionSetupTries = (motionSetupTries || 0) + 1;
       if (motionSetupTries <= 40) {
         motionSetupTimer = setTimeout(() => { loadMotionTemplates(); }, 3000);
@@ -930,21 +934,18 @@
     const isMotion = state.mode === 'motion';
     bar.classList.toggle('st-hidden', !isMotion);
     if (!isMotion) return;
-    // D-249: renderer belum siap -> tampilkan status, jangan diam-diam
-    // Hilang (user jadi tahu kenapa belum bisa render).
-    if (!motionAvailable) {
-      const installing = motionStatus === 'installing';
-      const failed = motionStatus === 'failed';
-      bar.innerHTML = '<div class="st-motion-head">' + icon('film') + '<b>Motion Graphics</b>'
-        + '<small>' + esc(failed
-          ? (motionReason || 'Gagal menyiapkan renderer.')
-          : installing
-            ? 'Sedang menyiapkan renderer video… (sekali saja, tunggu sebentar)'
-            : 'Menyiapkan renderer video…') + '</small></div>'
-        + '<div class="st-motion-status' + (installing ? ' st-motion-status-wait' : failed ? ' st-motion-status-err' : '') + '">'
-        + '<span class="st-motion-spinner"></span>'
-        + '<span>' + esc(failed ? 'Renderer tidak tersedia' : 'Menyiapkan…') + '</span></div>';
-      return;
+    // D-251: render utama dijalankan di browser (Canvas 2D + WebCodecs),
+    // jadi mode ini TIDAK lagi menunggu renderer server (yang tidak bisa
+    // hidup di Vercel serverless). Cek dukungan browser sekali di awal.
+    if (motionClientSupported === null) {
+      motionClientSupported = false;
+      motionClientReason = 'Memeriksa dukungan browser…';
+      loadMotionGraphicsClient().then((c) => {
+        motionClientSupported = c.supported;
+        motionClientReason = c.reason || '';
+        renderMotionBar();
+        updatePillLabels();
+      });
     }
     const tpl = motionTemplate();
     if (!tpl) { bar.innerHTML = ''; return; }
@@ -958,8 +959,12 @@
           : '<input id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" type="text" maxlength="4000" value="' + esc(value) + '" placeholder="' + esc(f.placeholder || '') + '">')
         + '</label>';
     }).join('');
+    const rendererNote = motionClientSupported === false
+      ? '<small class="st-motion-note st-motion-note-warn">' + esc(motionClientReason || 'Browser ini belum mendukung render video.') + '</small>'
+      : '<small class="st-motion-note">Render di browser perangkat kamu — tanpa biaya server.</small>';
     bar.innerHTML = '<div class="st-motion-head">' + icon('film') + '<b>' + esc(tpl.label) + '</b>'
       + '<small>' + esc(tpl.hint || '') + '</small></div>'
+      + rendererNote
       + '<div class="st-motion-fields">' + fields + '</div>';
     bar.querySelectorAll('[data-motion-field]').forEach((input) => {
       input.addEventListener('input', () => {
@@ -2170,13 +2175,6 @@
   // background) -> polling status -> video tersimpan sebagai aset di galeri.
 
   async function generateMotionGraphics() {
-    // D-249: renderer belum siap -> jelaskan ke user (bukan diam).
-    if (!motionAvailable) {
-      window.toast?.(motionStatus === 'installing'
-        ? 'Renderer video sedang disiapkan — tunggu sebentar ya.'
-        : (motionReason || 'Renderer Motion Graphics belum siap. Jalankan: npm run setup'));
-      return;
-    }
     const tpl = motionTemplate();
     if (!tpl) { window.toast?.('Template Motion Graphics belum tersedia.'); return; }
     const props = motionRenderProps();
@@ -2190,6 +2188,20 @@
     }
     const btn = $('stMotionBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Render'; }
+    // D-251: render di browser (Canvas 2D + WebCodecs) — jalan di Vercel
+    // serverless tanpa server render terpisah. Kalau browser tidak mendukung,
+    // jatuh ke render server (kalau server punya renderer Remotion).
+    const client = await loadMotionGraphicsClient();
+    if (client.supported) {
+      await renderMotionGraphicsClient(tpl, props);
+      return;
+    }
+    // Fallback: server-side render.
+    if (!motionAvailable) {
+      if (btn) { btn.disabled = false; btn.innerHTML = icon('film') + ' Render'; }
+      window.toast?.(client.reason || 'Render video tidak tersedia di browser ini.');
+      return;
+    }
     try {
       const r = await fetch('/api/studio/motion-graphics', {
         method: 'POST',
@@ -2205,10 +2217,85 @@
       if (!r.ok) throw new Error(d.error || 'Render Motion Graphics gagal.');
       motionTask = { id: d.task?.id, progress: 0, status: 'queued' };
       renderMotionProgress();
-      window.toast?.('Video sedang dirender… (±10-60 detik)');
+      window.toast?.('Video sedang dirender di server… (±10-60 detik)');
       pollMotion();
     } catch (e) {
       if (btn) { btn.disabled = false; btn.innerHTML = icon('film') + ' Render'; }
+      window.toast?.(e.message || 'Render Motion Graphics gagal.');
+    }
+  }
+
+  /**
+   * D-251: muat modul render client-side (lazy — hanya saat mode dipakai).
+   * Modul `public/motion-graphics.js` dimuat via dynamic import().
+   */
+  let motionClientPromise = null;
+  async function loadMotionGraphicsClient() {
+    if (!motionClientPromise) {
+      motionClientPromise = import('./motion-graphics.js').then((m) => ({
+        supported: m.clientRenderSupported(),
+        reason: m.clientRenderSupported() ? null
+          : 'Browser ini belum mendukung render video (WebCodecs). Coba Chrome 94+, Firefox 130+, atau Safari 26+.',
+        render: m.renderMotionGraphicsOnClient,
+      })).catch((e) => ({
+        supported: false,
+        reason: 'Modul render tidak bisa dimuat: ' + (e?.message || e),
+        render: null,
+      }));
+    }
+    return motionClientPromise;
+  }
+
+  /**
+   * D-251: render Motion Graphics di browser lalu upload hasilnya sebagai aset.
+   */
+  async function renderMotionGraphicsClient(tpl, props) {
+    const client = await loadMotionGraphicsClient();
+    const btn = $('stMotionBtn');
+    motionTask = {id: 'client', progress: 0, status: 'rendering', phase: 'preparing'};
+    renderMotionProgress();
+    try {
+      const result = await client.render({
+        template: tpl.id,
+        aspect: state.aspect,
+        duration: state.motionDuration,
+        props,
+      }, {
+        onProgress: ({progress, phase}) => {
+          if (!motionTask) return;
+          motionTask.progress = progress;
+          motionTask.phase = phase;
+          renderMotionProgress();
+        },
+      });
+      // Upload hasil render sebagai aset (multipart — Blob langsung, tanpa base64).
+      const fd = new FormData();
+      fd.append('file', result.blob, 'motion-graphics-' + tpl.id + '.mp4');
+      fd.append('prompt', String(props.title || props.value || props.captionsText || ''));
+      fd.append('meta', JSON.stringify({
+        kind: 'motion-graphics',
+        template: tpl.id,
+        templateLabel: tpl.label,
+        aspect: state.aspect,
+        width: result.width,
+        height: result.height,
+        renderer: 'client',
+      }));
+      fd.append('width', String(result.width));
+      fd.append('height', String(result.height));
+      fd.append('durationMs', String(result.durationMs));
+      const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeaders(), body: fd});
+      const ud = await up.json().catch(() => ({}));
+      if (!up.ok) throw new Error(ud.error || 'Gagal menyimpan video ke galeri.');
+      if (ud.asset) { assets.unshift(ud.asset); renderGallery(); }
+      motionTask = null;
+      renderMotionProgress();
+      resetGenerateButtons();
+      window.toast?.('Video Motion Graphics jadi ✨');
+    } catch (e) {
+      motionTask = null;
+      renderMotionProgress();
+      resetGenerateButtons();
       window.toast?.(e.message || 'Render Motion Graphics gagal.');
     }
   }
