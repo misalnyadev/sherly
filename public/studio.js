@@ -536,9 +536,26 @@
       // packing diulang oleh ResizeObserver begitu lebar nyata tersedia.
       if (!row.clientWidth) return;
       const minCol = parseFloat(cs.getPropertyValue('--st-gal-mincol')) || 104;
-      const cols = Math.max(1, Math.floor((row.clientWidth + gap) / (minCol + gap)));
+      // D-259: jumlah kolom ideal dari lebar baris & lebar kolom minimum.
+      const idealCols = Math.max(1, Math.floor((row.clientWidth + gap) / (minCol + gap)));
+      // D-259: jangan buat kolom lebih banyak dari yang bisa diisi. Kalau
+      // kolom > jumlah item, tiap kolom cuma berisi 1 item -> galeri terlihat
+      // "1 baris" dan itemnya melayang (grid keliatan rata tengah).
+      const maxCols = Math.max(1, Math.floor(items.length / 2));
+      const cols = Math.max(1, Math.min(idealCols, maxCols));
       if (cols < 1) return;
-      const colW = (row.clientWidth - gap * (cols - 1)) / cols;
+      // D-259: lebar kolom TIDAK ikut melebar saat jumlah kolom dikurangi.
+      // Kalau ikut melebar, 7 aset & 3 kolom -> kolom jadi 350px (thumbnail
+      // giant, bukan "3 grid"). Lebar kolom tetap ~minCol, sisa ruang di kanan
+      // dibiarkan kosong (baris jadi lebih pendek, thumbnail tetap ramping).
+      // Lebar kolom TIDAK ikut melebar saat jumlah kolom dikurangi.
+      // Kalau ikut melebar, 7 aset & 3 kolom -> kolom jadi 350px (thumbnail
+      // giant). Lebar kolom tetap ~minCol (maksimal 1,35x minCol supaya tetap
+      // space untuk landscape), sisa ruang di kanan dibiarkan kosong.
+      const colW = Math.min(
+        (row.clientWidth - gap * (cols - 1)) / cols,
+        minCol * 1.35,
+      );
       if (!(colW > 0)) return;
 
       // Rasio thumbnail seragam per baris (median rasio aset di baris itu).
