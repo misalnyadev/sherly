@@ -28,6 +28,10 @@ const ASSETS = [
   { id: 'a4', file_name: 'vid-vertikal-4.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1080, height: 1920, duration_ms: 6000, meta: { kind: 'motion-graphics' } },
   // Landscape 16:9 — harus tetap 1 baris (compact).
   { id: 'a5', file_name: 'vid-horizontal-16x9.mp4', media_type: 'video', kind: 'generate', url: '/assets/brand/sherly-logo.mp4', width: 1920, height: 1080, duration_ms: 5000 },
+  // D-257: video HORIZONTAL asli (1280x720) — harus masuk baris Horizontal.
+  { id: 'aH', file_name: 'vid-horizontal-real.webm', media_type: 'video', kind: 'upload', url: '/assets/brand/fixture-horizontal.webm', width: 1280, height: 720, duration_ms: 1200 },
+  // D-257: video VERTIKAL asli (720x1280) — harus masuk baris Vertikal.
+  { id: 'aV', file_name: 'vid-vertical-real.webm', media_type: 'video', kind: 'upload', url: '/assets/brand/fixture-vertical.webm', width: 720, height: 1280, duration_ms: 1200 },
   // Gambar 4:5 & 3:4 — potret ringan.
   { id: 'a6', file_name: 'foto-4x5.png', media_type: 'image', kind: 'upload', url: '/assets/brand/sherly-logo-poster.png', width: 1080, height: 1350 },
   { id: 'a7', file_name: 'foto-3x4.png', media_type: 'image', kind: 'upload', url: '/assets/brand/sherly-logo-poster.png', width: 900, height: 1200 },
@@ -258,6 +262,27 @@ for (const vp of VIEWPORTS) {
   });
   console.log('  LIGHTBOX:', JSON.stringify(lb));
   check(vp.name, 'lightbox preview aset tampil di layar', lb.hasPanel && lb.inView, JSON.stringify(lb));
+
+  // D-257: video horizontal harus masuk baris HORIZONTAL, video vertikal ke
+  // baris VERTIKAL (bukanvice versa).
+  const orient = await page.evaluate(() => {
+    const inRow = (sel, id) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const it = el.querySelector('[data-asset-open="' + id + '"]');
+      return it ? it.closest('.st-gal-row')?.className || null : null;
+    };
+    const h = inRow('.st-gal-row--horizontal', 'aH');
+    const v = inRow('.st-gal-row--vertical', 'aV');
+    // Aset tanpa dimensi (video lama) juga boleh terdeteksi nanti.
+    const noDim = document.querySelector('[data-asset-open="a4"]')?.closest('.st-gal-row')?.className || null;
+    return { h, v, noDim };
+  });
+  console.log('  ORIENTASI:', JSON.stringify(orient));
+  check(vp.name, 'video horizontal (1280x720) masuk baris HORIZONTAL',
+    String(orient.h || '').includes('st-gal-row--horizontal'), JSON.stringify(orient.h));
+  check(vp.name, 'video vertikal (720x1280) masuk baris VERTIKAL',
+    String(orient.v || '').includes('st-gal-row--vertical'), JSON.stringify(orient.v));
   check(vp.name, 'lightbox menampilkan ukuran asli', lb.hasMeta && /px/.test(lb.metaText), lb.metaText);
   await page.evaluate(() => { document.getElementById('stLightbox')?.querySelector('[data-lb-close]')?.click(); });
 

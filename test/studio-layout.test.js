@@ -2792,7 +2792,9 @@ test('D-254: fallback rasio video 9:16 saat metadata width/height kosong', () =>
   const fn = studio.slice(studio.indexOf('function assetRatio('));
   const body = fn.slice(0, fn.indexOf('\n  }'));
   assert.ok(body.includes("a?.media_type === 'video'"), 'video tanpa metadata harus fallback');
-  assert.ok(body.includes('9 / 16'), 'fallback video harus 9:16');
+  // D-257: video tanpa dimensi TIDAK boleh diasumsikan vertikal (9:16) —
+  // default 16:9 (horizontal) sampai dimensi_asli terdeteksi.
+  assert.ok(body.includes('16 / 9'), 'fallback video harus 16:9 (bukan 9:16)');
   assert.ok(body.includes('return 1;'), 'gambar tanpa metadata harus fallback 1:1');
 });
 
@@ -2998,4 +3000,57 @@ test('D-256: aset utuh tetap bisa dilihat lewat preview (contain)', () => {
   const body = fn.slice(0, fn.indexOf('\n  }'));
   assert.ok(body.includes('st-lb-meta'), 'preview harus menampilkan ukuran asli');
   assert.ok(body.includes('autoplay loop playsinline'), 'video preview autoplay + loop');
+});
+
+// ===== D-257: orientasi aset terdeteksi (video horizontal tidak tampil vertikal) =====
+
+test('D-257: upload aset mengirim dimensi file (client)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function readFileSize('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Gambar: naturalWidth/naturalHeight; Video: videoWidth/videoHeight.
+  assert.ok(body.includes('naturalWidth'), 'gambar harus dibaca via naturalWidth');
+  assert.ok(body.includes('naturalHeight'), 'gambar harus dibaca via naturalHeight');
+  assert.ok(body.includes('videoWidth'), 'video harus dibaca via videoWidth');
+  assert.ok(body.includes('videoHeight'), 'video harus dibaca via videoHeight');
+  // Upload KirstHarus mengirim width/height.
+  const up = studio.slice(studio.indexOf('async function uploadAsset('));
+  const upbody = up.slice(0, up.indexOf('\n  }'));
+  assert.ok(upbody.includes('readFileSize'), 'upload harus memanggil readFileSize');
+  assert.ok(upbody.includes("fd.append('width'"), 'upload harus mengirim width');
+  assert.ok(upbody.includes("fd.append('height'"), 'upload harus mengirim height');
+});
+
+test('D-257: server menyimpan dimensi saat upload & menebak dari header file', () => {
+  const app = readFileSync('server/app.js', 'utf8');
+  assert.ok(app.includes("import { detectDimensions } from './media-dimensions.js'"),
+    'server harus mengimpor detectDimensions');
+  const route = app.slice(app.indexOf("app.post('/api/studio/assets'"));
+  const rbody = route.slice(0, route.indexOf('\napp.'));
+  assert.ok(rbody.includes('detectDimensions'), 'route upload harus menebak dimensi dari file');
+  assert.ok(rbody.includes('width: width || undefined'), 'route upload harus menyimpan width');
+  assert.ok(rbody.includes('height: height || undefined'), 'route upload harus menyimpan height');
+});
+
+test('D-257: ada route PATCH untuk memperbarui dimensi aset', () => {
+  const app = readFileSync('server/app.js', 'utf8');
+  assert.ok(app.includes("app.patch('/api/studio/assets/:id'"), 'route PATCH harus ada');
+  const route = app.slice(app.indexOf("app.patch('/api/studio/assets/:id'"));
+  const rbody = route.slice(0, route.indexOf('\napp.'));
+  assert.ok(rbody.includes('req.body?.width'), 'PATCH harus membaca width');
+  assert.ok(rbody.includes('req.body?.height'), 'PATCH harus membaca height');
+  assert.ok(rbody.includes('getAsset'), 'PATCH harus cek kepemilikan aset');
+});
+
+test('D-257: galeri mendeteksi orientasi aset lama dari metadata video', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const rf = studio.slice(studio.indexOf('function renderGallery('));
+  const body = rf.slice(0, rf.indexOf('\n  }'));
+  // Aset tanpa dimensi -> dibaca dari elemen video (loadedmetadata).
+  assert.ok(body.includes("vid.addEventListener('loadedmetadata'"), 'harus监听 loadedmetadata');
+  assert.ok(body.includes('vid.videoWidth'), 'harus membaca videoWidth');
+  assert.ok(body.includes('vid.videoHeight'), 'harus membaca videoHeight');
+  // Dimensi disimpan ke server supaya konsisten.
+  assert.ok(body.includes("method: 'PATCH'"), 'dimensi harus dikirim ke server');
+  assert.ok(body.includes('renderGallery()'), 'galeri harus dirender ulang setelah orientasi diketahui');
 });

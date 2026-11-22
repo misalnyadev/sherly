@@ -441,7 +441,11 @@
   function assetRatio(a) {
     const w = Number(a?.width) || 0, h = Number(a?.height) || 0;
     if (w > 0 && h > 0) return w / h;
-    if (a?.media_type === 'video') return 9 / 16;
+    // D-257: rasio tidak diketahui -> jangan diasumsikan vertikal (9:16)
+    // karena itu bikin video horizontal tampil vertikal. Video tanpa
+    // metadata diasumsikan 16:9 (paling umum) sampai dimensi terdeteksi
+    // (dibaca dari header file / metadata video di browser).
+    if (a?.media_type === 'video') return 16 / 9;
     return 1;
   }
   // D-254: aset portrait (video 9:16 / gambar tinggi) tidak boleh dipotong
@@ -594,6 +598,36 @@
       }
       openPreview(a);
     }));
+    // D-257: aset lama (upload sebelum dimensi dicatat) belum punya
+    // width/height -> orientasi tidak bisa ditentukan dari metadata.
+    // Video thumbnail sudah dimuat di halaman, jadi dimensions-nya bisa
+    // dibaca langsung dari elemen video (videoWidth/videoHeight) lalu
+    // galeri dirender ulang supaya aset itu pindah ke baris yang benar
+    // (Vertikal / Horizontal).
+    box.querySelectorAll('.st-gal-item').forEach((it) => {
+      const vid = it.querySelector('video');
+      if (!vid) return;
+      const id = it.dataset.assetOpen;
+      const a = assets.find((x) => x.id === id);
+      if (!a || (Number(a.width) > 0 && Number(a.height) > 0)) return;
+      const apply = async () => {
+        const w = vid.videoWidth || 0, h = vid.videoHeight || 0;
+        if (!(w > 0 && h > 0)) return;
+        a.width = w; a.height = h;
+        // Perbarui juga metadata di server supaya konsisten di sesi berikutnya.
+        try {
+          const t = (await window.sherlyGetAccessToken?.()) || '';
+          await fetch('/api/studio/assets/' + encodeURIComponent(a.id), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+            body: JSON.stringify({ width: w, height: h }),
+          });
+        } catch { /* offline / tanpa token */ }
+        renderGallery();
+      };
+      if (vid.readyState >= 1 && vid.videoWidth) apply();
+      else vid.addEventListener('loadedmetadata', apply, { once: true });
+    });
     // D-255: PC — kursor di atas thumbnail -> video diputar.
     box.querySelectorAll('.st-gal-item').forEach((b) => {
       b.addEventListener('pointerenter', () => {
@@ -772,11 +806,43 @@
       window.toast?.('Aset dihapus.');
     } catch (e) { window.toast?.(e.message || 'Gagal menghapus aset.'); }
   }
+  // D-257: baca dimensi file di browser (sebelum upload) supaya galeri bisa
+  // membedakan aset VERTIKAL & HORIZONTAL. Tanpa ini metadata width/height
+  // kosong -> semua video jatuh ke fallback 9:16 (tampil vertikal).
+  //  - Gambar: <img> + objectURL, tunggu event 'load' -> naturalWidth/Height.
+  //  - Video: <video> preload=metadata -> videoWidth/videoHeight.
+  //  - Fallback: MP4/MOVParser di server.
+  function readFileSize(file) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const done = (w, h) => {
+        URL.revokeObjectURL(url);
+        resolve((w > 0 && h > 0) ? { width: w, height: h } : null);
+      };
+      const isVideo = String(file.type || '').startsWith('video/');
+      const el = isVideo ? document.createElement('video') : document.createElement('img');
+      const timer = setTimeout(() => done(0, 0), 3000);
+      el.onload = () => { clearTimeout(timer); done(el.naturalWidth || el.videoWidth || 0, el.naturalHeight || el.videoHeight || 0); };
+      el.onerror = () => { clearTimeout(timer); done(0, 0); };
+      if (isVideo) { el.preload = 'metadata'; el.muted = true; el.playsInline = true; }
+      el.src = url;
+    });
+  }
   /** Unggah aset dari perangkat. */
   async function uploadAsset(file) {
     if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
+    // D-257: kirim dimensi kalau bisa dibaca di browser. Batas waktu pendek
+    // (1,2 detik) supaya upload TIDAK ikut menunggu — kalau gagal, server
+    // tetap menebak dimensi dari header file.
+    try {
+      const dim = await Promise.race([
+        readFileSize(file),
+        new Promise((r) => setTimeout(() => r(null), 1200)),
+      ]);
+      if (dim) { fd.append('width', String(dim.width)); fd.append('height', String(dim.height)); }
+    } catch { /* biarkan server yang menebak */ }
     try {
       const t = (await window.sherlyGetAccessToken?.()) || '';
       const r = await fetch('/api/studio/assets', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: fd });

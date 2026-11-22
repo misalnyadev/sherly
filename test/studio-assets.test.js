@@ -255,3 +255,29 @@ test('getVideoTask / listVideoTasks: hanya milik sendiri', async () => {
   const list = await listVideoTasks(supabase, 'u1');
   assert.equal(list.length, 1);
 });
+
+// --- D-257: dimensi aset tersimpan saat upload (orientasi vertikal/horizontal) ---
+test('D-257: saveAsset: simpan dimensi width/height dari client', async () => {
+  const { supabase } = fakeDb();
+  const file = { buffer: Buffer.from('DATAFOTO'), mimetype: 'image/png', originalname: 'foto.png' };
+  const asset = await saveAsset(supabase, 'u1', file, { kind: 'upload', width: 1280, height: 720 });
+  assert.equal(asset.width, 1280, 'lebar harus tersimpan');
+  assert.equal(asset.height, 720, 'tinggi harus tersimpan');
+});
+
+test('D-257: saveAsset: dimensi null bila tidak diketahui (diteruskan sebagai null)', async () => {
+  const { supabase } = fakeDb();
+  const file = { buffer: Buffer.from('DATAFOTO'), mimetype: 'image/png', originalname: 'foto.png' };
+  const asset = await saveAsset(supabase, 'u1', file, { kind: 'upload' });
+  assert.equal(asset.width, null);
+  assert.equal(asset.height, null);
+});
+
+test('D-257: signedAsset mengirim dimensi ke client', async () => {
+  const { supabase } = fakeDb();
+  const file = { buffer: Buffer.from('DATAFOTO'), mimetype: 'image/png', originalname: 'foto.png' };
+  const asset = await saveAsset(supabase, 'u1', file, { kind: 'upload', width: 1920, height: 1080 });
+  const signed = await signedAsset(asset, supabase);
+  assert.equal(signed.width, 1920);
+  assert.equal(signed.height, 1080);
+});
