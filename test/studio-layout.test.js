@@ -2773,9 +2773,11 @@ test('D-254: aset portrait (video 9:16) tidak terpotong — rasio item ikut meta
   assert.ok(vRatio, 'item video harus punya aspect-ratio inline, dapat ' + vStyle);
   assert.ok(Math.abs(Number(vRatio[1]) - 9 / 16) < 0.01,
     'item video harus ikut rasio 9:16, dapat ' + vRatio[1]);
-  // Item gambar tetap kotak (tanpa kelas portrait, tanpa aspect-ratio inline).
+  // D-255: gambar juga ikut rasio aslinya (compact packing) — gambar 1:1
+  // tetap rasio 1 (kotak) tapi BUKAN punya kelas portrait.
   assert.ok(!img.classList.contains('st-gal-item--portrait'), 'gambar 1:1 bukan portrait');
-  assert.ok(!/aspect-ratio/.test(img.getAttribute('style') || ''), 'gambar 1:1 tetap kotak default');
+  assert.ok(/aspect-ratio:1/.test(img.getAttribute('style') || ''),
+    'gambar 1:1 harus tetap rasio 1, dapat ' + img.getAttribute('style'));
   // CSS: media portrait pakai contain (bukan cover) supaya tidak terpotong.
   const css = readFileSync('public/index.html', 'utf8');
   const rule = css.match(/\.st-gal-item--portrait \.st-gal-thumb img,\s*\.st-gal-item--portrait \.st-gal-thumb video\{([^}]*)\}/s);
@@ -2807,4 +2809,112 @@ test('D-254: galeri & composer — dock terpisah dari stage di markup studio.js'
   assert.ok(/'\s*\+\s*'<\/div>'\s*\+\s*'<\/div>'/.test(afterLightbox) ||
     /\+\s*'<\/div>'[\s\S]{0,40}\+\s*'<\/div>'/.test(afterLightbox),
     'dock harus ditutup (composer + dock) sebelum markup stage: ' + afterLightbox.slice(0, 160));
+});
+
+// ===== D-255: galeri compact (masonry) + preview ukuran asli + autoplay video =====
+
+test('D-255: galeri pakai masonry multi-column (vertikal & horizontal saling isi)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Mode packed: container jadi multi-column, item = blok utuh.
+  assert.ok(css.includes('.st-gallery--packed{display:block'), 'mode packed gallery harus ada');
+  assert.ok(css.includes('break-inside:avoid'), 'item galeri tidak boleh terpotong antar kolom');
+  // Jarak diatur lewat CSS var (bisa user atur sendiri).
+  assert.ok(css.includes('--st-gal-gap'), 'jarak galeri harus pakai CSS var');
+  assert.ok(css.includes('--st-gal-mincol'), 'lebar kolom minimal harus pakai CSS var');
+  // Thumbnail lebih kecil dari sebelumnya (D-247: 180px PC / 112px HP).
+  assert.ok(/min-width:900px\)\{\.st-gallery\{[^}]*minmax\(132px/.test(css),
+    'kolom galeri PC harus lebih kecil (132px)');
+  assert.ok(/max-width:560px\)\{\.st-gallery\{[^}]*minmax\(96px/.test(css),
+    'kolom galeri HP harus lebih kecil (96px)');
+});
+
+test('D-255: packing gallery dihitung dari rasio aset & tinggi dibatasi (compact)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  assert.ok(studio.includes('function packGallery('), 'packGallery harus ada');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Tinggi item = lebar kolom / rasio.
+  assert.ok(body.includes('colW / ratio'), 'tinggi item harus dihitung dari rasio');
+  // Dibatasi supaya portrait tidak bikin kolom terlalu panjang.
+  assert.ok(body.includes('maxH'), 'tinggi item harus dibatasi');
+  assert.ok(body.includes('colW * 1.55'), 'batas tinggi portrait harus 1.55x lebar kolom');
+  // Mode multi-column.
+  assert.ok(body.includes('columnCount'), 'harus memakai column-count');
+  assert.ok(body.includes("st-gallery--packed"), 'harus menandai mode packed');
+  // Dijalankan setelah layout terhitung (requestAnimationFrame).
+  assert.ok(studio.includes('requestAnimationFrame'), 'packing harus dijadwalkan setelah layout');
+  // Resize -> packing diulang.
+  assert.ok(studio.includes("window.addEventListener('resize'"), 'packing harus diulang saat resize');
+});
+
+test('D-255: tinggi item portrait dibatasi tapi video tetap utuh (contain)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Aset portrait tetap pakai contain -> tidak ada crop.
+  const rule = css.match(/\.st-gal-item--portrait \.st-gal-thumb img,\s*\.st-gal-item--portrait \.st-gal-thumb video\{([^}]*)\}/s);
+  assert.ok(rule, 'aturan media portrait tidak ada');
+  assert.ok(rule[1].includes('object-fit:contain'), 'media portrait harus object-fit:contain');
+  // Latar gelap untuk letterbox.
+  assert.ok(/\.st-gal-item--portrait \.st-gal-thumb\{[^}]*background:#070b14/.test(css),
+    'latar portrait harus gelap');
+});
+
+test('D-255: video thumbnail punya loop + muted (autoplay tanpa suara)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function assetThumb('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('muted'), 'video thumbnail harus muted');
+  assert.ok(body.includes('loop'), 'video thumbnail harus loop (berulang)');
+  assert.ok(body.includes('playsinline'), 'video thumbnail harus playsinline');
+});
+
+test('D-255: autoplay video — PC hover, HP klik', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  // Helper putar.
+  assert.ok(studio.includes('function playThumbVideo('), 'playThumbVideo harus ada');
+  assert.ok(studio.includes('function pauseThumbVideo('), 'pauseThumbVideo harus ada');
+  assert.ok(studio.includes('function pauseAllThumbVideos('), 'pauseAllThumbVideos harus ada');
+  // PC: pointerenter / pointerleave.
+  assert.ok(studio.includes("addEventListener('pointerenter'"), 'harus listen pointerenter (hover PC)');
+  assert.ok(studio.includes("addEventListener('pointerleave'"), 'harus listen pointerleave (hover PC)');
+  // HP: klik = putar di tempat, klik kedua = buka preview.
+  const rf = studio.slice(studio.indexOf('function renderGallery('));
+  const rbody = rf.slice(0, rf.indexOf('\n  }'));
+  assert.ok(rbody.includes("a.media_type === 'video' && isMobileLayout()"),
+    'di HP klik video harus autoplay di tempat');
+  assert.ok(rbody.includes('playThumbVideo(b)'), 'klik HP harus memanggil playThumbVideo');
+  assert.ok(rbody.includes('openPreview(a)'), 'klik kedua harus membuka preview');
+  // Item yang diputar diberi penanda.
+  assert.ok(studio.includes("classList.add('is-playing')"), 'itemplaying harus diberi kelas');
+  assert.ok(studio.includes("classList.remove('is-playing')"), 'kelas is-playing harus dilepas saat berhenti');
+});
+
+test('D-255: preview aset menampilkan ukuran asli', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function openPreview('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Baris info ukuran asli.
+  assert.ok(body.includes('st-lb-meta'), 'harus ada baris info ukuran asli');
+  assert.ok(body.includes('Ukuran asli'), 'teks ukuran asli harus ada');
+  assert.ok(body.includes('px'), 'ukuran asli harus ditampilkan dalam px');
+  // Video di preview autoplay + loop.
+  assert.ok(body.includes('autoplay loop playsinline'), 'video preview harus autoplay + loop');
+  // CSS baris info.
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('.st-lb-meta{'), 'CSS .st-lb-meta harus ada');
+  assert.ok(css.includes('.st-lb-meta-ico'), 'CSS ikon ukuran harus ada');
+  // Media di preview tidak boleh di-crop.
+  assert.ok(css.includes('.st-lb-body .st-lb-media{object-fit:contain'),
+    'media preview harus contain (tampilkan ukuran asli)');
+  // Ikon maximize dipakai & tersedia di ICONS.
+  assert.ok(studio.includes("icon('maximize')"), 'harus pakai ikon maximize');
+  assert.ok(css.includes("'maximize':'<"), "ICONS harus punya ikon 'maximize'");
+});
+
+test('D-255: tooltip thumbnail menampilkan ukuran aset', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function assetCardHtml('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  assert.ok(body.includes('a.width'), 'tooltip harus memakai lebar aset');
+  assert.ok(body.includes('a.height'), 'tooltip harus memakai tinggi aset');
+  assert.ok(body.includes('x'), 'tooltip harus menyatukan ukuran');
 });

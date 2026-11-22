@@ -1076,15 +1076,37 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-skel-img{width:100%;aspect-ratio:1/1;background:linear-gradient(100deg,#111a2e 30%,#1c2b40 50%,#111a2e 70%);background-size:200% 100%;animation:stShimmer 1.4s infinite}
 
 /* ===== D-198: Galeri Aset Studio (flat grid di atas komposer) ===== */
-/* D-247: grid aset lebih luas di PC (thumbnail lebih besar) — HP tetap 2 kolom. */
-.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin:0 0 10px;align-content:start}
-@media(min-width:900px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}}
-.st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:12px;background:#101b2c;overflow:hidden;cursor:pointer;aspect-ratio:1/1;transition:border-color .18s,box-shadow .18s}
+/* D-255: galeri COMPACT — thumbnail lebih kecil, rasio vertikal/horizontal saling mengisi
+   (dense packing), jarak diatur lewat --st-gal-gap.
+   Item memakai `grid-auto-rows` + `aspect-ratio` per aset supaya kotak
+   portrait (9:16) & landscape (16:9) bisa saling mengisi baris tanpa
+   menyisakan celah besar. */
+.st-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
+  grid-auto-rows:min-content;grid-auto-flow:row dense;align-items:start;
+  --st-gal-mincol:104px;--st-gal-gap:8px;
+  gap:var(--st-gal-gap);margin:0 0 10px;align-content:start}
+@media(min-width:900px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
+  --st-gal-mincol:132px;--st-gal-gap:10px;gap:var(--st-gal-gap)}}
+@media(max-width:560px){.st-gallery{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));
+  --st-gal-mincol:96px;--st-gal-gap:7px;gap:var(--st-gal-gap)}}
+/* D-255: mode MASONRY — container jadi multi-column, tiap aset blok utuh
+   (break-inside:avoid) supaya kotak vertikal & horizontal saling mengisi
+   dan tidak ada sel kosong besar di antara baris. */
+.st-gallery--packed{display:block;column-gap:var(--st-gal-gap,8px)}
+.st-gallery--packed .st-gal-item{display:block;width:100%;margin:0 0 var(--st-gal-gap,8px);
+  break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
+/* D-255: tiap aset memakai tinggi baris sesuai rasio aslinya (compact, saling
+   mengisi). `span` dihitung dari rasio metadata di studio.js. */
+.st-gal-item{position:relative;display:block;padding:0;border:1px solid var(--line);border-radius:10px;background:#101b2c;overflow:hidden;cursor:pointer;transition:border-color .18s,box-shadow .18s}
 .st-gal-item:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814}
+/* D-255: fokus keyboard ikut kelihatan (galeri bisa dijelajahi dengan Tab). */
+.st-gal-item:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
+/* D-255: video yang sedang diputar (hover PC / tap HP) diberi sedikit glow. */
+.st-gal-item.is-playing{border-color:#f044a8;box-shadow:0 0 0 3px #f044a826}
 .st-gal-thumb{display:block;width:100%;height:100%;background:#160f20}
 .st-gal-thumb img,.st-gal-thumb video{width:100%;height:100%;object-fit:cover;display:block}
-/* D-254: aset portrait (video 9:16) — kotak item ikut rasio asli dan media
-   pakai `contain` supaya TIDAK terpotong; latar gelap biar letterbox rapi. */
+/* D-254: aset portrait (video 9:16) — media pakai `contain` supaya TIDAK
+   terpotong; latar gelap biar letterbox rapi. */
 .st-gal-item--portrait .st-gal-thumb{background:#070b14}
 .st-gal-item--portrait .st-gal-thumb img,
 .st-gal-item--portrait .st-gal-thumb video{object-fit:contain}
@@ -1111,6 +1133,16 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-lb-x svg{width:13px;height:13px}
 .st-lb-body{overflow:auto;background:#070b14;display:grid;place-items:center}
 .st-lb-media{max-width:100%;max-height:56vh;display:block}
+/* D-255: preview menampilkan UKURAN ASLI aset — media dibiarkan utuh
+   (object-fit:contain, tanpa crop) dan panel bisa zoom-in lewat scroll. */
+.st-lb-body .st-lb-media{object-fit:contain;image-rendering:auto}
+/* D-255: baris info ukuran asli di bawah preview. */
+.st-lb-meta{display:flex;align-items:center;gap:8px;padding:9px 15px;border-top:1px solid var(--line);
+  background:#0c1422;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.st-lb-meta b{color:#fff;font-weight:600}
+.st-lb-meta-ico{display:inline-flex;align-items:center}
+.st-lb-meta-ico svg{width:14px;height:14px;stroke:#ff9bdc;fill:none}
+.st-lb-meta-hint{margin-left:auto;color:#91a2b9;font-style:italic}
 .st-lb-prompt{margin:0;padding:11px 15px;font-size:11.5px;color:#cfd6e4;line-height:1.6;border-top:1px solid var(--line)}
 .st-lb-actions{display:flex;gap:8px;padding:12px 15px;border-top:1px solid var(--line);flex-wrap:wrap}
 .st-lb-actions .st-act{flex:0 1 auto;min-width:96px}
@@ -1951,6 +1983,8 @@ const ICONS={
  pause:'<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>',
  square:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
  'circle-dot':'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1.5"/>',
+ // D-255: ikon "perbesar" untuk baris ukuran asli di lightbox preview.
+ 'maximize':'<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3"/>',
  scissors:'<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
  'volume-2':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
  'volume-x':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
