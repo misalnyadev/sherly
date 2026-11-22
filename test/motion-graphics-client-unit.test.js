@@ -181,3 +181,25 @@ describe('D-251 integrasi vendor mediabunny', () => {
     assert.doesNotMatch(src, /from\s+'mediabunny'/, 'tidak boleh pakai bare specifier');
   });
 });
+
+describe('D-252 batas ukuran upload (Vercel 4,5 MB)', () => {
+  test('bitrateForDuration menurunkan bitrate supaya muat', () => {
+    const short = mod.bitrateForDuration(4);
+    const long = mod.bitrateForDuration(10);
+    assert.ok(long < short, 'durasi lebih panjang -> bitrate lebih kecil');
+    // Batas atas & bawah.
+    assert.ok(short <= 6_000_000, 'bitrate tidak boleh melebihi batas atas');
+    assert.ok(long >= 800_000, 'bitrate tidak boleh terlalu kecil');
+    // Estimasi ukuran harus di bawah batas upload untuk semua durasi模板.
+    for (const dur of [4, 5, 6, 8, 10]) {
+      const bytes = (mod.bitrateForDuration(dur) / 8) * dur;
+      assert.ok(bytes <= mod.MG_UPLOAD_MAX_BYTES,
+        'durasi ' + dur + ' dtk harus muat (estimasi ' + (bytes / 1024 / 1024).toFixed(2) + ' MB)');
+    }
+  });
+
+  test('batas upload di bawah limit Vercel 4,5 MB', () => {
+    assert.ok(mod.MG_UPLOAD_MAX_BYTES <= 4.5 * 1024 * 1024,
+      'batas upload harus di bawah batas platform 4,5 MB');
+  });
+});

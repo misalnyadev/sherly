@@ -41,6 +41,27 @@ const MG_ASPECTS = {
 
 const MG_FPS = 30;
 
+// D-252: Batas request body Vercel serverless = 4,5 MB (hard limit, tidak
+// bisa dinaikkan). File hasil render dikirim sebagai multipart ke server,
+// jadi ukuran MP4 HARUS di bawah itu. Bitrate dipilih dinamis per durasi
+// supaya hasil muat — video Motion Graphics mostly datar, jadi bitrate
+// lebih rendah tetap terlihat tajam.
+export const MG_UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // 4 MB (sisakan ruang untuk multipart)
+
+/**
+ * Bitrate (bit/detik) supaya hasil muat di bawah batas upload.
+ * @param {number} durationInSeconds
+ * @returns {number}
+ */
+export function bitrateForDuration(durationInSeconds) {
+  const dur = Math.max(1, Number(durationInSeconds) || 1);
+  // Sisakan ~15% untuk overhead multipart + muxing.
+  const targetBytes = MG_UPLOAD_MAX_BYTES * 0.85;
+  const bits = Math.floor((targetBytes * 8) / dur);
+  // Batas bawah & atas supaya tidak terlalu pecil nor overly besar.
+  return Math.min(Math.max(bits, 800_000), 6_000_000);
+}
+
 /** Template Motion Graphics (harus sama dengan server/motion-graphics.js). */
 export const MG_CLIENT_TEMPLATES = [
   {
@@ -646,7 +667,7 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
 
   const source = new CanvasSource(canvas, {
     codec: videoCodec,
-    bitrate: 8_000_000,
+    bitrate: bitrateForDuration(durationInSeconds),
     keyFrameInterval: 2,
   });
   output.addVideoTrack(source, {frameRate: MG_FPS});
@@ -685,11 +706,62 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     try { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); } catch { /* abaikan */ }
   }
 
+  // D-252: pastikan hasil muat di batas upload (Vercel 4,5 MB). Kalau
+  // kelewat besar, kompres ulang dengan bitrate lebih rendah; kalau tetap
+  // besar, beri pesan jelas (bukan gagal diam-diam di server).
+  let finalBlob = blob;
+  if (finalBlob.size > MG_UPLOAD_MAX_BYTES) {
+    opts.onProgress?.({progress: 98, phase: 'compressing'});
+    finalBlob = await reencodeSmaller(canvas, size, durationInSeconds, videoCodec, finalBlob.size);
+  }
+  if (finalBlob.size > MG_UPLOAD_MAX_BYTES) {
+    throw Object.assign(
+      new Error('Video terlalu besar untuk dikirim (' + (finalBlob.size / 1024 / 1024).toFixed(1) + ' MB). Pilih durasi lebih pendek.'),
+      {status: 413},
+    );
+  }
+
   opts.onProgress?.({progress: 100, phase: 'done'});
   return {
-    blob,
+    blob: finalBlob,
     width: size.width,
     height: size.height,
     durationMs: Math.round(durationInSeconds * 1000),
+    bytes: finalBlob.size,
   };
+}
+
+/**
+ * D-252: render ulang dengan bitrate lebih rendah sampai muat.
+ * @returns {Promise<Blob>}
+ */
+async function reencodeSmaller(canvas, size, durationInSeconds, codec, previousSize) {
+  const mediabunny = await import('./vendor/mediabunny.min.mjs');
+  const {Output, Mp4OutputFormat, BufferTarget, CanvasSource} = mediabunny;
+  const totalFrames = Math.max(1, Math.round(durationInSeconds * MG_FPS));
+
+  // Bitrate turun bertahap: 60% -> 40% -> 25% dari nilai semula.
+  const base = bitrateForDuration(durationInSeconds);
+  for (const factor of [0.6, 0.4, 0.25]) {
+    const output = new Output({
+      format: new Mp4OutputFormat({fastStart: 'in-memory'}),
+      target: new BufferTarget(),
+    });
+    const source = new CanvasSource(canvas, {
+      codec,
+      bitrate: Math.max(400_000, Math.floor(base * factor)),
+      keyFrameInterval: 2,
+    });
+    output.addVideoTrack(source, {frameRate: MG_FPS});
+    await output.start();
+    for (let frame = 0; frame < totalFrames; frame++) {
+      const t = frame / MG_FPS;
+      await source.add(t, 1 / MG_FPS);
+    }
+    await output.finalize();
+    const blob = new Blob([output.target.buffer], {type: 'video/mp4'});
+    if (blob.size <= MG_UPLOAD_MAX_BYTES) return blob;
+    if (blob.size >= previousSize) break;
+  }
+  return new Blob([], {type: 'video/mp4'});
 }

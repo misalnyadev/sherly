@@ -159,6 +159,27 @@ describe('D-251 alur Motion Graphics end-to-end di browser', () => {
     await page.close();
   });
 
+  test('D-252: hasil render muat di bawah batas upload (4 MB)', { skip: !needsChromium() && 'chromium tidak tersedia' }, async () => {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 480, height: 900 });
+    await page.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'domcontentloaded' });
+    // Kasus terberat: 16:9 durasi 10 detik (rasio paling lebar).
+    const out = await page.evaluate(async () => {
+      const mod = await import('/motion-graphics.js');
+      const r = await mod.renderMotionGraphicsOnClient({
+        template: 'branded-intro', aspect: '16:9', duration: 10,
+        props: { title: 'Uji Batas Ukuran', subtitle: 'Subjudul panjang untuk menambah variasi' },
+      }, { onProgress: () => {} });
+      return { size: r.blob.size, bytes: r.bytes, max: mod.MG_UPLOAD_MAX_BYTES };
+    });
+    assert.ok(out.size > 1000, 'hasil harus punya isi');
+    assert.ok(out.size <= out.max,
+      'hasil ' + (out.size / 1024 / 1024).toFixed(2) + ' MB harus <= batas ' + (out.max / 1024 / 1024).toFixed(0) + ' MB');
+    assert.ok(out.size <= 4.5 * 1024 * 1024,
+      'harus di bawah batas platform Vercel 4,5 MB');
+    await page.close();
+  });
+
   test('komposisi branded-intro 9:16 menghasilkan MP4 client-side', { skip: !needsChromium() && 'chromium tidak tersedia' }, async () => {
     const page = await browser.newPage();
     await page.setViewport({ width: 480, height: 900 });
