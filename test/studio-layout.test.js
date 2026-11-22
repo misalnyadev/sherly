@@ -3410,7 +3410,7 @@ test('D-265: tombol filter = logo saja (tanpa teks label)', () => {
   const body = fn.slice(0, fn.indexOf('\n    const filterBar'));
   // Tombol berisi ikon + badge jumlah, TANPA teks "Semua/Foto/Video" di dalam.
   assert.ok(body.includes('icon(ico)'), 'tombol filter harus render ikon');
-  assert.ok(body.includes("'<b>' + n + '</b>"), 'tombol filter harus punya badge jumlah');
+  assert.ok(body.includes("'<b>(' + n + ')</b></button>'"), 'tombol filter harus punya jumlah dalam kurung');
   assert.ok(!body.includes('>' + "label"), 'label tidak boleh dicetak sebagai teks di dalam tombol');
   // Label tetap tersedia untuk aksesibilitas (title/aria-label).
   assert.ok(body.includes("title=\"' + esc(label) + ' (' + n + ')'"), 'harus punya title aksesibel');
@@ -3456,16 +3456,42 @@ test('D-265: CSS baris atas = 1 baris flex (filter kiri, Unggah kanan)', () => {
   // Filter di kiri, tombol Unggah didorong ke kanan.
   assert.ok(/\.st-stage-top \.st-upload-btn\{[^}]*margin-left:auto/.test(css),
     'filter kiri & Unggah kanan');
-  // Badge jumlah: di pojok kanan bawah, tidak menutupi ikon, tidak selectable.
+  // D-266: jumlah ditampilkan DI SAMPING ikon (bukan badge di pojok).
   const badge = css.match(/\.st-gal-filter b\{([^}]*)\}/);
-  assert.ok(badge && badge[1].includes('position:absolute'), 'badge harus absolut');
-  assert.ok(badge && badge[1].includes('pointer-events:none'), 'badge tidak boleh memblokir klik');
-  assert.ok(badge && badge[1].includes('right:'), 'badge di pojok kanan');
-  assert.ok(badge && badge[1].includes('bottom:'), 'badge di pojok bawah');
-  // Tombol filter harus compact (kotak kecil, bukan pill teks).
+  assert.ok(badge, 'aturan .st-gal-filter b harus ada');
+  assert.ok(!badge[1].includes('position:absolute'), 'jumlah tidak lagi badge pojok');
+  assert.ok(!badge[1].includes('right:'), 'jumlah tidak lagi di pojok kanan');
+  assert.ok(!badge[1].includes('bottom:'), 'jumlah tidak lagi di pojok bawah');
+  assert.ok(/font-size:\d/.test(badge[1]), 'jumlah harus punya ukuran font');
+  // Tombol filter: ikon + jumlah dalam 1 baris horizontal.
   const btn = css.match(/\.st-gal-filter\{([^}]*)\}/);
-  assert.ok(btn && /width:\d+px/.test(btn[1]) && /height:\d+px/.test(btn[1]),
-    'tombol filter harus ukuran tetap (logo only)');
+  assert.ok(btn && btn[1].includes('display:inline-flex'), 'tombol filter harus inline-flex');
+  assert.ok(btn && btn[1].includes('align-items:center'), 'ikon & jumlah sejajar');
+  assert.ok(btn && btn[1].includes('gap:'), 'ada jarak antara ikon & jumlah');
+  assert.ok(!/width:\d+px/.test(btn[1]), 'tombol tidak boleh lebar tetap (ikut jumlah)');
+  assert.ok(/height:\d+px/.test(btn[1]), 'tinggi tombol tetap (1 baris)');
+});
+
+// ===== D-266: Jumlah aset di samping ikon filter =====
+
+test('D-266: jumlah filter ditulis dalam kurung di samping ikon', () => {
+  const js = readFileSync('public/studio.js', 'utf8');
+  const fn = js.slice(js.indexOf('const filterBtn ='));
+  const body = fn.slice(0, fn.indexOf('\n    const filterBar'));
+  // Tombol = ikon + <b>(n)</b> — jumlah dalam kurung, di samping ikon.
+  assert.ok(body.includes('icon(ico)'), 'tombol harus render ikon');
+  assert.ok(body.includes(`'<b>(' + n + ')</b></button>'`), 'jumlah harus ditulis dalam kurung');
+  // Urutan: ikon dulu, baru jumlah.
+  assert.ok(body.indexOf('icon(ico)') < body.indexOf(`'<b>(' + n + ')</b></button>'`),
+    'ikon harus di sebelah kiri jumlah');
+  // Tidak ada badge pojok lagi.
+  assert.ok(!body.includes('badge'), 'tidak ada badge pojok');
+});
+
+test('D-266: harness filter mengecek jumlah di samping ikon', () => {
+  const h = readFileSync('tools/studio-filter-check.mjs', 'utf8');
+  assert.ok(h.includes('jumlah di samping ikon'), 'harness harus cek jumlah di samping ikon');
+  assert.ok(h.includes('1 baris'), 'harness harus tetap cek 1 baris');
 });
 
 test('D-264: harness filter galeri harus ada', () => {

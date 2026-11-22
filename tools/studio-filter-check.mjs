@@ -81,16 +81,31 @@ for (const vp of VIEWPORTS) {
   const read = () => page.evaluate(() => {
     const bar = [...document.querySelectorAll('.st-gal-filter')].map((b) => {
       const r = b.getBoundingClientRect();
+      const bb = b.querySelector('b');
+      const svg = b.querySelector('svg');
+      const br = bb?.getBoundingClientRect();
+      const sr = svg?.getBoundingClientRect();
       return {
         key: b.dataset.galFilter,
         label: b.textContent.replace(/\s+/g, ' ').trim(),
         on: b.classList.contains('is-active'),
-        n: Number((b.querySelector('b') || {}).textContent || 0),
+        // D-266: jumlah ditulis dalam kurung -> ambil angkanya saja.
+        n: Number((bb?.textContent || '').replace(/[^\d]/g, '')),
         top: Math.round(r.top),
         h: Math.round(r.height),
         w: Math.round(r.width),
-        hasSvg: !!b.querySelector('svg'),
+        hasSvg: !!svg,
         title: b.getAttribute('title') || '',
+        // D-266: jumlah di SAMPING ikon (kanan ikon, sebaris vertikal).
+        bLeft: br ? Math.round(br.left) : null,
+        bRight: br ? Math.round(br.right) : null,
+        bTop: br ? Math.round(br.top) : null,
+        bH: br ? Math.round(br.height) : null,
+        svgRight: sr ? Math.round(sr.right) : null,
+        svgTop: sr ? Math.round(sr.top) : null,
+        svgH: sr ? Math.round(sr.height) : null,
+        // Teks jumlah harus dalam kurung.
+        paren: /\(\d+\)/.test(b.textContent.replace(/\s+/g, '')),
       };
     });
     const rows = [...document.querySelectorAll('.st-gal-row')].map((r) => ({
@@ -132,6 +147,13 @@ for (const vp of VIEWPORTS) {
   check(vp.name, 'tombol filter pakai logo (svg)', all.bar.every((b) => b.hasSvg), JSON.stringify(all.bar.map((b) => b.hasSvg)));
   check(vp.name, 'tombol filter punya title/label aksesibel',
     all.bar.every((b) => /Semua|Foto|Video/.test(b.title)), JSON.stringify(all.bar.map((b) => b.title)));
+  // D-266: jumlah ditulis DALAM KURUNG & berada DI SAMPING ikon (bukan pojok).
+  check(vp.name, 'jumlah ditulis dalam kurung',
+    all.bar.every((b) => b.paren), JSON.stringify(all.bar.map((b) => b.label)));
+  check(vp.name, 'jumlah di samping ikon (kanan ikon, sebaris)',
+    all.bar.every((b) => b.bLeft !== null && b.svgRight !== null && b.bLeft >= b.svgRight
+      && Math.abs(b.bTop - b.svgTop) <= Math.max(b.bH, b.svgH)),
+    JSON.stringify(all.bar.map((b) => ({ bLeft: b.bLeft, svgRight: b.svgRight, bTop: b.bTop, svgTop: b.svgTop }))));
   // 2) Jumlah: total 16, foto 10, video 6.
   const byKey = Object.fromEntries(all.bar.map((b) => [b.key, b]));
   check(vp.name, 'jumlah Semua = 16', byKey.all?.n === 16, `n=${byKey.all?.n}`);
@@ -194,4 +216,4 @@ if (failures.length) {
   failures.forEach((f) => console.log('  - ' + f));
   process.exit(1);
 }
-console.log('SEMUA LOLOS — D-265 OK');
+console.log('SEMUA LOLOS — D-266 OK');

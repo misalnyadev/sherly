@@ -708,13 +708,15 @@
     };
     // D-265: baris filter BERADA DI LUAR galeri — sebaris dengan tombol
     // Unggah di sudut kanan area Studio (bukan di dalam daftar aset), supaya
-    // barisnya cuma 1 ( hemat ruang di HP). Tombol = LOGO SAJA + jumlah.
+    // barisnya cuma 1 ( hemat ruang di HP).
+    // D-266: tombol = LOGO + JUMLAH DI SAMPINGnya: "[icon] (n)" — ikon kiri,
+    // jumlah dalam kurung di sebelah kanannya, semua dalam 1 baris.
     const filterBtn = (key, ico, label, n) =>
       '<button type="button" class="st-gal-filter' + (galleryFilter === key ? ' is-active' : '') + '"'
       + ' data-gal-filter="' + key + '" title="' + esc(label) + ' (' + n + ')'
       + '" aria-label="' + esc(label) + ' (' + n + ')"'
       + ' aria-pressed="' + (galleryFilter === key ? 'true' : 'false') + '">'
-      + icon(ico) + '<b>' + n + '</b></button>';
+      + icon(ico) + '<b>(' + n + ')</b></button>';
     const filterBar = '<div class="st-gal-filters" id="stGalFilters" role="group" aria-label="Saring aset">'
       + filterBtn('all', 'layout-grid', 'Semua', counts.all)
       + filterBtn('photo', 'image', 'Foto', counts.photo)

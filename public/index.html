@@ -1109,31 +1109,28 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    kanan). HP tetap 3 vertikal / 2 horizontal. */
 .st-gallery{display:grid;gap:16px;margin:0 0 10px;align-content:start;
   --st-gal-mincol:132px;--st-gal-gap:12px}
-/* ===== D-264/D-265: Filter jenis konten (Semua | Foto | Video) ===== */
-/* D-265: tombol = LOGO SAJA + badge jumlah di pojok kanan BAWAH (badge
-   ngumpet di luar tombol, jadi ikon tetap kelihatan jelas).
-   Baris filter berdiri sendiri di area atas Studio, SEBARIS dengan tombol
-   Unggah (kanan) -> 1 baris saja, hemat ruang di HP. */
-.st-gal-filters{display:flex;align-items:center;gap:11px;flex:none;min-width:0}
-.st-gal-filter{position:relative;display:inline-grid;place-items:center;
-  width:36px;height:36px;border-radius:11px;border:1px solid var(--line);
-  background:#101b2c;color:#a9b8cd;cursor:pointer;padding:0;
+/* ===== D-264/D-265/D-266: Filter jenis konten (Semua | Foto | Video) ===== */
+/* D-266: tombol = "[icon] (jumlah)" — logo di kiri, JUMLUH DALAM KURUNG di
+   sebelah samplingnya (bukan badge di pojok). Tetap 1 baris baris toolbar,
+   SEBARIS dengan tombol Unggah (kanan) -> hemat ruang di HP. */
+.st-gal-filters{display:flex;align-items:center;gap:9px;flex:none;min-width:0}
+.st-gal-filter{display:inline-flex;align-items:center;gap:6px;
+  height:34px;padding:0 10px;border-radius:11px;border:1px solid var(--line);
+  background:#101b2c;color:#a9b8cd;cursor:pointer;
   transition:border-color .16s,color .16s,background .16s}
-.st-gal-filter svg{width:18px;height:18px;stroke:currentColor;margin-bottom:2px}
+.st-gal-filter svg{width:17px;height:17px;stroke:currentColor;flex:none}
 .st-gal-filter:hover{border-color:#49334e;color:#f4f5fb}
-/* Badge jumlah aset — pojok kanan bawah, NGUMPET di luar tombol. */
-.st-gal-filter b{position:absolute;right:-7px;bottom:-7px;min-width:16px;
-  padding:0 4px;border-radius:999px;font-size:9px;font-weight:800;
-  line-height:15px;text-align:center;color:#cfd6e4;background:#1c2b40;
-  border:1px solid #24344e;pointer-events:none}
+/* Jumlah aset — di samping ikon, ditulis dalam kurung. */
+.st-gal-filter b{font-size:11.5px;font-weight:800;color:#cfd6e4;
+  line-height:1;letter-spacing:.2px}
 .st-gal-filter.is-active{border-color:#ff72c5;color:#ff9bdc;background:#311738}
-.st-gal-filter.is-active b{color:#fff;background:#f044a8;border-color:#ff72c5}
+.st-gal-filter.is-active b{color:#ff9bdc}
 /* HP: tombol filter sedikit lebih kecil supaya barisnya tetap 1 baris. */
 @media(max-width:560px){
-  .st-gal-filters{gap:10px}
-  .st-gal-filter{width:32px;height:32px;border-radius:10px}
-  .st-gal-filter svg{width:16px;height:16px}
-  .st-gal-filter b{min-width:15px;font-size:8.5px;line-height:14px;right:-6px;bottom:-6px}
+  .st-gal-filters{gap:7px}
+  .st-gal-filter{height:30px;padding:0 8px;gap:5px;border-radius:10px}
+  .st-gal-filter svg{width:15px;height:15px}
+  .st-gal-filter b{font-size:10.5px}
 }
 /* Kosong setelah filter (mis. filter Video tapi belum ada video). */
 .st-gal-empty-filter{display:grid;place-items:center;gap:6px;padding:34px 16px;
