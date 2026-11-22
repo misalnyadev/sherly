@@ -54,6 +54,9 @@ const browser = await puppeteer.launch({
 const VIEWPORTS = [
   { name: 'PC', width: 1280, height: 900, mobile: false },
   { name: 'HP', width: 390, height: 844, mobile: true },
+  // D-259: HP dimiringkan (landscape) — galeri harus tetap multi-kolom,
+  // bukan jadi 1 baris ke bawah.
+  { name: 'HP-LANDSCAPE', width: 844, height: 390, mobile: true },
 ];
 
 const failures = [];

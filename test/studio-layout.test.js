@@ -648,10 +648,13 @@ test('D-213: baris menu aksi 1 baris & rata kanan (desktop & HP)', async () => {
   assert.ok(rowRule, 'aturan .st-tools-menu-row tidak ada');
   assert.ok(!rowRule[0].includes('flex-direction:column'), 'baris menu jangan jadi vertikal');
   // Menu utama tidak boleh jadi lebar penuh (bentuk compact).
-  const btnRule = css.match(/\.st-menu-btn\{[^}]*\}/);
+  // Ambil rule .st-menu-btn YANG ADA border-radius:10px (bukan rule ringkas
+  // di @media(max-height:520px) yang muncul lebih dulu di file).
+  const btnRules = [...css.matchAll(/\.st-menu-btn\{([^}]*)\}/g)].map((m) => m[1]);
+  const btnRule = btnRules.find((b) => b.includes('border-radius:10px')) || btnRules[0] || '';
   assert.ok(btnRule, 'aturan .st-menu-btn tidak ada');
-  assert.ok(btnRule[0].includes('border-radius:10px'), 'tombol menu harus bentuk petak');
-  assert.ok(btnRule[0].includes('color:#fff'), 'tulisan tombol menu harus putih');
+  assert.ok(btnRule.includes('border-radius:10px'), 'tombol menu harus bentuk petak');
+  assert.ok(btnRule.includes('color:#fff'), 'tulisan tombol menu harus putih');
 });
 
 // ===== D-212: 4 tombol aksi prompt seragam petak, warna putih, + tombol Reset =====
@@ -1480,10 +1483,14 @@ test('D-232: chip punya ikon + tidak terpotong (footer sticky, body scroll)', ()
   // Chip aktif -> ikon pink.
   assert.ok(css.includes('.st-set-chip.on svg{stroke:#ff9bdc}'), 'ikon chip aktif harus pink');
   // Body = area scroll; footer = sticky (tidak pernah terpotong).
-  const body = css.match(/\.st-set-body\{[^}]*\}/s);
-  assert.ok(body[0].includes('overflow-y:auto'), 'body panel harus bisa scroll');
-  assert.ok(body[0].includes('flex:1 1 auto'), 'body panel harus flexible');
-  assert.ok(body[0].includes('min-height:0'), 'body panel butuh min-height:0 agar scroll benar');
+  // Ambil rule .st-set-body YANG ADA overflow-y:auto (bukan rule ringkas
+  // di @media(max-height:520px) yang muncul lebih dulu di file).
+  const bodies = [...css.matchAll(/\.st-set-body\{([^}]*)\}/g)].map((m) => m[1]);
+  const body = bodies.find((b) => b.includes('overflow-y:auto')) || bodies[0] || '';
+  assert.ok(body, 'aturan .st-set-body harus ada');
+  assert.ok(body.includes('overflow-y:auto'), 'body panel harus bisa scroll');
+  assert.ok(body.includes('flex:1 1 auto'), 'body panel harus flexible');
+  assert.ok(body.includes('min-height:0'), 'body panel butuh min-height:0 agar scroll benar');
   const foot = css.match(/\.st-set-foot\{[^}]*\}/s);
   assert.ok(foot[0].includes('flex:none'), 'footer harus flex:none (tidak ikut scroll)');
   assert.ok(foot[0].includes('border-top:1px solid #24344e'), 'footer harus ada garis pemisah');
@@ -1891,9 +1898,11 @@ test('D-222: placeholder prompt singkat, tanpa contoh panjang', () => {
 
 test('D-222: area tulis menyatu dengan form (tanpa border/background pembeda)', () => {
   const css = readFileSync('public/index.html', 'utf8');
-  const ta = css.match(/\.st-composer textarea\{[^}]*\}/s);
-  assert.ok(ta, 'aturan .st-composer textarea harus ada');
-  const rule = ta[0];
+  // Ambil rule .st-composer textarea YANG ADA background:transparent (bukan
+  // rule ringkas di @media(max-height:520px) yang muncul lebih dulu).
+  const taRules = [...css.matchAll(/\.st-composer textarea\{([^}]*)\}/g)].map((m) => m[1]);
+  const rule = taRules.find((r) => r.includes('background:transparent')) || taRules[0] || '';
+  assert.ok(rule, 'aturan .st-composer textarea harus ada');
   assert.ok(rule.includes('background:transparent'), 'background textarea harus transparan');
   assert.ok(/border:0[;}]/.test(rule), 'border textarea harus 0');
   assert.ok(rule.includes('border-radius:0'), 'border-radius textarea harus 0');
@@ -2828,7 +2837,8 @@ test('D-255: galeri pakai masonry multi-column (vertikal & horizontal saling isi
   // Thumbnail lebih kecil dari sebelumnya (D-247: 180px PC / 112px HP).
   assert.ok(/min-width:900px\)\{\.st-gal-row--vertical\{--st-gal-mincol:132px/.test(css),
     'kolom vertikal PC harus 132px');
-  assert.ok(/max-width:560px\)\{\.st-gal-row--vertical\{--st-gal-mincol:96px/.test(css),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
     'kolom vertikal HP harus 96px');
 });
 
@@ -2943,17 +2953,21 @@ test('D-256: HP 3 grid vertikal & 2 grid horizontal', () => {
   // Vertikal: kolom minimum kecil (3 kolom muat di HP).
   assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:104px}'),
     'aturan baris vertikal harus ada');
-  assert.ok(css.includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
     'vertikal HP mincol 96px (3 grid)');
   // Horizontal: kolom minimum lebih lebar (2 kolom di HP).
   assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:150px}'),
     'aturan baris horizontal harus ada');
-  assert.ok(css.includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px}')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
     'horizontal HP mincol 132px (2 grid)');
   // Media query HP override.
-  assert.ok(/max-width:560px\)\{\.st-gal-row--vertical\{--st-gal-mincol:96px/.test(css),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--vertical{--st-gal-mincol:96px}')
+    .includes('.st-gal-row--vertical{--st-gal-mincol:96px}'),
     'media query HP untuk baris vertikal harus ada');
-  assert.ok(/max-width:560px\)\{\.st-gal-row--horizontal\{--st-gal-mincol:132px/.test(css),
+  assert.ok(mediaBlock(css, 'max-width:560px', '.st-gal-row--horizontal{--st-gal-mincol:132px}')
+    .includes('.st-gal-row--horizontal{--st-gal-mincol:132px}'),
     'media query HP untuk baris horizontal harus ada');
 });
 
@@ -3058,6 +3072,24 @@ test('D-257: galeri mendeteksi orientasi aset lama dari metadata video', () => {
   assert.ok(body.includes('renderGallery()'), 'galeri harus dirender ulang setelah orientasi diketahui');
 });
 
+
+// D-259: helper — ambil isi blok @media tertentu yang mengandung selector.
+function mediaBlock(css, query, mustContain) {
+  const re = new RegExp('@media\\(' + query + '\\)\\{', 'g');
+  let m;
+  while ((m = re.exec(css))) {
+    let depth = 1, i = m.index + m[0].length;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') depth--;
+      i++;
+    }
+    const body = css.slice(m.index + m[0].length, i - 1);
+    if (!mustContain || body.includes(mustContain)) return body;
+  }
+  return '';
+}
+
 // ===== D-258: galeri tanpa kotak kosong (masonry kolom seimbang) =====
 
 test('D-258: layout galeri pakai masonry kolom (bukan CSS multi-column)', () => {
@@ -3108,4 +3140,52 @@ test('D-258: posisi item stabil saat galeri render ulang (klik/autoplay)', () =>
   assert.ok(body.includes('sameShape'), 'packing hanya diulang bila bentuk berubah');
   // Signature memuat daftar id aset -> urutan item menentukan posisinya.
   assert.ok(body.includes("it.dataset.assetOpen || ''"), 'signature harus memuat id aset');
+});
+
+// ===== D-259: grid tidak "1 baris"/rata tengah, HP landscape tetap rapi =====
+
+test('D-259: jumlah kolom dibatasi agar tiap kolom terisi (bukan 1 baris)', () => {
+  const studio = readFileSync('public/studio.js', 'utf8');
+  const fn = studio.slice(studio.indexOf('function packGallery('));
+  const body = fn.slice(0, fn.indexOf('\n  }'));
+  // Kolom maksimal = jumlah item / 2 -> tiap kolom punya minimal 2 item.
+  assert.ok(body.includes('const maxCols = Math.max(1, Math.floor(items.length / 2))'),
+    'jumlah kolom harus dibatasi agar tiap kolom terisi >= 2 item');
+  assert.ok(body.includes('Math.min(idealCols, maxCols)'), 'cols harus dibatasi oleh maxCols');
+  // Lebar kolom tidak boleh ikut melebar saat jumlah kolom dikurangi.
+  assert.ok(body.includes('minCol * 1.35'), 'lebar kolom harus dibatasi (tidak ikut melebar)');
+});
+
+test('D-259: baris masonry tidak rata tengah (align-content start)', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  const rule = css.match(/\.st-gal-row--masonry\{([^}]*)\}/);
+  assert.ok(rule, 'aturan masonry harus ada');
+  assert.ok(rule[1].includes('align-content:start'), 'baris tidak boleh rata tengah');
+  assert.ok(rule[1].includes('justify-content:start'), 'konten tidak boleh rata tengah');
+});
+
+test('D-259: panel Pengaturan jadi modal tengah juga saat HP dimiringkan', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  // Rule modal HP harus ada di @media(max-width:850px) (bukan cuma 560px),
+  // supaya tetap berlaku saat HP landscape.
+  const m = mediaBlock(css, 'max-width:850px', '.st-pop.st-pop-settings{position:fixed');
+  assert.ok(m, 'blok @media(max-width:850px) untuk panel harus ada');
+  assert.ok(m.includes('.st-pop.st-pop-settings{position:fixed'),
+    'panel Pengaturan harus jadi modal fixed di <= 850px');
+  assert.ok(m.includes('translate(-50%,-50%)'), 'modal harus dipusatkan');
+});
+
+test('D-259: layar pendek (landscape) — composer ringkas, galeri tak tertutup', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(css.includes('@media(max-height:520px)'), 'blok layar pendek harus ada');
+  const m = mediaBlock(css, 'max-height:520px', '.st-composer{');
+  assert.ok(m, 'isi blok layar pendek harus ada');
+  assert.ok(m.includes('.st-composer{'), 'composer harus diringkas');
+  assert.ok(m.includes('max-height:min(52vh,220px)'), 'isi panel pengaturan harus dibatasi');
+});
+
+test('D-259: jarak antar item galeri tidak terlalu sempit di HP', () => {
+  const css = readFileSync('public/index.html', 'utf8');
+  assert.ok(/@media\(max-width:560px\)\{\.st-gallery\{--st-gal-gap:9px\}/.test(css),
+    'HP harus punya jarak galeri sendiri (9px)');
 });
