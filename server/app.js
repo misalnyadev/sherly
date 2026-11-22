@@ -25,6 +25,7 @@ import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 import { detectDimensions } from './media-dimensions.js';
+import { handleSherlyStatus } from './sherly-status-route.js';
 
 // D-257: dimensi default per aspect ratio (dipakai kalau header file tidak
 // bisa dibaca). Rasio umum model video.
@@ -1640,6 +1641,16 @@ app.get('/api/public/settings', async (_req, res) => {
     (data || []).forEach((r) => { if (r && r.key) out[r.key] = r.value || ''; });
     res.json({ settings: out });
   } catch { res.json({ settings: {} }); }
+});
+
+// ===== D-268: Status harian Sherly (dibuat otomatis AI, berlaku 24 jam) =====
+// Dibaca publik (tamu pun boleh) & ditulis server lewat JWT admin.
+// Status expired (>24 jam) dibersihkan otomatis dari DB.
+app.get('/api/sherly-status', async (req, res) => {
+  await handleSherlyStatus(req, res, { force: false });
+});
+app.post('/api/sherly-status/refresh', requireUser, requireAdmin, async (req, res) => {
+  await handleSherlyStatus(req, res, { force: true });
 });
 
 app.get('/api/public/characters', async (req, res) => {

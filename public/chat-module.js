@@ -117,7 +117,7 @@
           <button type="button" class="ss-ava-wrap" id="ssAvaBtn" title="Buka profil Sherly" aria-label="Buka profil Sherly"><img class="ss-ava" src="assets/sherly-portrait.png" alt="Sherly"></button>
           <button type="button" class="ss-chat-info" id="ssChatInfoBtn" title="Buka profil Sherly" aria-label="Buka profil Sherly">
             <div class="ss-chat-name">Sherly <span class="ss-verified" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 2.1 3-.3 1.4 2.7 2.8 1.1-1 2.9 1 2.9-2.8 1.1-1.4 2.7-3-.3L12 22l-2.4-2.1-3 .3-1.4-2.7-2.8-1.1 1-2.9-1-2.9 2.8-1.1 1.4-2.7 3 .3L12 2zm-1.2 13.6l5-5-1.4-1.4-3.6 3.6-1.8-1.8L7.6 15l3.2 3.2z" opacity=".95"/></svg></span></div>
-            <div class="ss-chat-status"><span class="ss-status-dot" aria-hidden="true"></span><span class="ss-status-text">Online · siap bantu ide, strategi &amp; campaign</span></div>
+            <div class="ss-chat-status"><span class="ss-status-dot" aria-hidden="true"></span><span class="ss-status-text" id="ssStatusText">Online · siap bantu ide, strategi &amp; campaign</span></div>
           </button>
         </div>
         <span class="ss-spacer"></span>
@@ -155,6 +155,33 @@
     ownerEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAccountOrLogin(); } });
   }
   const $ = id => document.getElementById(id);
+  // ---------- D-268: Status harian Sherly (dibuat server, berlaku 24 jam) ----------
+  // Status diambil dari /api/sherly-status. Server yang menentukan kapan harus
+  // diganti (1-2x sehari, jam acak 08:00-22:00 WIB) & membersihkan status
+  // kedaluwarsa (>24 jam) dari DB. Client hanya menampilkan apa adanya.
+  let __sherlyStatusAt = 0;
+  const loadSherlyStatus = async (force = false) => {
+    const el = $('ssStatusText');
+    if (!el) return null;
+    // Cache di sisi client 5 menit — jangan spam server tiap render.
+    if (!force && Date.now() - __sherlyStatusAt < 5 * 60_000) return el.textContent;
+    try {
+      const res = await fetch('/api/sherly-status', { headers: { Accept: 'application/json' } });
+      const data = await res.json().catch(() => ({}));
+      const text = typeof data?.status === 'string' ? data.status.trim() : '';
+      if (text) {
+        el.textContent = text;
+        el.title = `Status Sherly · berlaku 24 jam${data?.expires_at ? ' (sampai ' + new Date(data.expires_at).toLocaleString('id-ID') + ')' : ''}`;
+        // Panel "Chat Sherly" di Beranda ikut menampilkan status yang sama.
+        const home = document.getElementById('homeSherlyStatus');
+        if (home) home.textContent = '● ' + text;
+        __sherlyStatusAt = Date.now();
+        return text;
+      }
+    } catch { /* offline / server belum siap — biarkan teks bawaan */ }
+    return el.textContent;
+  };
+  window.sherlyLoadStatus = loadSherlyStatus;
   let token = window.sherlyStoredToken?.()?.access_token || null, conversationId = null, sending = false;
   const hasToken = () => Boolean(window.sherlyStoredToken?.()?.access_token || token);
   const authHeaders = async () => ({'Content-Type':'application/json','Authorization':`Bearer ${(await window.sherlyGetAccessToken?.()) || token}`});
@@ -287,7 +314,7 @@
     if (Number.isFinite(avail) && avail > 240) root.style.height = Math.floor(avail) + 'px';
   }
   window.addEventListener('resize', sizeChat);
-  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); window.dispatchEvent(new Event('sherly-chat-opened')); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
+  function openChat(){ mainEl?.classList.add('ss-chat-active'); $('ssSherlyChat').classList.add('open'); requestAnimationFrame(sizeChat); window.dispatchEvent(new Event('sherly-chat-opened')); loadSherlyStatus(); if(!hasToken()){openLogin()}else{restoreLatestConversation().finally(()=>$('ssChatInput').focus())} }
   function closeChat(){ const root=$('ssChatRoot'); if(root) root.style.height=''; $('ssSherlyChat').classList.remove('open'); mainEl?.classList.remove('ss-chat-active'); window.dispatchEvent(new Event('sherly-chat-closed')); }
   let tierTagShown = false;
   function empty(){
@@ -557,4 +584,7 @@ $('ssChatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey)
   window.sherlyOpenVoicePanel=openVoicePanel;
   window.sherlyLogout=logout;
   window.sherlyCloseChat=closeChat;
+  // D-268: ambil status Sherly saat halaman dibuka (panel Beranda ikut terisi).
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => loadSherlyStatus());
+  else loadSherlyStatus();
 })();
