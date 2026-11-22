@@ -38,10 +38,22 @@
     const span = fresh.firstElementChild;
     if (span) el.insertBefore(span, el.firstChild);
   };
-  const authHeaders = async () => {
+  /**
+   * Header auth untuk request multipart (FormData).
+   *
+   * PENTING: Content-Type TIDAK boleh dipaksa ke application/json — browser
+   * harus yang menambahkan `multipart/form-data; boundary=...`. Kalau dipaksa,
+   * Express tidak mem-parse multipart -> req.file undefined -> 400.
+   * Pola ini sama dengan public/bank-suara.js.
+   */
+  const authHeadersMultipart = async () => {
     const t = (await window.sherlyGetAccessToken?.()) || window.sherlyStoredToken?.()?.access_token || '';
-    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t };
+    return { 'Authorization': 'Bearer ' + t };
   };
+  const authHeaders = async () => ({
+    'Content-Type': 'application/json',
+    ...(await authHeadersMultipart()),
+  });
 
   const CHAIN_KEY = 'sherly.studio.chain.v1';
   const MAX_CHARACTERS = 3;      // batas keras: maksimal 3 karakter per adegan
@@ -2285,7 +2297,7 @@
       fd.append('width', String(result.width));
       fd.append('height', String(result.height));
       fd.append('durationMs', String(result.durationMs));
-      const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeaders(), body: fd});
+      const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeadersMultipart(), body: fd});
       const ud = await up.json().catch(() => ({}));
       if (!up.ok) {
         // D-252: platform (Vercel) menolak body > 4,5 MB -> 413 tanpa pesan.

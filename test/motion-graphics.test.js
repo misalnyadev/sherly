@@ -363,3 +363,41 @@ test('D-252: gagal kirim -> video tetap diunduh ke perangkat user', () => {
   assert.match(studioJs, /URL\.createObjectURL\(result\.blob\)/);
   assert.match(studioJs, /a\.download = 'motion-graphics-'/);
 });
+
+// ===== D-253: multipart Motion Graphics =====
+//
+// Bug: `authHeaders()` memaksa `Content-Type: application/json` lalu dipakai
+// untuk request multipart (FormData). Akibatnya Express tidak mem-parse
+// multipart -> req.file undefined -> 400 "File video wajib diunggah" -> video
+// tidak pernah masuk galeri (hanya terunduh fallback).
+//
+// Pola benar (sudah dipakai public/bank-suara.js): header auth TANPA
+// Content-Type untuk multipart; Content-Type JSON hanya untuk body JSON.
+
+test('D-253: upload Motion Graphics pakai header multipart (tanpa Content-Type)', () => {
+  assert.match(studioJs, /const authHeadersMultipart = async \(\)/);
+  assert.match(studioJs, /'Authorization': 'Bearer ' \+ t/);
+  // Fetch upload WAJIB pakai authHeadersMultipart (bukan authHeaders).
+  assert.match(studioJs, /motion-graphics\/asset', \{method: 'POST', headers: await authHeadersMultipart\(\), body: fd\}/);
+  // authHeaders (JSON) tidak boleh dipakai untuk FormData.
+  assert.doesNotMatch(studioJs, /motion-graphics\/asset'[^\n]*headers: await authHeaders\(\)/);
+});
+
+test('D-253: authHeaders JSON tetap pakai Content-Type application/json', () => {
+  assert.match(studioJs, /const authHeaders = async \(\) => \(\{\s*'Content-Type': 'application\/json',/);
+  // Helper multipart tidak boleh menyertakan Content-Type sama sekali.
+  const m = studioJs.match(/const authHeadersMultipart = async \(\) => \{[\s\S]*?\n  \};/);
+  assert.ok(m, 'helper authHeadersMultipart harus ada');
+  assert.doesNotMatch(m[0], /Content-Type/, 'header multipart tidak boleh memaksa Content-Type');
+});
+
+test('D-253: tidak ada fetch FormData yang salah pakai header JSON', () => {
+  // Semua fetch dengan body FormData tidak boleh pakai authHeaders() (JSON).
+  const lines = studioJs.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/body:\s*fd\b/.test(line)) continue;
+    assert.doesNotMatch(line, /headers:\s*await authHeaders\(\)/,
+      'baris ' + (i + 1) + ' kirim FormData tapi pakai header JSON');
+  }
+});
