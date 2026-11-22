@@ -2254,8 +2254,9 @@
     const btn = $('stMotionBtn');
     motionTask = {id: 'client', progress: 0, status: 'rendering', phase: 'preparing'};
     renderMotionProgress();
+    let result = null;
     try {
-      const result = await client.render({
+      result = await client.render({
         template: tpl.id,
         aspect: state.aspect,
         duration: state.motionDuration,
@@ -2286,13 +2287,38 @@
       fd.append('durationMs', String(result.durationMs));
       const up = await fetch('/api/studio/motion-graphics/asset', {method: 'POST', headers: await authHeaders(), body: fd});
       const ud = await up.json().catch(() => ({}));
-      if (!up.ok) throw new Error(ud.error || 'Gagal menyimpan video ke galeri.');
+      if (!up.ok) {
+        // D-252: platform (Vercel) menolak body > 4,5 MB -> 413 tanpa pesan.
+        if (up.status === 413) {
+          throw new Error('Video terlalu besar untuk dikirim ke server. Pilih durasi lebih pendek lalu render ulang.');
+        }
+        throw new Error(ud.error || 'Gagal menyimpan video ke galeri.');
+      }
       if (ud.asset) { assets.unshift(ud.asset); renderGallery(); }
       motionTask = null;
       renderMotionProgress();
       resetGenerateButtons();
       window.toast?.('Video Motion Graphics jadi ✨');
     } catch (e) {
+      // D-252: kalau gagal kirim ke galeri, jangan hilangkan hasil render —
+      // simpan ke perangkat user supaya videonya tetap bisa dipakai.
+      try {
+        if (result && result.blob && result.blob.size) {
+          const url = URL.createObjectURL(result.blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'motion-graphics-' + tpl.id + '-' + Date.now() + '.mp4';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 30000);
+          window.toast?.('Gagal kirim ke galeri — videonya sudah diunduh ke perangkat kamu.');
+          motionTask = null;
+          renderMotionProgress();
+          resetGenerateButtons();
+          return;
+        }
+      } catch { /* gagal unduh juga — jatuh ke pesan error biasa */ }
       motionTask = null;
       renderMotionProgress();
       resetGenerateButtons();

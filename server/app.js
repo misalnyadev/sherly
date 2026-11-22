@@ -28,6 +28,7 @@ import {
   MOTION_GRAPHICS_PROVIDER, MG_TEMPLATES, motionGraphicsAvailable,
   motionGraphicsInstallState, ensureMotionGraphicsInstalled,
   normalizeRenderRequest, renderMotionGraphic,
+  isServerlessRuntime, MG_UPLOAD_MAX_BYTES,
 } from './motion-graphics.js';
 // D-207: Bank Prompt (template utuh + blok modular) untuk Studio.
 import {
@@ -805,8 +806,15 @@ app.post('/api/studio/motion-graphics/asset', requireUser, requireAdmin, assetUp
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ ok: false, error: 'File video wajib diunggah.' });
-    if (file.size > MAX_ASSET_BYTES) {
-      return res.status(400).json({ ok: false, error: 'Ukuran video melebihi 25 MB.' });
+    // D-252: Vercel serverless punya batas request body 4,5 MB (hard limit).
+    // Server lokal bebas 25 MB, tapi di hosting serverless file yang lebih
+    // besar ditolak platform sebelum sampai ke route ini.
+    const limit = isServerlessRuntime() ? MG_UPLOAD_MAX_BYTES : MAX_ASSET_BYTES;
+    if (file.size > limit) {
+      return res.status(413).json({
+        ok: false,
+        error: 'Video terlalu besar untuk dikirim (' + (file.size / 1024 / 1024).toFixed(1) + ' MB, maks ' + (limit / 1024 / 1024).toFixed(0) + ' MB). Pilih durasi lebih pendek.',
+      });
     }
     const mime = String(file.mimetype || '').toLowerCase();
     if (!ASSET_MIME.includes(mime)) {

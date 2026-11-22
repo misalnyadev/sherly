@@ -318,3 +318,48 @@ test('D-251: package.json punya dependency mediabunny', () => {
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
   assert.ok(pkg.dependencies?.mediabunny, 'mediabunny harus jadi dependency root');
 });
+
+// ===== D-252: batas ukuran upload (Vercel serverless 4,5 MB) =====
+//
+// Hasil render client-side dikirim sebagai multipart ke server. Platform
+// Vercel membatasi request body function serverless di 4,5 MB (hard limit)
+// -> file yang lebih besar ditolak 413 sebelum sampai ke route.
+
+test('D-252: server punya batas upload khusus Motion Graphics', () => {
+  assert.match(appJs, /MG_UPLOAD_MAX_BYTES/);
+  assert.match(appJs, /isServerlessRuntime\(\) \? MG_UPLOAD_MAX_BYTES : MAX_ASSET_BYTES/);
+  // Route harus balas 413 (bukan 500 generik) kalau file kelewat besar.
+  assert.match(appJs, /res\.status\(413\)\.json\(/);
+});
+
+test('D-252: modul server mengekspor batas upload 4 MB', async () => {
+  const mg = await import('../server/motion-graphics.js');
+  assert.equal(mg.MG_UPLOAD_MAX_BYTES, 4 * 1024 * 1024);
+  assert.ok(mg.MG_UPLOAD_MAX_BYTES <= 4.5 * 1024 * 1024,
+    'harus di bawah batas platform Vercel 4,5 MB');
+});
+
+test('D-252: bitrate client-side dinamis per durasi', () => {
+  const src = readFileSync('public/motion-graphics.js', 'utf8');
+  assert.match(src, /export function bitrateForDuration/);
+  // CanvasSource harus memakai bitrate dinamis, bukan angka tetap.
+  assert.match(src, /bitrate: bitrateForDuration\(durationInSeconds\)/);
+  assert.doesNotMatch(src, /bitrate: 8_000_000/);
+});
+
+test('D-252: ada jaring pengaman kompres ulang + pesan jelas', () => {
+  const src = readFileSync('public/motion-graphics.js', 'utf8');
+  assert.match(src, /reencodeSmaller/);
+  assert.match(src, /phase: 'compressing'/);
+  assert.match(src, /Pilih durasi lebih shorter|Pilih durasi lebih pendek/);
+  // UI harus memberi pesan khusus untuk 413.
+  assert.match(studioJs, /up\.status === 413/);
+  assert.match(studioJs, /terlalu besar untuk dikirim ke server/);
+});
+
+test('D-252: gagal kirim -> video tetap diunduh ke perangkat user', () => {
+  // Render-nya jangan hilang hanya karena upload gagal.
+  assert.match(studioJs, /Gagal kirim ke galeri — videonya sudah diunduh ke perangkat kamu\./);
+  assert.match(studioJs, /URL\.createObjectURL\(result\.blob\)/);
+  assert.match(studioJs, /a\.download = 'motion-graphics-'/);
+});

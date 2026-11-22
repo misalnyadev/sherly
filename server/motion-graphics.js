@@ -289,6 +289,15 @@ export async function renderMotionGraphic(req, opts = {}) {
 }
 
 /**
+ * D-252: batas ukuran upload hasil render Motion Graphics.
+ *
+ * Vercel serverless function punya batas request body 4,5 MB (hard limit,
+ * tidak bisa dinaikkan lewat vercel.json). Hasil render dikirim sebagai
+ * multipart -> harus muat. Server lokal bebas 25 MB.
+ */
+export const MG_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
  * D-251: deteksi lingkungan serverless (Vercel/Lambda/Netlify functions).
  * Di sana auto-install dependency & render headless tidak mungkin.
  */
