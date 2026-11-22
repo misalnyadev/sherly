@@ -23,6 +23,21 @@ import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUplo
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
+import { detectDimensions } from './media-dimensions.js';
+
+// D-257: dimensi default per aspect ratio (dipakai kalau header file tidak
+// bisa dibaca). Rasio umum model video.
+const ASPECT_DIMENSIONS = {
+  '16:9': [1920, 1080],
+  '9:16': [1080, 1920],
+  '1:1': [1080, 1080],
+  '4:3': [1440, 1080],
+  '3:4': [1080, 1440],
+  '4:5': [1080, 1350],
+  '3:2': [1620, 1080],
+  '2:3': [1080, 1620],
+  '21:9': [2560, 1080],
+};
 // D-249: Mode "Motion Graphics" — render video programatik (Remotion, lokal/server sendiri).
 import {
   MOTION_GRAPHICS_PROVIDER, MG_TEMPLATES, motionGraphicsAvailable,
@@ -665,10 +680,42 @@ app.post('/api/studio/assets', requireUser, requireAdmin, assetUpload, async (re
     if (!ASSET_MIME.includes(String(file.mimetype || '').toLowerCase())) {
       return res.status(400).json({ ok: false, error: 'Format aset harus JPG, PNG, WebP, GIF, MP4, WebM, atau MOV.' });
     }
-    const asset = await saveAsset(req.supabase, req.user.id, file, { kind: 'upload' });
+    // D-257: dimensi aset (lebar x tinggi) supaya galeri bisa membedakan
+    // aset VERTIKAL & HORIZONTAL. Client idealnya mengirim width/height; kalau
+    // tidak, server menebak sendiri dari header file (MP4/MOV/PNG/JPEG/...).
+    let width = Number(req.body?.width) || 0;
+    let height = Number(req.body?.height) || 0;
+    if (!(width > 0 && height > 0)) {
+      const dim = detectDimensions(file.buffer, file.mimetype);
+      if (dim && dim.width > 0 && dim.height > 0) { width = dim.width; height = dim.height; }
+    }
+    const asset = await saveAsset(req.supabase, req.user.id, file, {
+      kind: 'upload', width: width || undefined, height: height || undefined,
+    });
     res.status(201).json({ asset: await signedAsset(asset, req.supabase) });
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal mengunggah aset.' });
+  }
+});
+
+// D-257: perbarui metadata aset (hanya dimensi) — dipakai galeri untuk
+// mencatat orientasi aset lama yang diunggah sebelum dimensi terdeteksi.
+app.patch('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const row = await getAsset(req.supabase, req.user.id, req.params.id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Aset tidak ditemukan.' });
+    const patch = {};
+    const w = Number(req.body?.width), h = Number(req.body?.height);
+    if (w > 0 && h > 0) { patch.width = Math.round(w); patch.height = Math.round(h); }
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Dimensi aset tidak valid.' });
+    }
+    const { error } = await req.supabase.from('assets').update(patch).eq('id', row.id);
+    if (error) throw Object.assign(new Error(error.message), { status: 500 });
+    const { data } = await req.supabase.from('assets').select('*').eq('id', row.id).maybeSingle();
+    res.json({ ok: true, asset: await signedAsset(data || row, req.supabase) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memperbarui aset.' });
   }
 });
 
@@ -1221,13 +1268,22 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
       const mime = (videoRes.headers.get('content-type') || 'video/mp4').split(';')[0];
       const taskMeta = task.meta && typeof task.meta === 'object' ? task.meta : {};
       const durationSec = Number(taskMeta.duration) || 8;
+      // D-257: dimensi video hasil generate (Kie) HARUS dicatat, kalau tidak
+      // asetnya jatuh ke fallback 9:16 -> video horizontal tampil vertikal.
+      // Urutan: (1) baca dari header file, (2) tebak dari aspect ratio task.
+      const cleanMime = ASSET_MIME.includes(mime) ? mime : 'video/mp4';
+      const dim = detectDimensions(buffer, cleanMime);
+      const aspectGuess = ASPECT_DIMENSIONS[String(taskMeta.aspect || '16:9').toLowerCase()];
+      const width = dim?.width || aspectGuess?.[0] || undefined;
+      const height = dim?.height || aspectGuess?.[1] || undefined;
       const asset = await saveAsset(req.supabase, req.user.id, {
-        buffer, mimetype: ASSET_MIME.includes(mime) ? mime : 'video/mp4',
+        buffer, mimetype: cleanMime,
         originalname: 'studio-video-' + Date.now() + '.mp4',
       }, {
         kind: 'generate', prompt: task.prompt,
         meta: { model: task.model, aspect: taskMeta.aspect || '16:9', duration_ms: durationSec * 1000 },
         durationMs: durationSec * 1000,
+        width, height,
       });
       await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'success', progress: 100, asset_id: asset.id });
       const signed = await signedAsset(asset, req.supabase);
