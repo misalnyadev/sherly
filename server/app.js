@@ -1385,6 +1385,25 @@ app.get('/api/ai/lipsync/models', requireUser, requireAdmin, (req, res) => {
  * Alur: potret karakter -> upload Kie; audio (TTS/rekaman) -> upload Kie;
  * lalu createTask InfiniteTalk.
  */
+/**
+ * D-284: buang token @mention dari naskah sebelum dikirim ke TTS.
+ *
+ * Di mode "Karakter Bicara", composer berisi naskah YANG DICHAKADAKAN +
+ * token @mention gambar (mis. "selamat datang di sherly studio
+ * @aset-gambarreferensi"). Script mentah akan dibaca TTS apa adanya ->
+ * karakter membacakan "@aset-gambarreferensi" dengan suara robotik.
+ *
+ * Server melakukan pembersihan yang sama sebagai client (belt & braces):
+ * client lama / panggilan API langsung tetap aman.
+ */
+function cleanScriptForTts(raw) {
+  return String(raw || '')
+    .replace(/@[a-z0-9][a-z0-9_-]{0,59}/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+    .trim();
+}
+
 app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
   try {
     const {
@@ -1394,7 +1413,9 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
       referenceImage: rawRefImage,
       provider: rawProvider, fps: rawFps, duration: rawDuration,
     } = req.body || {};
-    const script = typeof rawScript === 'string' ? rawScript.trim() : '';
+    // D-284: token @mention (aset/karakter) dibuang dari naskah — kalau tidak,
+    // TTS akan membacakan "@aset-gambarreferensi" dengan suara robotik.
+    const script = cleanScriptForTts(typeof rawScript === 'string' ? rawScript.trim() : '');
     const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
 
     // --- 1) Validasi parameter model ---
