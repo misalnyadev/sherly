@@ -25,7 +25,7 @@ import {
   parseBeats, distributeBeats, beatsFromText, beatAtFrame, roleForBeatName,
 } from '../public/motion-graphics-beats.js';
 import {
-  TTSMAKER_ID_VOICES, TTSMAKER_VOICE_IDS, TTSMAKER_EMOTIONS,
+  AZURE_ID_VOICES, AZURE_VOICE_IDS, ELEVENLABS_VOICES, ELEVENLABS_VOICE_IDS,
   TTS_FALLBACK_PROVIDERS, isQuotaError, sanitizeTtsText, ttsProviderOrder,
 } from '../server/tts-providers.js';
 
@@ -319,39 +319,50 @@ test('D-276: beat CTA punya tombol CTA & badge "SEKARANG"', () => {
 
 // ===== TTS cadangan =====
 
-test('D-276: TTSMaker punya voice native Indonesia', () => {
-  assert.ok(TTSMAKER_ID_VOICES.length >= 8, 'harus ada beberapa voice Indonesia');
-  for (const v of TTSMAKER_ID_VOICES) {
+test('D-278: Azure punya voice native Indonesia (Ardi & Gadis)', () => {
+  assert.ok(AZURE_ID_VOICES.length >= 2, 'harus ada beberapa voice Indonesia');
+  for (const v of AZURE_ID_VOICES) {
     assert.ok(v.id && v.label, 'voice harus punya id + label');
-    assert.ok(v.limit > 0, `${v.label} harus punya batas karakter`);
+    assert.ok(v.id.startsWith('id-ID-'), `${v.label} harus locale id-ID`);
+    assert.ok(AZURE_VOICE_IDS.has(v.id), `${v.label} harus ada di set id`);
   }
-  // Ada voice Sunda (bonus untuk konten Jawa).
   assert.ok(
-    TTSMAKER_ID_VOICES.some((v) => v.key.includes('sunda')),
-    'harus ada voice Bahasa Sunda',
+    AZURE_ID_VOICES.some((v) => v.key === 'ardi'),
+    'harus ada voice Ardi',
   );
-  // Ada voice multi-emosi.
   assert.ok(
-    TTSMAKER_ID_VOICES.some((v) => v.emotion),
-    'harus ada voice dengan emosi',
+    AZURE_ID_VOICES.some((v) => v.key === 'gadis'),
+    'harus ada voice Gadis',
   );
 });
 
-test('D-276: TTSMaker punya key URL resmi + info provider', () => {
-  const info = TTS_FALLBACK_PROVIDERS.ttsmaker;
-  assert.ok(info, 'provider ttsmaker harus ada');
-  assert.ok(info.keyUrl.startsWith('https://'), 'harus ada link ambil key');
-  assert.ok(info.docsUrl.startsWith('https://'), 'harus ada link dokumentasi');
-  assert.ok(info.languages.includes('Indonesia'), 'harus menyebut bahasa Indonesia');
+test('D-278: ElevenLabs punya daftar voice bawaan', () => {
+  assert.ok(ELEVENLABS_VOICES.length >= 3, 'harus ada beberapa voice');
+  for (const v of ELEVENLABS_VOICES) {
+    assert.ok(v.id && v.label, 'voice harus punya id + label');
+    assert.ok(ELEVENLABS_VOICE_IDS.has(v.id), `${v.label} harus ada di set id`);
+  }
 });
 
-test('D-276: urutan fallback TTS = gemini dulu, baru engine ID', () => {
+test('D-278: Azure & ElevenLabs punya key URL resmi + info provider', () => {
+  for (const provider of ['azure', 'elevenlabs']) {
+    const info = TTS_FALLBACK_PROVIDERS[provider];
+    assert.ok(info, `provider ${provider} harus ada`);
+    assert.ok(info.keyUrl.startsWith('https://'), `${provider} harus ada link ambil key`);
+    assert.ok(info.docsUrl.startsWith('https://'), `${provider} harus ada link dokumentasi`);
+    assert.ok(info.languages.includes('Indonesia'), `${provider} harus menyebut bahasa Indonesia`);
+    assert.ok(info.freeTier, `${provider} harus menyebut free tier`);
+  }
+});
+
+test('D-278: urutan fallback TTS = gemini dulu, baru engine ID', () => {
   assert.deepEqual(ttsProviderOrder([]), ['gemini']);
-  assert.deepEqual(ttsProviderOrder(['ttsmaker']), ['gemini', 'ttsmaker']);
+  assert.deepEqual(ttsProviderOrder(['azure']), ['gemini', 'azure']);
+  assert.deepEqual(ttsProviderOrder(['elevenlabs']), ['gemini', 'elevenlabs']);
   // Provider yang tidak dikenal diabaikan.
   assert.deepEqual(ttsProviderOrder(['bogus']), ['gemini']);
   // Tidak ada duplikat.
-  assert.deepEqual(ttsProviderOrder(['ttsmaker', 'ttsmaker']), ['gemini', 'ttsmaker']);
+  assert.deepEqual(ttsProviderOrder(['azure', 'azure']), ['gemini', 'azure']);
 });
 
 test('D-276: deteksi error kuota (429/RESOURCE_EXHAUSTED) bekerja', () => {
@@ -392,42 +403,59 @@ test('D-276: ada route daftar voice TTS', () => {
   );
 });
 
-test('D-276: TTSMaker terdaftar sebagai provider di vault', () => {
+test('D-278: Azure & ElevenLabs terdaftar sebagai provider di vault', () => {
   const pk = readFileSync(path.resolve('server/provider-keys.js'), 'utf8');
   assert.ok(
-    /PROVIDERS = \[[^\]]*'ttsmaker'/.test(pk),
-    'ttsmaker harus ada di PROVIDERS',
+    /PROVIDERS = \[[^\]]*'azure'/.test(pk),
+    'azure harus ada di PROVIDERS',
   );
   assert.ok(
-    /ttsmaker: \['tts'\]/.test(pk),
-    'ttsmaker harus punya capability tts',
+    /PROVIDERS = \[[^\]]*'elevenlabs'/.test(pk),
+    'elevenlabs harus ada di PROVIDERS',
+  );
+  assert.ok(
+    /azure: \['tts'\]/.test(pk),
+    'azure harus punya capability tts',
+  );
+  assert.ok(
+    /elevenlabs: \['tts'\]/.test(pk),
+    'elevenlabs harus punya capability tts',
   );
 });
 
-test('D-276: migrasi DB mengizinkan provider ttsmaker', () => {
-  // Tanpa constraint ini, simpan key TTSMaker gagal:
+test('D-278: migrasi DB mengizinkan provider azure & elevenlabs', () => {
+  // Tanpa constraint ini, simpan key cadangan TTS gagal:
   // "new row for relation ai_provider_keys violates check constraint".
   const mig = readFileSync(
-    path.resolve('supabase/ai_provider_ttsmaker_constraint_migration.sql'),
+    path.resolve('supabase/ai_provider_azure_constraint_migration.sql'),
     'utf8',
   );
   assert.ok(
-    /ai_provider_keys_provider_check[\s\S]*'ttsmaker'/.test(mig),
-    'constraint ai_provider_keys harus menerima ttsmaker',
+    /ai_provider_keys_provider_check[\s\S]*'azure'[\s\S]*'elevenlabs'/.test(mig),
+    'constraint ai_provider_keys harus menerima azure + elevenlabs',
   );
   assert.ok(
-    /ai_provider_settings_provider_check[\s\S]*'ttsmaker'/.test(mig),
-    'constraint ai_provider_settings harus menerima ttsmaker',
+    /ai_provider_settings_provider_check[\s\S]*'azure'[\s\S]*'elevenlabs'/.test(mig),
+    'constraint ai_provider_settings harus menerima azure + elevenlabs',
   );
+  // Provider lama yang wajib subscribe harus dibuang dari constraint.
+  // (DELETE untuk membersihkan key lama boleh menyebutnya — itu bukan constraint.)
+  const constraints = mig.split('-- 3)')[0] || mig;
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+    assert.ok(
+      !new RegExp(`provider in \\([^)]*'${gone}'`).test(constraints),
+      `${gone} tidak boleh ada di constraint`,
+    );
+  }
   // Bucket Bank Suara tetap PRIVATE (bukan publik) + RLS.
   assert.ok(
     /'tts-clips',\s*'tts-clips',\s*false/.test(mig),
     'bucket tts-clips harus tetap private',
   );
-  // TTSMaker mengembalikan MP3 -> MIME audio harus diizinkan.
+  // Azure/ElevenLabs mengembalikan MP3/WAV/OGG -> MIME audio harus diizinkan.
   assert.ok(
     /audio\/mpeg/.test(mig),
-    'MIME audio/mpeg harus diizinkan untuk MP3 TTSMaker',
+    'MIME audio/mpeg harus diizinkan untuk MP3 Azure/ElevenLabs',
   );
   // ai_conversations TIDAK boleh ikut berubah (TTS bukan provider chat).
   assert.ok(
@@ -572,8 +600,12 @@ test('D-276: server render Motion Graphics menyintesis voice-over', () => {
     'route harus punya rantai cadangan TTS (Soniox → Voicemaker → TTSMaker)',
   );
   assert.ok(
-    appJs.includes('synthesizeSoniox'),
-    'route harus punya jalur Soniox',
+    appJs.includes('synthesizeAzure'),
+    'route harus punya jalur Azure Speech',
+  );
+  assert.ok(
+    appJs.includes('synthesizeElevenLabs'),
+    'route harus punya jalur ElevenLabs',
   );
 });
 
@@ -588,28 +620,28 @@ test('D-276: komposisi Remotion BeatSequence bisa menempel audio', () => {
   );
 });
 
-// ===== D-277: migrasi provider cadangan TTS =====
+// ===== D-278: migrasi provider cadangan TTS (free tier) =====
 
-test('D-277: migrasi DB mengizinkan provider soniox & voicemaker', () => {
+test('D-278: migrasi DB mengizinkan provider azure & elevenlabs', () => {
   const mig = readFileSync(
-    path.resolve('supabase/ai_provider_soniox_constraint_migration.sql'),
+    path.resolve('supabase/ai_provider_azure_constraint_migration.sql'),
     'utf8',
   );
   assert.ok(
-    /ai_provider_keys_provider_check[\s\S]*'soniox'[\s\S]*'voicemaker'/.test(mig),
-    'constraint ai_provider_keys harus menerima soniox + voicemaker',
+    /ai_provider_keys_provider_check[\s\S]*'azure'[\s\S]*'elevenlabs'/.test(mig),
+    'constraint ai_provider_keys harus menerima azure + elevenlabs',
   );
   assert.ok(
-    /ai_provider_settings_provider_check[\s\S]*'soniox'[\s\S]*'voicemaker'/.test(mig),
-    'constraint ai_provider_settings harus menerima soniox + voicemaker',
+    /ai_provider_settings_provider_check[\s\S]*'azure'[\s\S]*'elevenlabs'/.test(mig),
+    'constraint ai_provider_settings harus menerima azure + elevenlabs',
   );
   // Bucket Bank Suara tetap PRIVATE (bukan publik) + RLS.
   assert.ok(
     /'tts-clips',\s*'tts-clips',\s*false/.test(mig),
     'bucket tts-clips harus tetap private',
   );
-  // Soniox bisa kirim aac/opus/flac/pcm -> MIME baru harus diizinkan.
-  for (const mime of ['audio/mpeg', 'audio/aac', 'audio/opus', 'audio/flac', 'audio/pcm']) {
+  // MIME audio untuk mp3/wav/ogg-opus/pcm.
+  for (const mime of ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/pcm']) {
     assert.ok(new RegExp(mime.replace('/', '\\/')).test(mig), `MIME ${mime} harus diizinkan`);
   }
   // ai_conversations TIDAK boleh ikut berubah (TTS bukan provider chat).
@@ -619,10 +651,17 @@ test('D-277: migrasi DB mengizinkan provider soniox & voicemaker', () => {
   );
 });
 
-test('D-277: setup SQL mengizinkan provider cadangan TTS baru', () => {
+test('D-278: setup SQL mengizinkan provider cadangan TTS baru', () => {
   const memberSql = readFileSync(path.resolve('supabase/member_ai_keys.sql'), 'utf8');
   assert.ok(
-    /provider in \([^)]*'soniox'[^)]*'voicemaker'/.test(memberSql),
-    'setup SQL harus menerima soniox + voicemaker',
+    /provider in \([^)]*'azure'[^)]*'elevenlabs'/.test(memberSql),
+    'setup SQL harus menerima azure + elevenlabs',
   );
+  // Provider yang wajib subscribe harus hilang dari setup SQL.
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+    assert.ok(
+      !new RegExp(`provider in \\([^)]*'${gone}'`).test(memberSql),
+      `${gone} tidak boleh ada di setup SQL`,
+    );
+  }
 });

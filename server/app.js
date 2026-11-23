@@ -11,13 +11,13 @@ import { supabaseConfigured, createPublicClient, createUserClient } from './supa
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint } from './tts.js';
-// D-276 / D-277: cadangan TTS yang support bahasa Indonesia (dipakai kalau
-// kuota Gemini habis). Urutan: Soniox → Voicemaker → TTSMaker (wajib subscribe).
+// D-276 / D-277 / D-278: cadangan TTS bahasa Indonesia (dipakai kalau kuota
+// Gemini habis). Hanya provider dengan free tier tanpa subscription:
+// Azure Speech (F0, 500rb karakter/bulan) → ElevenLabs (free, 10rb kredit/bulan).
 import {
-  synthesizeTtsmaker, isQuotaError, TTSMAKER_ID_VOICES, TTSMAKER_EMOTIONS,
-  TTS_FALLBACK_PROVIDERS, getTtsmakerTokenStatus,
-  synthesizeSoniox, listSonioxVoices, SONIOX_ID_VOICES, SONIOX_LANGUAGES,
-  synthesizeVoicemaker, VOICEMAKER_ID_VOICES,
+  isQuotaError, TTS_FALLBACK_PROVIDERS,
+  synthesizeAzure, listAzureVoices, AZURE_ID_VOICES,
+  synthesizeElevenLabs, ELEVENLABS_VOICES,
   ttsFallbackChain,
 } from './tts-providers.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
@@ -965,7 +965,7 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
  *
  * Memakai Gemini TTS dulu (default). Kalau kuota Gemini habis, otomatis
  * jatuh ke engine cadangan yang support bahasa Indonesia:
- * **Soniox → Voicemaker → TTSMaker** (lihat `ttsFallbackChain()`).
+ * **Azure Speech → ElevenLabs** (lihat `ttsFallbackChain()`).
  * Hasilnya diunggah ke Storage Supabase supaya Remotion bisa mereferensikan
  * URL-nya saat render.
  *
@@ -990,7 +990,7 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
   let mimeType = 'audio/wav';
   let provider = 'gemini';
   // Voice Gemini hanya valid kalau ID-nya dikenal; kalau user mengisi ID
-  // voice provider lain (mis. "Sari"/"ai2-Ardi"/angka TTSMaker), pakai default.
+  // voice provider lain (mis. "id-ID-ArdiNeural"/"21m00Tcm4TlvDq8ikWAM"), pakai default.
   const rawVoice = String(inputProps.voice || '').trim();
   const geminiVoice = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice : DEFAULT_VOICE;
   for (const attempt of attempts) {
@@ -1042,8 +1042,9 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
 }
 
 /**
- * D-277 — Coba synthesize TTS lewat rantai cadangan (Soniox → Voicemaker →
- * TTSMaker). Semua provider harus punya API key sendiri dari user.
+ * D-277 / D-278 — Coba synthesize TTS lewat rantai cadangan
+ * (**Azure Speech → ElevenLabs**). Semua provider punya free tier tanpa
+ * subscription; tiap provider wajib punya API key sendiri dari user.
  *
  * @param {object} req
  * @param {string} text
@@ -1056,33 +1057,26 @@ async function synthesizeTtsFallbackChain(req, text) {
       const usable = await getUsableKeys(req.supabase, provider).catch(() => []);
       for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
     }
-    const envKey = provider === 'soniox' ? process.env.SONIOX_API_KEY
-      : provider === 'voicemaker' ? process.env.VOICEMAKER_API_KEY
-        : process.env.TTSMAKER_API_KEY;
+    const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+      : process.env.ELEVENLABS_API_KEY;
     if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null});
     if (!keys.length) continue;
 
     for (const k of keys) {
       try {
         let out;
-        if (provider === 'soniox') {
-          out = await synthesizeSoniox({
+        if (provider === 'azure') {
+          out = await synthesizeAzure({
             apiKey: k.apiKey,
             text,
-            voice: process.env.SONIOX_TTS_VOICE || 'Sari',
-            language: process.env.SONIOX_TTS_LANGUAGE || 'id',
-          });
-        } else if (provider === 'voicemaker') {
-          out = await synthesizeVoicemaker({
-            apiKey: k.apiKey,
-            text,
-            voice: process.env.VOICEMAKER_TTS_VOICE || 'ai2-Ardi',
+            voice: process.env.AZURE_TTS_VOICE || 'id-ID-ArdiNeural',
+            region: process.env.AZURE_SPEECH_REGION || '',
           });
         } else {
-          out = await synthesizeTtsmaker({
+          out = await synthesizeElevenLabs({
             apiKey: k.apiKey,
             text,
-            voiceId: Number(process.env.TTSMAKER_TTS_VOICE) || 729,
+            voice: process.env.ELEVENLABS_TTS_VOICE || '21m00Tcm4TlvDq8ikWAM',
           });
         }
         if (k.keyId) await recordSuccess(req.supabase, k.keyId).catch(() => {});
@@ -1787,16 +1781,18 @@ const isMissingTtsTable = (error) => /sherly_tts_clips/i.test(error?.message || 
 const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message || '') && /not found|does not exist|schema/i.test(error?.message || '');
 
 /**
- * D-276 / D-277 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
+ * D-276 / D-277 / D-278 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
  *
  * Rantai cadangan (semua WAJIB punya API key sendiri dari user):
- *   1. **Soniox**     → native `id` (Indonesia) + `su` (Sunda), REST sederhana,
- *                       pay-as-you-go tanpa langganan wajib. → fallback utama.
- *   2. **Voicemaker** → native `id-ID` + Javanese, VoxFX + voice cloning.
- *   3. **TTSMaker**   → native Indonesia + Sunda, TAPI API resminya hanya ada
- *                       untuk akun subscription Pro/Studio (jadi paling akhir).
+ *   1. **Azure Speech** → native `id-ID` (Indonesia), REST SSML, free tier F0
+ *      500.000 karakter/bulan, reset bulanan, tanpa info pembayaran, hak
+ *      komersial termasuk. → fallback utama.
+ *   2. **ElevenLabs**   → model `eleven_multilingual_v2` (29 bahasa termasuk
+ *      Indonesia), free tier 10.000 kredit/bulan tanpa kartu kredit. ⚠️ free
+ *      plan tanpa hak komersial + wajib atribusi → fallback terakhir.
  *
- * Kunci diambil dari vault (provider `soniox`/`voicemaker`/`ttsmaker`) atau env.
+ * Kunci diambil dari vault (provider `azure`/`elevenlabs`) atau env
+ * (`AZURE_SPEECH_API_KEY` / `ELEVENLABS_API_KEY`).
  *
  * Return: fungsi yang mengirim respons audio ke `res`, atau null kalau tidak
  * ada cadangan yang bisa dipakai.
@@ -2229,8 +2225,8 @@ app.post('/api/public/posts/:id/view', async (req, res) => {
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
-// D-276 / D-277: daftar voice TTS. Gemini = default; cadangan bahasa Indonesia:
-// Soniox (fallback #1) → Voicemaker (#2) → TTSMaker (#3, wajib subscription).
+// D-276 / D-277 / D-278: daftar voice TTS. Gemini = default; cadangan bahasa
+// Indonesia: Azure Speech (free F0) → ElevenLabs (free, tanpa kartu kredit).
 // UI pakai ini buat menampilkan pilihan suara + status engine mana yang siap.
 app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
   try {
@@ -2241,69 +2237,41 @@ app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
         label: v.label,
         language: 'Bahasa Indonesia',
       })),
-      ...SONIOX_ID_VOICES.map((v) => ({
-        provider: 'soniox',
-        id: v.id,
-        label: v.label,
-        language: v.lang === 'su' ? 'Bahasa Sunda' : 'Bahasa Indonesia',
-      })),
-      ...VOICEMAKER_ID_VOICES.map((v) => ({
-        provider: 'voicemaker',
+      ...AZURE_ID_VOICES.map((v) => ({
+        provider: 'azure',
         id: v.id,
         label: v.label,
         language: 'Bahasa Indonesia',
       })),
-      ...TTSMAKER_ID_VOICES.map((v) => ({
-        provider: 'ttsmaker',
+      ...ELEVENLABS_VOICES.map((v) => ({
+        provider: 'elevenlabs',
         id: v.id,
         label: v.label,
-        language: v.key.includes('sunda') ? 'Bahasa Sunda' : 'Bahasa Indonesia',
-        limit: v.limit,
-        unlimited: Boolean(v.unlimited),
-        emotion: Boolean(v.emotion),
+        language: 'Bahasa Indonesia',
       })),
     ];
 
     // Status key cadangan per provider supaya UI tahu engine mana yang siap.
-    const status = {soniox: {configured: false}, voicemaker: {configured: false}, ttsmaker: {configured: false, quota: null, error: null}};
+    const status = {azure: {configured: false}, elevenlabs: {configured: false}};
     for (const provider of ttsFallbackChain()) {
       let usable = [];
       if (vaultConfigured()) {
         usable = await getUsableKeys(req.supabase, provider).catch(() => []);
       }
       if (!usable.length) {
-        const envKey = provider === 'soniox' ? process.env.SONIOX_API_KEY
-          : provider === 'voicemaker' ? process.env.VOICEMAKER_API_KEY
-            : process.env.TTSMAKER_API_KEY;
-        if (envKey) {
-          status[provider].configured = true;
-          continue;
-        }
+        const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+          : process.env.ELEVENLABS_API_KEY;
+        if (envKey) status[provider].configured = true;
         continue;
       }
       status[provider].configured = true;
-      if (provider !== 'ttsmaker') continue;
-      try {
-        const tokenStatus = await getTtsmakerTokenStatus(usable[0].apiKey);
-        const st = tokenStatus?.data || tokenStatus?.account_status || tokenStatus;
-        status.ttsmaker.quota = {
-          quota: Number(st?.quota_characters ?? 0),
-          used: Number(st?.characters_used ?? 0),
-          left: Number(st?.available_quota ?? 0),
-        };
-      } catch (e) {
-        status.ttsmaker.error = String(e?.message || '').slice(0, 200);
-      }
     }
 
     res.json({
       ok: true,
       voices,
       providers: TTS_FALLBACK_PROVIDERS,
-      emotions: TTSMAKER_EMOTIONS,
-      // Status per provider (backwards-compat: `ttsmaker` tetap ada).
       ...status,
-      ttsmaker: status.ttsmaker,
     });
   } catch (error) {
     res.status(500).json({ok: false, error: error.message || 'Gagal memuat daftar voice.'});

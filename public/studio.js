@@ -274,13 +274,12 @@
   let videoTimer = null;
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
-  // D-276 / D-277: daftar suara TTS (Gemini + cadangan bahasa Indonesia:
-  // Soniox → Voicemaker → TTSMaker).
+  // D-276 / D-278: daftar suara TTS (Gemini + cadangan bahasa Indonesia:
+  // Azure Speech → ElevenLabs; keduanya free tier tanpa subscription).
   let ttsVoices = [];
   let ttsProviders = {
-    soniox: {configured: false},
-    voicemaker: {configured: false},
-    ttsmaker: {configured: false, quota: null},
+    azure: {configured: false},
+    elevenlabs: {configured: false},
   };
   let ttsVoicesLoaded = false;
   let motionAvailable = false;   // renderer siap di server?
@@ -1619,10 +1618,10 @@
     }
   }
   /**
-   * D-276 / D-277: muat daftar suara TTS.
+   * D-276 / D-278: muat daftar suara TTS.
    *
    * Server mengembalikan suara Gemini (default) + suara cadangan bahasa
-   * Indonesia: Soniox (fallback #1) → Voicemaker (#2) → TTSMaker (#3).
+   * Indonesia: Azure Speech (free F0) → ElevenLabs (free).
    * Kalau kuota Gemini habis, server otomatis memakai suara cadangan —
    * jadi user tidak perlu memilih.
    */
@@ -1632,7 +1631,7 @@
       if (!r.ok) return;
       const d = await r.json();
       if (Array.isArray(d?.voices)) ttsVoices = d.voices;
-      for (const p of ['soniox', 'voicemaker', 'ttsmaker']) {
+      for (const p of ['azure', 'elevenlabs']) {
         if (d?.[p]) ttsProviders[p] = d[p];
       }
       ttsVoicesLoaded = true;
@@ -1641,9 +1640,9 @@
   }
 
   /**
-   * D-276 / D-277: opsi suara TTS untuk dropdown.
+   * D-276 / D-278: opsi suara TTS untuk dropdown.
    * Dikelompokkan per provider: Gemini (default) lalu cadangan bahasa Indonesia
-   * (Soniox → Voicemaker → TTSMaker).
+   * (Azure Speech → ElevenLabs).
    */
   function ttsVoiceOptions() {
     const gemini = ttsVoices.filter((v) => v.provider === 'gemini');
@@ -1652,43 +1651,36 @@
       out.push({value: '', label: '— Gemini (bawaan) —'});
       for (const v of gemini) out.push({value: v.id, label: 'Gemini · ' + v.label});
     }
-    for (const provider of ['soniox', 'voicemaker', 'ttsmaker']) {
+    for (const provider of ['azure', 'elevenlabs']) {
       const group = ttsVoices.filter((v) => v.provider === provider);
       if (!group.length) continue;
-      const name = provider === 'soniox' ? 'Soniox' : provider === 'voicemaker' ? 'Voicemaker' : 'TTSMaker';
+      const name = provider === 'azure' ? 'Azure Speech' : 'ElevenLabs';
       out.push({value: '', label: '— ' + name + ' (bahasa Indonesia) —'});
       for (const v of group) {
-        const tag = v.language === 'Bahasa Sunda' ? 'Sunda' : 'Indonesia';
-        out.push({value: String(v.id), label: name + ' · ' + v.label + ' (' + tag + ')'});
+        out.push({value: String(v.id), label: name + ' · ' + v.label});
       }
     }
     return out;
   }
 
   /**
-   * D-276 / D-277: catatan status engine TTS cadangan.
+   * D-276 / D-278: catatan status engine TTS cadangan.
    * Kalau engine cadangan belum dikonfigurasi, user diberi tahu supaya
    * suara tetap jalan saat kuota Gemini habis.
    */
   function ttsProviderNote() {
     const ready = [];
-    for (const provider of ['soniox', 'voicemaker', 'ttsmaker']) {
+    for (const provider of ['azure', 'elevenlabs']) {
       if (ttsProviders?.[provider]?.configured) ready.push(provider);
     }
     if (!ready.length) {
       return '<small class="st-motion-tts-note st-motion-tts-note-warn">'
         + icon('bell')
-        + ' <span>Engine cadangan TTS belum aktif. Tambahkan key <b>Soniox</b> (Utama), <b>Voicemaker</b>, atau <b>TTSMaker</b> di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
+        + ' <span>Engine cadangan TTS belum aktif. Tambahkan key <b>Azure Speech</b> (Utama) atau <b>ElevenLabs</b> di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
         + '</small>';
     }
-    const NAME = {soniox: 'Soniox', voicemaker: 'Voicemaker', ttsmaker: 'TTSMaker'};
+    const NAME = {azure: 'Azure Speech', elevenlabs: 'ElevenLabs'};
     const list = ready.map((p) => NAME[p] || p).join(', ');
-    const quota = ready.find((p) => ttsProviders?.[p]?.quota?.left);
-    if (quota) {
-      return '<small class="st-motion-tts-note">' + icon('audio-lines')
-        + ' <span>Cadangan TTS siap (<b>' + list + '</b>) — sisa <b>' + Number(ttsProviders[quota].quota.left).toLocaleString('id-ID') + '</b> karakter.</span>'
-        + '</small>';
-    }
     return '<small class="st-motion-tts-note">' + icon('audio-lines')
       + ' <span>Cadangan TTS siap dipakai kalau kuota Gemini habis (<b>' + list + '</b>).</span>'
       + '</small>';

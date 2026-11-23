@@ -5,8 +5,8 @@
 //   1. Template "Rangkaian Beat" bisa dipilih di panel Pengaturan.
 //   2. Field "Isi Beat" (textarea) + "Teks Tombol CTA" + "Naskah Voice-over"
 //      + dropdown "Suara" tampil di bar isian Motion Graphics.
-//   3. Dropdown suara berisi voice Gemini + Soniox + Voicemaker + TTSMaker.
-//   4. Status engine cadangan TTS (Soniox utama) ditampilkan.
+//   3. Dropdown suara berisi voice Gemini + Azure Speech + ElevenLabs.
+//   4. Status engine cadangan TTS (Azure Speech utama) ditampilkan.
 //   5. Tidak ada overflow horizontal di PC maupun HP.
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
@@ -87,18 +87,14 @@ const TTS_VOICES = {
   voices: [
     { provider: 'gemini', id: 'Kore', label: 'Kore (wanita)', language: 'Bahasa Indonesia' },
     { provider: 'gemini', id: 'Puck', label: 'Puck (pria)', language: 'Bahasa Indonesia' },
-    { provider: 'soniox', id: 'Sari', label: 'Sari', language: 'Bahasa Indonesia' },
-    { provider: 'voicemaker', id: 'ai2-Ardi', label: 'Ardi', language: 'Bahasa Indonesia' },
-    { provider: 'ttsmaker', id: 729, label: 'Citra', language: 'Bahasa Indonesia', limit: 1000 },
-    { provider: 'ttsmaker', id: 270, label: 'Dewi', language: 'Bahasa Indonesia', limit: 1000 },
-    { provider: 'ttsmaker', id: 700001, label: 'Sarah', language: 'Bahasa Sunda', limit: 500 },
+    { provider: 'azure', id: 'id-ID-ArdiNeural', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia' },
+    { provider: 'azure', id: 'id-ID-GadisNeural', label: 'Gadis · Indonesia', language: 'Bahasa Indonesia' },
+    { provider: 'elevenlabs', id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel', language: 'Bahasa Indonesia' },
   ],
-  providers: ['gemini', 'soniox', 'voicemaker', 'ttsmaker'],
-  emotions: [],
-  // D-277: Soniox = fallback utama (tanpa langganan), TTSMaker = opsional (wajib subscribe).
-  soniox: { configured: true },
-  voicemaker: { configured: false },
-  ttsmaker: { configured: true, quota: { quota: 100000, used: 1200, left: 98800 }, error: null },
+  providers: ['gemini', 'azure', 'elevenlabs'],
+  // D-278: cadangan TTS = provider free tier (tanpa subscription).
+  azure: { configured: true },
+  elevenlabs: { configured: false },
 };
 
 const server = spawn('node', ['tools/serve-static.mjs', 'public', String(PORT)], { stdio: 'ignore' });
@@ -241,32 +237,24 @@ ok(pc.hasCta, 'kolom "Teks Tombol CTA" tampil');
 ok(pc.hasVoiceover, 'kolom "Naskah Voice-over" tampil');
 ok(pc.hasSelect, 'dropdown "Suara" tampil');
 ok(
-  pc.options.some((o) => o.includes('Sari')),
-  'dropdown suara berisi voice Soniox (Sari)',
-);
-ok(
   pc.options.some((o) => o.includes('Ardi')),
-  'dropdown suara berisi voice Voicemaker (Ardi)',
+  'dropdown suara berisi voice Azure Speech (Ardi)',
 );
 ok(
-  pc.options.some((o) => o.includes('Citra')),
-  'dropdown suara berisi voice TTSMaker (Citra)',
+  pc.options.some((o) => o.includes('Gadis')),
+  'dropdown suara berisi voice Azure Speech (Gadis)',
 );
 ok(
-  pc.options.some((o) => o.includes('Sunda')),
-  'dropdown suara menandai voice Bahasa Sunda',
+  pc.options.some((o) => o.includes('Rachel')),
+  'dropdown suara berisi voice ElevenLabs (Rachel)',
 );
 ok(
   pc.options.some((o) => o.includes('Kore')),
   'dropdown suara berisi voice Gemini',
 );
 ok(
-  /Soniox/.test(pc.note),
-  'status engine cadangan Soniox tampil (catatan: "' + pc.note + '")',
-);
-ok(
-  /98[.\s]?800/.test(pc.note),
-  'status engine cadangan menampilkan sisa kuota (catatan: "' + pc.note + '")',
+  /Azure Speech/.test(pc.note),
+  'status engine cadangan Azure Speech tampil (catatan: "' + pc.note + '")',
 );
 
 const pcOverflow = await readOverflow();

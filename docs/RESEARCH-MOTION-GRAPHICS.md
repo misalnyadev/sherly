@@ -17,7 +17,7 @@
 | Kenapa dulu cuma 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
 | TTS untuk audio? | **GPT-SoVITS** (MIT, 5 detik sample) — TAPI **tidak mendukung bahasa Indonesia** |
 | TTS Indonesia yang lebih cocok? | Gemini TTS (sudah dipakai di repo) atau **Qwen3-TTS** (Apache-2.0, 10 bahasa) |
-| **Fallback TTS kalau kredit Gemini habis?** | **TTSMaker** (`api.ttsmaker.com/v2`, voice native Indonesia + Sundanese, `audio_speed` + jeda per paragraf + emosi) → **Voicemaker** (`developer.voicemaker.in`) → Azure/ElevenLabs. Detail di **§4.6** |
+| **Fallback TTS kalau kredit Gemini habis?** | **Azure Speech** (F0 gratis 500.000 karakter/bulan, tanpa info pembayaran, voice native `id-ID`) → **ElevenLabs** (gratis 10.000 kredit/bulan, tanpa kartu kredit, Multilingual v2). Keduanya **free tier tanpa subscribe** (D-278). Detail di **§4.6** |
 
 ---
 
@@ -419,78 +419,91 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
 > ⚠️ **Kenapa bukan GPT-SoVITS / Qwen3-TTS sebagai fallback hosted?** Keduanya butuh GPU (VPS sendiri) dan/atau tidak support ID. See §4.3.
 > ⚠️ **Kenapa bukan Azure/ElevenLabs?** Keduanya support ID dan API-nya stabil, tapi **tidak ada voice native Indonesia** yang sekelas TTSMaker — hasilnya aksen Inggris, persis masalah yang bikin GPT-SoVITS gagal. Cocok jadi fallback level-3 kalau TTSMaker/Voicemaker kosong, bukan level-1.
 
-### 4.6.4 D-277 — Evaluasi ulang fallback TTS (koreksi: TTSMaker wajib subscribe)
+### 4.6.4 D-277 / D-278 — Evaluasi ulang fallback TTS (hanya yang free tier)
 
-#### 4.6.4.1 Koreksi penting
+#### 4.6.4.1 Aturan D-278
 
-> **TTSMaker API HANYA tersedia untuk akun ber-subscription Pro/Studio.**
-> Tanpa subscribe, **tidak ada API key** sama sekali — jadi TTSMaker **tidak bisa**
-> dipakai sebagai fallback "yang bisa langsung dipakai". Semua fallback
-> **wajib自带 API key** dari user (D-270: tiap provider punya link resmi).
+> **Fallback TTS WAJIB bisa dipakai tanpa subscribe.**
+> Setiap provider cadangan harus punya **free tier bulanan** yang bisa dipakai
+> **tanpa langganan, tanpa kartu kredit, tanpa info pembayaran**.
 
-#### 4.6.4.2 Hasil evaluasi kandidat (semua dicek langsung ke sumber resmi)
+#### 4.6.4.2 Hasil evaluasi kandidat (dicek langsung ke sumber resmi)
 
-| Kandidat | Bahasa Indonesia | API resmi | Key tanpa subscribe? | Harga | Putusan |
-|---|---|---|---|---|---|
-| **EasyVoice** (`easyvoice.ae/geo/id`) | ❌ **TIDAK ADA** — situs resmi: tidak punya voice Bahasa Indonesia dan tidak direncanakan | — | — | free 2.000–5.000 karakter/hari; Pro $9,99/bln + API | ❌ **DIHapus** — bukan kandidat ID sama sekali |
-| **Soniox** (`soniox.com`) | ✅ **native `id`** + **`su` (Sunda)** | ✅ REST `POST https://tts-rt.soniox.com/tts` | ✅ ya, key per project di console — **tanpa subscription** (pay-as-you-go) | ~$0,70/jam audio (token) | ✅ **Fallback #1** |
-| **TTSForFree** (`ttsforfree.com/id/`) | ✅ voice native **Ardi** & **Gadis** | ❌ tidak ada API resmi (UI web) | — | free 200 karakter/hari | ❌ **Dihapus** — membungkus Gemini/OpenAI/Azure, jadi provider baru untuk key yang sudah kita punya |
-| **Voicemaker** (`developer.voicemaker.in`) | ✅ **native `id-ID`** (Ardi, Henry, Putri, David, Fitri, Salsabilla, Anastasia) + **Javanese** | ✅ REST + WebSocket | ⚠️ developer API **pay-as-you-go** (mulai ~$20–25/1M karakter), free plan web **tidak** membawa API | free web: 100 konversi/minggu, 250 karakter/konversi, personal use | ✅ **Fallback #2** (sudah ada di §4.6.2) |
-| **TTSMaker** (`ttsmaker.com`) | ✅ native `id` + Sunda | ✅ `api.ttsmaker.com/v2` | ❌ **subscription Pro/Studio wajib** | $12,99/bln Pro | ⚠️ Turun ke **fallback #3** (opsional) |
-| **VideoGrid AI** (`videogridai.com`) | n/a (video, bukan TTS) | ❌ **TIDAK ADA API publik** — studio web saja, credit-based, watermark di akun free | — | Plus $19,9/bln · Pro $49,9/bln · Max $99,9/bln | ❌ **Bukan kandidat** untuk integrasi API |
+| Kandidat | Bahasa Indonesia | Key tanpa subscribe? | Free tier | Putusan |
+|---|---|---|---|---|
+| **EasyVoice** (`easyvoice.ae/geo/id`) | ❌ **TIDAK ADA** — situs resmi: tidak punya voice Bahasa Indonesia dan tidak direncanakan | — | free 2.000–5.000 karakter/hari (UI web) | ❌ dibuang |
+| **Soniox** (`soniox.com`) | ✅ native `id` + `su` | ✅ ya | ❌ free credit signup baru **dihentikan** (Okt 2025) → praktis pay-as-you-go | ❌ **dibuang** |
+| **TTSForFree** (`ttsforfree.com/id/`) | ✅ Ardi & Gadis | — | free 200 karakter/hari | ❌ **dibuang** — tanpa API resmi, provider di belakangnya Gemini/OpenAI/Azure |
+| **Voicemaker** (`developer.voicemaker.in`) | ✅ native `id-ID` + Jawa | ⚠️ developer API pay-as-you-go; free plan web tidak membawa API | free web 100 konversi/minggu (UI saja) | ❌ **dibuang** |
+| **TTSMaker** (`ttsmaker.com`) | ✅ native `id` + Sunda | ❌ **subscription Pro/Studio wajib** — tanpa subscribe tidak ada API key | — | ❌ **dibuang** |
+| **Groq Orpheus TTS** | ❌ **hanya English + Arabic** | ✅ ya | free, maks 200 karakter/request | ❌ dibuang — tidak support Indonesia |
+| **Azure Speech** (`azure.microsoft.com`) | ✅ **native `id-ID`** (`id-ID-ArdiNeural`, `id-ID-GadisNeural`, + Neural HD) | ✅ **ya** | ✅ **500.000 karakter/bulan (F0), tanpa info pembayaran**, reset bulanan, tak pernah kedaluwarsa | ✅ **FALLBACK #1** |
+| **ElevenLabs** (`elevenlabs.io`) | ✅ **Multilingual v2** (29 bahasa termasuk Indonesia) | ✅ **ya, tanpa kartu kredit** | ✅ **10.000 kredit/bulan (~10 menit audio)** | ✅ **FALLBACK #2** |
+| **VideoGrid AI** (`videogridai.com`) | n/a (video, bukan TTS) | — | — | ❌ bukan kandidat (tanpa API publik) |
 
 > ⚠️ **Jangan tertukar:** `videogridai.com` (**Video Grid AI**) berbeda dari
 > `vidogrid.ai` (**VidoGrid AI**). Yang punya REST API + webhook adalah
-> **VidoGrid AI** (`api.vidogrid.ai`, plan $199/bln, "Request API access") —
-> bukan yang diminta user, dan terlalu mahal/tertutup untuk fallback.
+> **VidoGrid AI** (`api.vidogrid.ai`, plan $199/bln) — bukan yang diminta user.
 
-#### 4.6.4.3 Detail Soniox (fallback utama baru)
+#### 4.6.4.3 Detail Azure Speech (fallback utama)
 
-- **Endpoint**: `POST https://tts-rt.soniox.com/tts`, header `Authorization: Bearer <SONIOX_API_KEY>`, body JSON.
-- **Body**: `{model, language, voice, text, audio_format, sample_rate?, bitrate?}`.
-  - `model`: `tts-rt-v2` (default), `tts-rt-v1`.
-  - `language`: `id` (Indonesia), `su` (Sundanese).
-  - `voice`: nama voice shared — contoh **`Sari`** (Indonesia), `Maya`, `Daniel`, `Nina`, `Emma`, `Adrian`, …
-    **Setiap voice bisaSpeaking di 60+ bahasa** (identitas suara konsisten lintas bahasa).
-  - `audio_format`: `mp3` (default praktis), `wav`, `aac`, `opus`, `flac`, `pcm_f32le`, `pcm_s16le`, `pcm_mulaw`, `pcm_alaw`.
-  - `sample_rate`: 8000/16000/24000/44100/48000. `bitrate`: 32000–256000.
-- **Respons**: body = raw audio bytes, `Content-Type` sesuai format (`audio/mpeg`, `audio/wav`, `audio/opus`, …).
-  Tidak ada URL sementara → **tidak perlu download kedua** (lebih sederhana & andal daripada TTSMaker).
-- **Error**: JSON `{error_code, error_type, error_message, more_info, request_id}` → branch di `error_type`.
-- **Limit**: 100 request/menit, 3 request konkuren, **durasi audio maks 2 menit** (fixed).
-  Audio > 2 menit terpotong → pecah teks (Motion Graphics maks 30 detik, jadi aman).
-- **Voice list via API**: `GET https://api.soniox.com/v1/tts-models` (Authorization Bearer) → `models[].voices[]`
-  berisi `id`, `description`, `gender`. Endpoint lain: `GET /v1/shared-voices` dengan filter gender/age/accent/usecase/style.
-- **Voice cloning**: bikin voice custom dari sample pendek, dipakai lewat `voice` = voice ID.
-- ⚠️ **Free credit untuk signup baru DIHENTIKAN** (Oktober 2025, `soniox.com/blog/2025-10-27-free-credits-update-for-soniox-api`).
-  Artinya Soniox = **pay-as-you-go sejak daftar**; tidak ada trial gratis. Ini berbeda dari TTSMaker yang
-  *mensyaratkan* subscription — Soniox tidak butuh langganan, cukup top-up usage.
+- **Endpoint**: `POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1`
+  - Header `Ocp-Apim-Subscription-Key` (subscription key resource Speech).
+  - Header `Content-Type: application/ssml+xml` (bukan JSON).
+  - Header `X-Microsoft-OutputFormat` → `audio-24khz-48kbitrate-mono-mp3` (default),
+    `audio-16khz-128kbitrate-mono-mp3`, `ogg-24khz-16bit-mono-opus`, `riff-24khz-16bit-mono-pcm`.
+  - Body: SSML `<speak xml:lang="id-ID"><voice name="id-ID-ArdiNeural">…</voice></speak>`.
+  - **Respons**: body = file audio langsung (mp3/wav/ogg) — tidak ada URL sementara.
+- **Region**: dari resource Azure (mis. `southeastasia`, `jakarta`). Disimpan di
+  env `AZURE_SPEECH_REGION` atau default `southeastasia`.
+- **Daftar voice**: `GET https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list`
+  → array voice; Ambil yang `Locale` diawali `id-ID`.
+- **Voice Indonesia**: `id-ID-ArdiNeural` (pria), `id-ID-GadisNeural` (wanita),
+  `id-ID-Ardi:DragonHDLatestNeural` & `id-ID-Gadis:DragonHDLatestNeural` (Neural HD).
+- **Kontrol**: SSML `<prosody rate="…" pitch="…%">` → ngatur tempo & pitch narasi
+  supaya pas dengan beat.
+- **Free tier F0**: 500.000 karakter/bulan **neural**, reset tiap bulan, **tidak
+  pernah kedaluwarsa**, dan **tidak butuh info pembayaran** di langganan Azure Free.
+  Setelah kuota habis → $15–16/1M karakter (neural). Rate limit free tier 20 req/menit.
 
-#### 4.6.4.4 Urutan fallback final (D-277)
+#### 4.6.4.4 Detail ElevenLabs (fallback kedua)
+
+- **Endpoint**: `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128`
+  - Header `xi-api-key`.
+  - Body JSON: `{text, model_id: 'eleven_multilingual_v2', voice_settings: {stability, similarity_boost, speed}}`.
+  - **Respons**: body = file mp3 langsung.
+- **Daftar voice**: `GET https://api.elevenlabs.io/v1/voices`.
+- **Model**: `eleven_multilingual_v2` → 29 bahasa termasuk **Indonesian**; model
+  mendeteksi bahasa dari teks otomatis, jadi voice apa pun bisa berbahasa Indonesia.
+- **Free tier**: 10.000 kredit/bulan (~10 menit audio), **tanpa kartu kredit**,
+  tidak ada rollover; API key bisa dibuat di `elevenlabs.io/app/settings/api-keys`.
+- ⚠️ **Batasan free plan**: **TIDAK ada hak komersial** + wajib atribusi
+  ("elevenlabs.io"/"11.ai") kalau audio dipublikasikan. Karena itu ElevenLabs
+  hanya jadi cadangan **terakhir**; Azure (yang punya free tier neural +
+  komersial) jadi cadangan utama.
+
+#### 4.6.4.5 Urutan fallback final (D-278)
 
 ```
-1. Gemini TTS            → default, gratis selama kuota (14 voice, style hint)
-2. Soniox                → fallback #1. Native id + su, REST sederhana, pay-as-you-go, key per project
-3. Voicemaker            → fallback #2. Native id-ID + Javanese, VoxFX, voice cloning
-4. TTSMaker              → fallback #3 (opsional). Hanya kalau user punya subscription Pro/Studio
+1. Gemini TTS      → default, gratis selama kuota (14 voice + style hint)
+2. Azure Speech    → fallback #1. 500rb karakter/bulan, tanpa info pembayaran, native id-ID
+3. ElevenLabs      → fallback #2. 10rb kredit/bulan, tanpa kartu kredit, multilingual (ID)
 ```
 
-Semua fallback **wajib punya API key sendiri** dari user — tidak ada satu pun yang bisa
-dipakai "gratis tanpa daftar". Urutan ini diterapkan otomatis oleh
-`synthesizeTtsFallback()` di `server/app.js`.
+Provider yang **wajib subscribe di awal** (TTSMaker, Soniox, Voicemaker) **dihapus
+total** dari kode, vault, dan constraint DB.
 
-#### 4.6.4.5 Perbandingan biaya praktis (30 detik Motion Graphics)
+#### 4.6.4.6 Perbandingan biaya praktis (30 detik Motion Graphics)
 
 | Provider | Karakter ± 75 kata (≈ 450 karakter) | Biaya |
 |---|---|---|
 | Gemini TTS | 450 | $0 (kuota free) |
-| Soniox | 450 | ~$0,004 (≈ 1 detik audio di $0,70/jam → ~0,02 dtk biaya text; audio ~30 dtk ≈ $0,006) |
-| Voicemaker | 450 | ~$0,009–0,011 (~$20–25/1M karakter) |
-| TTSMaker | 450 | ~$0,006 (1 jt karakter ≈ $12,99) |
+| Azure Speech (F0) | 450 | $0 (dalam free tier 500rb/bln) |
+| ElevenLabs (Free) | 450 | $0 (dalam free tier 10rb kredit/bln) |
 
-> Kesimpulan biaya: **tidak ada bedanya berarti** untuk usage SherlyStudio yang sesekali.
-> Yang menentukan cuma **ketersediaan key** — dan itu sebabnya TTSMaker (wajib subscribe)
-> tidak boleh berada di posisi fallback utama.
+> 30 detik Motion Graphics ≈ 450 karakter ≈ 45 detik audio. Free tier Azure
+> (500rb karakter/bulan) ≈ **1.100 video 30 detik per bulan**; ElevenLabs
+> (10rb kredit/bulan) ≈ **±20 video 30 detik per bulan** sebagai cadangan terakhir.
 
 ### 4.7 Cara pasang audio ke Motion Graphics
 
