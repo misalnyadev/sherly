@@ -149,3 +149,41 @@ test('D-268: client menampilkan status di header chat & panel Beranda', () => {
   assert.ok(html.includes('id="homeSherlyStatus"'), 'panel Beranda harus punya elemen status');
   assert.ok(clientJs.includes('homeSherlyStatus'), 'client harus mengisi panel Beranda');
 });
+
+// ===== D-269: Status panjang -> klik untuk lihat utuh =====
+
+test('D-269: status pendek inline, status panjang bisa diklik (bubble)', () => {
+  assert.ok(clientJs.includes('refreshStatusOverflow'), 'harus ada deteksi status terpotong');
+  assert.ok(clientJs.includes('scrollWidth > el.clientWidth'), 'deteksi pakai scrollWidth vs clientWidth');
+  assert.ok(clientJs.includes("classList.toggle('is-clickable'"), 'status terpotong -> jadi bisa diklik');
+  // Status pendek: TIDAK diklik (tanpa bubble).
+  assert.ok(clientJs.includes('const truncated = el.scrollWidth > el.clientWidth + 1'),
+    'hanya status yang benar-benar terpotong yang diklik');
+  // Bubble berisi teks status lengkap.
+  assert.ok(clientJs.includes('id="ssStatusBubble"'), 'harus ada elemen bubble');
+  assert.ok(clientJs.includes('id="ssStatusBubbleText"'), 'bubble harus punya teks status');
+  assert.ok(clientJs.includes('__sherlyStatusFull.text'), 'bubble harus menampilkan status utuh');
+  // Buka/tutup bubble.
+  assert.ok(clientJs.includes('toggleStatusBubble'), 'harus ada toggle bubble');
+  assert.ok(clientJs.includes('closeStatusBubble'), 'harus bisa menutup bubble');
+  // Klik di luar menutup bubble.
+  assert.ok(clientJs.includes("document.addEventListener('click'"), 'klik luar harus menutup bubble');
+  // Aksesibilitas: role button + tabindex + aria-label saat terpotong.
+  assert.ok(clientJs.includes("el.setAttribute('role', truncated ? 'button' : 'presentation')"),
+    'role harus sesuai status terpotong');
+  assert.ok(clientJs.includes("el.setAttribute('tabindex', '0')"), 'status terpotong harus bisa difokus');
+});
+
+test('D-269: bubble punya gaya & ditulis di bawah header', () => {
+  assert.ok(clientJs.includes('.ss-status-bubble{'), 'harus ada aturan .ss-status-bubble');
+  assert.ok(clientJs.includes('.ss-status-text.is-clickable{'), 'harus ada gaya status bisa-klik');
+  // Bubble: absolute di bawah, teks membungkus (tidak terpotong).
+  const bub = clientJs.match(/\.ss-status-bubble\{([^}]*)\}/);
+  assert.ok(bub && bub[1].includes('position:absolute'), 'bubble harus absolute');
+  assert.ok(bub && bub[1].includes('white-space:normal'), 'teks bubble harus membungkus');
+  assert.ok(bub && /max-width:\d+px/.test(bub[1]), 'bubble punya lebar maksimum');
+  // Anchor-nya harus positioned -> .ss-chat-id dapat position:relative.
+  const idRule = clientJs.match(/\.ss-chat-id\{([^}]*)\}/);
+  assert.ok(idRule && idRule[1].includes('position:relative'),
+    '.ss-chat-id harus position:relative jadi bubble jadi anchor');
+});
