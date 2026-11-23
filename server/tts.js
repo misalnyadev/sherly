@@ -80,6 +80,66 @@ export function pcmToWav(pcm, sampleRate = 24000) {
 }
 
 /**
+ * D-283: hitung durasi WAV (detik) dari header file.
+ *
+ * ⚠️ BUG YANG DIPERBAIKI: sebelumnya durasi audio TTS diperkirakan dari
+ * `base64.length * 0.75 / 16000` — itu mengasumsikan PCM 16 kHz, padahal
+ * Gemini TTS menghasilkan **WAV 24 kHz mono 16-bit** (48.000 byte/detik).
+ * Akibatnya durasi **dihitung ~3x lebih besar** dari kenyataan:
+ *   - naskah 5 detik  -> dianggap 15 detik
+ *   - naskah 4 detik  -> dianggap 12 detik
+ * Karena InfiniteTalk hanya menerima audio <= 15 detik, hampir SETIAP
+ * naskah realistic ditolak "Audio terlalu panjang" sebelum sampai ke Kie.
+ * (Data live: 4 task lipsync gagal dengan durasi tercatat 11-12 detik.)
+ *
+ * Sekarang durasi dibaca PERSIS dari header WAV (sampleRate + dataSize),
+ * jadi gatekeeper sesuai dengan kenyataan. Kalau bukan WAV / header rusak,
+ * jatuh ke heuristik保守 yang dulu.
+ */
+export function wavDurationSeconds(buffer) {
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
+  if (buf.length < 44) return 0;
+  // Cari chunk 'fmt ' lalu 'data' (chunk WAV bisa disisipkan LIST dsb).
+  let offset = 12;
+  let byteRate = 0;
+  let dataSize = 0;
+  let sampleRate = 0;
+  while (offset + 8 <= buf.length) {
+    const id = buf.toString('ascii', offset, offset + 4);
+    const size = buf.readUInt32LE(offset + 4);
+    if (id === 'fmt ') {
+      // Layout chunk 'fmt ': size(4) audioFormat(2) numChannels(2)
+      //                  sampleRate(4) byteRate(4) blockAlign(2) bits(2)
+      sampleRate = buf.readUInt32LE(offset + 12);
+      byteRate = buf.readUInt32LE(offset + 16);
+    } else if (id === 'data') {
+      dataSize = size;
+      break;
+    }
+    offset += 8 + size + (size % 2);
+  }
+  if (byteRate > 0 && dataSize > 0) return dataSize / byteRate;
+  if (sampleRate > 0 && dataSize > 0) {
+    // Fallback: 16-bit mono asumsi (2 byte per sample).
+    return dataSize / (sampleRate * 2);
+  }
+  return 0;
+}
+
+/**
+ * D-283: durasi audio (detik) dari base64, seakurat mungkin.
+ * Base64 -> byte -> header WAV. Kalau bukan WAV, pakai heuristik lama.
+ */
+export function audioDurationFromBase64(base64) {
+  const buf = Buffer.from(String(base64 || ''), 'base64');
+  const wav = wavDurationSeconds(buf);
+  if (wav > 0) return Math.max(1, Math.round(wav));
+  // Fallback konservatif: asumsikan PCM 16-bit mono 24 kHz (48.000 B/detik),
+  // bukan 16 kHz seperti estimation lama yang bikin durasi 3x lebih besar.
+  return Math.max(1, Math.round((buf.length / 48000)));
+}
+
+/**
  * Synthesize `text` to audio. Resolves { wav: Buffer, model, voice }.
  * Throws with a descriptive Error on failure (caller decides fallback).
  */
