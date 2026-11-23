@@ -5,7 +5,7 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom, KIE_BOARD_MODEL } from './ai.js';
+import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImageWithCustom, KIE_BOARD_MODEL, kieConfig } from './ai.js';
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
@@ -24,6 +24,7 @@ import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUplo
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
+import { fetchKieCredits, IMAGE_CREDITS, VIDEO_CREDITS } from './kie-credits.js';
 import { detectDimensions } from './media-dimensions.js';
 import { handleSherlyStatus } from './sherly-status-route.js';
 
@@ -494,6 +495,37 @@ app.post('/api/ai/chat', requireUser, requireChatUser, async (req, res) => {
 app.get('/api/ai/image/models', requireUser, requireAdmin, (req, res) => {
   try { res.json({ ok: true, ...imageCatalog() }); }
   catch (error) { res.status(500).json({ ok: false, error: error.message || 'Gagal memuat katalog model gambar.' }); }
+});
+
+// D-274: saldo kredit Kie AI (live) + tarif per model.
+// Dipakai komposer Studio untuk menampilkan "[foto] [12]" di samping jenis konten.
+app.get('/api/ai/credits', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const attempts = [];
+    if (req.supabase) {
+      const vaultKeys = await getUsableKeys(req.supabase, 'kie').catch(() => []);
+      for (const vk of vaultKeys) attempts.push(vk.apiKey);
+    }
+    if (process.env.KIE_API_KEY) attempts.push(process.env.KIE_API_KEY);
+
+    let credits = null;
+    let error = null;
+    for (const key of attempts) {
+      const result = await fetchKieCredits(key, kieConfig().base);
+      if (result.ok) { credits = result.credits; error = null; break; }
+      error = result.error;
+    }
+    res.json({
+      ok: true,
+      credits,
+      error: credits == null ? (error || 'Kunci Kie AI belum tersedia.') : null,
+      // Tarif per model (untuk hitung estimasi di frontend).
+      image: IMAGE_CREDITS,
+      video: VIDEO_CREDITS,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message || 'Gagal memuat data kredit.' });
+  }
 });
 
 app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {

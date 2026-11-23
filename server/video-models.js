@@ -12,6 +12,9 @@
 //   Kling 3.0  — model "kling-3.0/video" (durasi 3-15, mode std/pro/4K, sound)
 //   Seedance 2 — model "bytedance/seedance-2" (durasi 4-15, 480p..4k, 21:9)
 
+// D-274: tarif kredit Kie per model video (dipakai frontend untuk badge kredit).
+import { VIDEO_CREDITS } from './kie-credits.js';
+
 /** Semua durasi yang mungkin (dipakai untuk rentang). */
 const range = (min, max) => Array.from({ length: max - min + 1 }, (_, i) => min + i);
 
@@ -395,6 +398,8 @@ export function videoCatalog() {
       defaultDuration: m.defaultDuration,
       defaultResolution: m.defaultResolution,
       defaultAspect: m.defaultAspect,
+      // D-274: tarif kredit Kie (per detik atau per video, sesuai model).
+      credits: VIDEO_CREDITS[m.id] || null,
     })),
   };
 }

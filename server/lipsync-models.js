@@ -35,6 +35,9 @@
 //   kwaivgi/kling-lip-sync — lip sync berbasis teks (tidak ada di Kie)
 //   zsxkib/multitalk      — percakapan multi-orang (tidak ada di Kie)
 
+// D-274: tarif kredit Kie per model lipsync (dipakai frontend untuk badge kredit).
+import { LIPSYNC_CREDITS } from './kie-credits.js';
+
 /** Batas keras InfiniteTalk (dari docs Kie). */
 export const LIPSYNC_MAX_SECONDS = 15;
 export const LIPSYNC_MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -259,6 +262,8 @@ export function lipsyncCatalog() {
       fullBody: m.schema === 'omnihuman15' || m.schema === 'omnihuman20',
       // Batas durasi audio minimum (OmniHuman 2.0 butuh >= 4 detik).
       minSeconds: m.minSeconds || 1,
+      // D-274: tarif kredit Kie per detik (untuk badge kredit di composer).
+      credits: LIPSYNC_CREDITS[m.id] || null,
     })),
   };
 }

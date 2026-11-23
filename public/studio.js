@@ -74,22 +74,26 @@
       resolutions: ['720p', '1080p', '4k'], aspects: ['16:9', '9:16'], audio: true, firstLastFrame: true,
       note: 'Google Veo 3.1 — kualitas tinggi + audio native.',
       tiers: [{ id: 'veo3_fast', label: 'Fast (hemat)' }, { id: 'veo3_lite', label: 'Lite (tercepat)' }, { id: 'veo3', label: 'Quality (premium)' }],
-      defaultTier: 'veo3_fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultTier: 'veo3_fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16',
+      credits: { perVideo: { veo3_lite: { '720p': 30, '1080p': 35, '4k': 150 }, veo3_fast: { '720p': 60, '1080p': 65, '4k': 180 }, veo3: { '720p': 250, '1080p': 255, '4k': 370 } } } },
     { id: 'kling-3.0/video', provider: 'kie', label: 'Kling 3.0', maker: 'Kuaishou', durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       resolutions: ['720p', '1080p'], aspects: ['16:9', '9:16', '1:1'], audio: true, firstLastFrame: true,
       note: 'Kling 3.0 — storytelling multi-shot, durasi panjang sampai 15 detik.',
       tiers: [{ id: 'std', label: 'Standar' }, { id: 'pro', label: 'Pro' }, { id: '4K', label: '4K' }],
-      defaultTier: 'std', defaultDuration: 5, defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultTier: 'std', defaultDuration: 5, defaultResolution: '720p', defaultAspect: '9:16',
+      credits: { perSecond: { std: { '720p': 15.1, '1080p': 15.1, '4k': 75.5 }, pro: { '720p': 20.2, '1080p': 20.2, '4k': 75.5 }, '4K': { '720p': 75.5, '1080p': 75.5, '4k': 75.5 } } } },
     { id: 'bytedance/seedance-2', provider: 'kie', label: 'Seedance 2.0', maker: 'ByteDance', durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       resolutions: ['480p', '720p', '1080p', '4k'], aspects: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], audio: true, firstLastFrame: true,
       note: 'Seedance 2.0 — paling konsisten & paling banyak rasio aspek.',
       tiers: [{ id: 'standard', label: 'Standard' }, { id: 'fast', label: 'Fast' }],
-      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '1080p', defaultAspect: '9:16' },
+      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '1080p', defaultAspect: '9:16',
+      credits: { perSecond: { fast: { '480p': 6.8, '720p': 15, '1080p': 15, '4k': 15 }, standard: { '480p': 11.7, '720p': 24.8, '1080p': 24.8, '4k': 24.8 } } } },
     { id: 'bytedance/seedance-2-fast', provider: 'kie', label: 'Seedance 2.0 Fast', maker: 'ByteDance', durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], audio: true, firstLastFrame: true,
       note: 'Seedance 2.0 Fast — hanya sampai 720p tapi generates lebih cepat.',
       tiers: [{ id: 'fast', label: 'Fast' }],
-      defaultTier: 'fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultTier: 'fast', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16',
+      credits: { perSecond: { fast: { '480p': 6.8, '720p': 15, '1080p': 15, '4k': 15 } } } },
     // D-239: Google Gemini Omni 1.2 Flash — 15 detik + audio native.
     { id: 'google/gemini-omni-flash-1-2', provider: 'kie', label: 'Omni 1.2 Flash', maker: 'Google',
       durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
@@ -97,7 +101,8 @@
       firstLastFrameExclusive: true, maxReferences: 6,
       note: 'Google Gemini Omni 1.2 Flash — 15 detik, audio native, referensi karakter paling konsisten.',
       tiers: [{ id: 'standard', label: 'Standard' }],
-      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultTier: 'standard', defaultDuration: 8, defaultResolution: '720p', defaultAspect: '9:16',
+      credits: { perSecond: { standard: { '360p': 4, '720p': 9, '1080p': 10, '4k': 22 } } } },
     // D-241: Seedance 2.5 — 30 detik, native 4K, 30 referensi, mode Draft (preview 480p).
     { id: 'bytedance/seedance-2-5', provider: 'kie', label: 'Seedance 2.5', maker: 'ByteDance',
       durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
@@ -105,7 +110,8 @@
       audio: true, firstLastFrame: true, maxReferences: 30, longForm: true,
       note: 'ByteDance Seedance 2.5 — sampai 30 detik, native 4K, 30 referensi multimodal.',
       tiers: [{ id: 'standard', label: 'Standard' }, { id: 'draft', label: 'Draft (preview 480p)' }],
-      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16' },
+      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16',
+      credits: { perSecond: { standard: { '480p': 17, '720p': 38, '1080p': 95, '4k': 155 }, draft: { '480p': 17, '720p': 17, '1080p': 17, '4k': 17 } } } },
     // D-241: Wan 3.0 — 2-30 detik, multimodal (dokumen/webpage/audio), paling hemat.
     { id: 'wan/3-0-video', provider: 'kie', label: 'Wan 3.0', maker: 'Alibaba',
       durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
@@ -113,7 +119,8 @@
       audio: true, firstLastFrame: true, maxReferences: 10, longForm: true,
       note: 'Alibaba Wan 3.0 — 2-30 detik, multimodal (dokumen/webpage/audio), paling hemat.',
       tiers: [{ id: 'standard', label: 'Standard' }],
-      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultTier: 'standard', defaultDuration: 10, defaultResolution: '720p', defaultAspect: '9:16',
+      credits: { perSecond: { standard: { '480p': 8, '720p': 16, '1080p': 32, '4k': 32 } } } },
     // D-241: Kling 4.0 — 30 detik, 4K HDR, stereo audio, 15 referensi.
     { id: 'kling-4-0/reference-to-video', provider: 'kie', label: 'Kling 4.0', maker: 'Kuaishou',
       durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
@@ -121,38 +128,39 @@
       audio: true, firstLastFrame: true, maxReferences: 15, longForm: true,
       note: 'Kuaishou Kling 4.0 — 30 detik, 4K HDR, stereo audio, 15 referensi.',
       tiers: [{ id: 'std', label: 'Standar' }, { id: 'pro', label: 'Pro' }, { id: '4K', label: '4K' }, { id: 'hdr', label: '4K + HDR' }],
-      defaultTier: 'std', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16' },
+      defaultTier: 'std', defaultDuration: 10, defaultResolution: '1080p', defaultAspect: '9:16',
+      credits: { perSecond: { std: { '720p': 28.5, '1080p': 28.5, '4k': 28.5 }, pro: { '720p': 42.5, '1080p': 42.5, '4k': 42.5 }, '4K': { '720p': 99, '1080p': 99, '4k': 99 }, hdr: { '720p': 28.5, '1080p': 51, '4k': 113 } } } },
   ];
   // D-203: katalog model gambar (Kie: Nano Banana / GPT Image / Seedream / FLUX).
   const FALLBACK_IMAGE_MODELS = [
     { id: 'nano-banana-2', provider: 'kie', label: 'Nano Banana 2', maker: 'Google', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'Google Nano Banana 2 — cepat & konsisten.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 8, '2K': 12, '4K': 18 } },
     { id: 'nano-banana-pro', provider: 'kie', label: 'Nano Banana Pro', maker: 'Google', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 8, note: 'Google Nano Banana Pro — kualitas premium.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 18, '2K': 18, '4K': 24 } },
     { id: 'gpt-image-2-text-to-image', provider: 'kie', label: 'GPT Image 2', maker: 'OpenAI', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 16, note: 'OpenAI GPT Image 2 — teks & fotorealisme.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
-    { id: 'bytedance/seedream-5.0-lite', provider: 'kie', label: 'Seedream 5.0 Lite', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 6, '2K': 10, '4K': 16 } },
+    { id: 'bytedance/seedream-v5.0-lite', provider: 'kie', label: 'Seedream 5.0 Lite', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'ByteDance Seedream Lite — cepat & murah.',
-      defaultResolution: '1K', defaultAspect: '4:5' },
+      defaultResolution: '1K', defaultAspect: '4:5', credits: { '1K': 5.5, '2K': 5.5, '4K': 5.5 } },
     { id: 'bytedance/seedream-5.0-pro', provider: 'kie', label: 'Seedream 5.0 Pro', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 10, note: 'ByteDance Seedream Pro — detail tajam.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 7, '2K': 14, '4K': 14 } },
     { id: 'flux-2-pro-text-to-image', provider: 'kie', label: 'FLUX 2 Pro', maker: 'Black Forest Labs', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9'], maxReferences: 4, note: 'FLUX 2 Pro — komposisi & tipografi.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 5, '2K': 7, '4K': 7 } },
     // D-241: Seedream 5.5 — background transparan, edit chain panjang.
     { id: 'bytedance/seedream-5-5', provider: 'kie', label: 'Seedream 5.5', maker: 'ByteDance', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '4:5', '9:16', '16:9', '3:4', '4:3', '3:2', '2:3', '5:4', '21:9'], maxReferences: 10,
       note: 'ByteDance Seedream 5.5 — background transparan, edit chain panjang, teks kecil rapi.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 3.6, '2K': 6.3, '4K': 6.3 } },
     // D-241: GPT Image 2.6 — poster & layout paling rapi, bisa SVG/GIF & transparan.
     { id: 'gpt-image-2-6/flare-text-to-image', provider: 'kie', label: 'GPT Image 2.6', maker: 'OpenAI', resolutions: ['1K', '2K', '4K'],
       aspects: ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9', '2:11', '1:2'], maxReferences: 16,
       note: 'OpenAI GPT Image 2.6 — poster & layout paling rapi, bisa SVG/GIF & transparan.',
-      defaultResolution: '2K', defaultAspect: '4:5' },
+      defaultResolution: '2K', defaultAspect: '4:5', credits: { '1K': 7.82, '2K': 15.9, '4K': 26.43 } },
   ];
   let imageCatalog = { defaultModel: 'nano-banana-2', models: FALLBACK_IMAGE_MODELS };
   const imageModel = () => imageCatalog.models.find((m) => m.id === state.imageModel) || imageCatalog.models[0] || null;
@@ -164,19 +172,21 @@
     { id: 'infinitalk/from-audio', provider: 'kie', label: 'InfiniteTalk', maker: 'MeiGen-AI',
       resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
       note: 'MeiGen-AI InfiniteTalk — potret + audio jadi karakter bicara (lip-sync akurat).',
-      defaultResolution: '720p', defaultAspect: '9:16' },
+      defaultResolution: '720p', defaultAspect: '9:16', credits: { '480p': 3, '720p': 12 } },
     { id: 'ltx/2-5-fast-audio-to-video', provider: 'kie', label: 'LTX 2.5 Fast A2V', maker: 'Lightricks',
       resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
       note: 'Lightricks LTX 2.5 Fast — durasi mengikuti audio (s/d 20 dtk), sampai 1440p.',
-      defaultResolution: '1080p', defaultAspect: '9:16' },
+      defaultResolution: '1080p', defaultAspect: '9:16', credits: { '720p': 10.8, '1080p': 15.6, '1440p': 22.8 } },
     { id: 'omnihuman-1-5', provider: 'kie', label: 'OmniHuman 1.5', maker: 'ByteDance',
       resolutions: ['720P', '1080P'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 60,
       note: 'ByteDance OmniHuman 1.5 — digital human full-body, ekspresi & gestur ikut emosi, sampai 1080p.',
-      defaultResolution: '1080P', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 1 },
+      defaultResolution: '1080P', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 1,
+      credits: { '720p': 27, '720P': 27, '1080p': 27, '1080P': 27 } },
     { id: 'omnihuman-2-0', provider: 'kie', label: 'OmniHuman 2.0', maker: 'ByteDance',
       resolutions: ['720p'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 300,
       note: 'ByteDance OmniHuman 2.0 — digital human + multi-person, durasi s/d 5 menit.',
-      defaultResolution: '720p', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 4 },
+      defaultResolution: '720p', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 4,
+      credits: { '720p': 14, '720P': 14 } },
   ];
   const FALLBACK_LIPSYNC_PROVIDERS = [
     { id: 'kie', label: 'Kie AI', note: 'Semua model lipsync via satu kunci Kie' },
@@ -281,6 +291,8 @@
   let promptBankTab = 'template'; // tab aktif di popover bank prompt
   let promptBankQuery = '';        // D-237: kata kunci pencarian bank prompt
   let promptBankMode = 'foto';     // D-208: mode prompt (foto|video) ikut jenis konten
+  // D-274: saldo kredit Kie (live, dari /api/ai/credits). null = belum diketahui.
+  let kieBalance = null;
 
   // Tutup popover saat klik di luar pil (sekali terdaftar di level modul).
   document.addEventListener('click', (e) => {
@@ -1746,6 +1758,103 @@
     updatePillLabels();
   }
 
+  // ===== D-274: badge kredit di samping jenis konten =====
+  // Angka saja (contoh: [Foto] [12]) — biaya Kie untuk generate yang aktif.
+  // Sumber angka: katalog kredit dari server (kredit per gambar / per detik
+  // atau per video, sesuai model).
+
+  /** Bulatkan ke atas supaya angka di UI tidak terlihat terlalu murah. */
+  function creditRoundUp(v) {
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    return Math.ceil(v - 0.0001);
+  }
+
+  /** Kredit untuk satu generate FOTO. */
+  function imageCreditEstimate(ctx) {
+    const c = ctx || state;
+    const m = imageCatalog.models.find((x) => x.id === c.imageModel) || imageCatalog.models[0];
+    if (!m || !m.credits) return 0;
+    const res = String(c.imageResolution || m.defaultResolution || '').toUpperCase();
+    const row = m.credits;
+    if (row[res] != null) return creditRoundUp(row[res]);
+    const values = Object.values(row).filter((v) => typeof v === 'number');
+    return values.length ? creditRoundUp(Math.min.apply(null, values)) : 0;
+  }
+
+  /** Kredit untuk satu generate VIDEO. */
+  function videoCreditEstimate(ctx) {
+    const c = ctx || state;
+    const m = videoCatalog.models.find((x) => x.id === c.videoModel) || videoCatalog.models[0];
+    if (!m || !m.credits) return 0;
+    const credits = m.credits;
+    const tier = c.tier;
+    const res = String(c.resolution || m.defaultResolution || '').toLowerCase();
+    const sec = Math.max(1, Math.round(Number(c.duration) || 5));
+
+    if (credits.perVideo) {
+      const tierRow = credits.perVideo[tier] || Object.values(credits.perVideo)[0];
+      if (!tierRow) return 0;
+      const value = tierRow[res] != null ? tierRow[res] : Object.values(tierRow)[0];
+      return creditRoundUp(value);
+    }
+    if (credits.perSecond) {
+      const tierRow = credits.perSecond[tier] || Object.values(credits.perSecond)[0];
+      if (!tierRow) return 0;
+      const value = tierRow[res] != null ? tierRow[res] : Object.values(tierRow)[0];
+      if (!Number.isFinite(value)) return 0;
+      return creditRoundUp(value * sec);
+    }
+    return 0;
+  }
+
+  /** Kredit untuk satu generate LIPSYNC (mode "Karakter Bicara"). */
+  function lipsyncCreditEstimate(ctx) {
+    const c = ctx || state;
+    const m = lipsyncCatalog.models.find((x) => x.id === c.lipsyncModel) || lipsyncCatalog.models[0];
+    if (!m || !m.credits) return 0;
+    const row = m.credits;
+    const res = String(c.lipsyncResolution || m.defaultResolution || '');
+    let perSec = row[res];
+    if (perSec == null) perSec = row[res.toLowerCase()];
+    if (perSec == null) perSec = Object.values(row)[0];
+    // Durasi audio baru diketahui setelah TTS jadi naskah -> perkiraan
+    // (~2,5 kata/detik untuk bahasa Indonesia), dibatasi durasi maks model.
+    const script = ($('stPrompt')?.value || '').trim();
+    const words = script ? script.split(/\s+/).filter(Boolean).length : 0;
+    const maxSec = Number(m.maxSeconds) || 15;
+    const sec = Math.min(maxSec, Math.max(1, Math.round(words / 2.5) || 1));
+    return creditRoundUp(Number(perSec || 0) * sec);
+  }
+
+  /** Estimasi kredit sesuai mode konten yang aktif. */
+  function currentCreditEstimate(ctx) {
+    const c = ctx || settingCtx();
+    const mode = c.mode || state.mode;
+    if (mode === 'video') return videoCreditEstimate(c);
+    if (mode === 'lipsync') return lipsyncCreditEstimate(c);
+    if (mode === 'motion') return 0;   // Motion Graphics dirender lokal (tanpa kredit).
+    return imageCreditEstimate(c);
+  }
+
+  /** Update badge kredit: [Foto] [12]. */
+  function updateCreditBadge() {
+    const badge = $('stCreditBadge');
+    if (!badge) return;
+    const ctx = settingCtx();
+    const mode = ctx.mode || state.mode;
+    // Motion Graphics = render lokal -> tidak pakai kredit Kie.
+    if (mode === 'motion') { badge.classList.add('st-hidden'); return; }
+    const credits = currentCreditEstimate(ctx);
+    if (!credits) { badge.classList.add('st-hidden'); return; }
+    badge.textContent = String(credits);
+    badge.classList.remove('st-hidden');
+    // Warn kalau saldo Kie menipis (kalau saldo live diketahui).
+    badge.classList.toggle('st-credit-low', kieBalance != null && kieBalance < credits);
+    badge.classList.toggle('st-credit-warn', kieBalance != null && kieBalance >= credits && kieBalance < credits * 3);
+    badge.title = 'Estimasi ' + credits + ' kredit Kie untuk generate ini'
+      + (kieBalance != null ? ' (sisa ' + kieBalance + ' kredit)' : '');
+  }
+
   function updatePillLabels() {
     // D-245: pakai draft bila panel Pengaturan Konten sedang dibuka,
     // supaya label pill ikut berubah saat pilihan di panel diubah.
@@ -1798,6 +1907,8 @@
         le.querySelector('b').textContent = (engines.find((x) => x[0] === ctx.engine) || engines[0])[1];
       }
     }
+    // D-274: badge kredit ikut label pill (angka di samping jenis konten).
+    updateCreditBadge();
   }
 
   /** D-210: deteksi layout HP (lebar layar kecil). */
@@ -1820,7 +1931,7 @@
   function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'imgres', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -1902,6 +2013,11 @@
     }
     else if (which === 'tier') items = tierOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.tier === v ? 'on' : '') + '">' + l + '</button>').join('');
     else if (which === 'res') items = resolutionOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.resolution === v ? 'on' : '') + '">' + l + '</button>').join('');
+    // D-274: resolusi foto (1K/2K/4K).
+    else if (which === 'imgres') {
+      items = imageResolutionOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="'
+        + (state.imageResolution === v ? 'on' : '') + '">' + esc(l) + '</button>').join('');
+    }
     // D-245: resolusi lipsync (model InfiniteTalk / LTX 2.5 A2V).
     else if (which === 'lipres') {
       const m = lipsyncModel();
@@ -1939,6 +2055,8 @@
           if (!im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
         }
       }
+      // D-274: pilih resolusi foto -> badge kredit ikut berubah.
+      if (which === 'imgres') state.imageResolution = b.dataset.v;
       if (which === 'model') {
         // Model baru -> samakan durasi/resolusi/aspek/tier ke capabilities model itu.
         state.videoModel = b.dataset.v;
@@ -2065,6 +2183,8 @@
       return engines.map(([v, l]) => ({ v, l, note: ENGINE_NOTES[v] || '' }));
     }
     if (which === 'imgmodel') return imageCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
+    // D-274: resolusi foto (1K/2K/4K) -> menentukan jumlah kredit.
+    if (which === 'imgres') return imageResolutionOptions().map(([v, l]) => ({ v, l }));
     if (which === 'model') return videoCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
     // D-245: model & resolusi lipsync.
     if (which === 'lipmodel') {
@@ -2091,6 +2211,8 @@
     if (which === 'dur') return ctx.duration;
     if (which === 'engine') return ctx.engine;
     if (which === 'imgmodel') return ctx.imageModel;
+    // D-274: resolusi foto terpilih.
+    if (which === 'imgres') return ctx.imageResolution;
     if (which === 'model') return ctx.videoModel;
     // D-245: model & resolusi lipsync.
     if (which === 'lipmodel') return ctx.lipsyncModel;
@@ -2130,6 +2252,8 @@
       list.push({ key: 'mgdur', label: 'Durasi', icon: 'clock' });
     } else if (kieEngine) {
       list.push({ key: 'imgmodel', label: 'Model', icon: 'sparkles' });
+      // D-274: resolusi foto bisa dipilih -> angka kredit ikut berubah.
+      list.push({ key: 'imgres', label: 'Resolusi', icon: 'sparkles' });
     }
     return list;
   }
@@ -2162,6 +2286,8 @@
         if (!im.aspects.includes(target.aspect)) target.aspect = im.defaultAspect || im.aspects[0];
       }
     }
+    // D-274: pilih resolusi foto -> badge kredit ikut berubah.
+    if (which === 'imgres') target.imageResolution = v;
     if (which === 'model') {
       target.videoModel = v;
       const m = videoCatalog.models.find((x) => x.id === v);
@@ -2245,6 +2371,8 @@
   const SET_CHIP_FALLBACK_ICON = {
     aspect: 'square', engine: 'cpu', dur: 'clock', tier: 'gauge', res: 'sliders',
     model: 'video', imgmodel: 'sparkles',
+    // D-274: resolusi foto -> ikon sparkles (sama seperti "Resolusi" video).
+    imgres: 'sparkles',
   };
   /** Ikon untuk satu pilihan pengaturan (null kalau tak ada). */
   function setChipIcon(key, v) {
@@ -3351,6 +3479,8 @@
       // klik -> panel berisi Rasio, Provider, Model, Durasi, Tier, Resolusi.
       // Di desktop pill tetap tampil baris seperti biasa.
       + '<div class="st-pill-wrap st-type-wrap"><button type="button" class="st-pill st-type-btn" id="stTypePill">' + icon('image-plus') + ' <b>Foto</b>' + icon('chevron-down') + '</button><div class="st-pop" id="stPop-type"></div></div>'
+      // D-274: badge kredit — angka aja, di samping jenis konten ("[Foto] [12]").
+      + '<span class="st-credit-badge st-hidden" id="stCreditBadge" title="Estimasi kredit Kie yang dipakai untuk generate ini"></span>'
       // D-221: container pill pengaturan (disembunyikan di HP, dipakai panel).
       + '<div class="st-settings-pills" id="stSettingsPills">'
       // Rasio (vertikal/horizontal) — urutan kedua.
@@ -3492,6 +3622,12 @@
       const m = lipsyncModel();
       if (m) state.lipsyncModel = m.id;
       renderLipsyncBar();
+    }).catch(() => {});
+    // D-274: saldo kredit Kie (live) -> badge kredit di composer.
+    fetch('/api/ai/credits', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d || !d.ok) return;
+      if (typeof d.credits === 'number') kieBalance = d.credits;
+      updateCreditBadge();
     }).catch(() => {});
     const ta = $('stPrompt');
     // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
