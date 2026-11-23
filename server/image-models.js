@@ -10,6 +10,9 @@
  * pilihan secara dinamis dari katalog yang sama.
  */
 
+// D-274: tarif kredit Kie per model gambar (dipakai frontend untuk badge kredit).
+import { IMAGE_CREDITS } from './kie-credits.js';
+
 /** Resolusi umum (Kie memakai 1K/2K/4K). */
 export const IMAGE_RESOLUTIONS = ['1K', '2K', '4K'];
 
@@ -268,6 +271,8 @@ export function imageCatalog() {
       note: m.note,
       defaultResolution: m.defaultResolution,
       defaultAspect: m.defaultAspect,
+      // D-274: estimasi kredit Kie per resolusi (angka saja, tanpa USD).
+      credits: IMAGE_CREDITS[m.id] || null,
     })),
   };
 }
