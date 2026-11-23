@@ -66,9 +66,10 @@ test('D-284: token aset WAJIB berawalan "aset-" (bukan "@gambar referensi")', ()
 test('D-284: token @ tak dikenal terdeteksi & diberi peringatan', () => {
   assert.ok(studio.includes('function unknownMentionTokens(raw)'), 'helper deteksi token asing');
   // Dipakai di generateLipsync (toast) & di tip UI.
-  assert.ok(studio.includes('const unknown = unknownMentionTokens(rawScript);'),
+  // D-285: tanpa argumen -> otomatis semua field (composer + arahan + kolom gambar).
+  assert.ok(studio.includes('const unknown = unknownMentionTokens();'),
     'generateLipsync harus memeriksa token asing');
-  assert.ok(studio.includes('unknownMentionTokens(($(\'stPrompt\') || {}).value)'),
+  assert.ok(studio.includes('const unknown = unknownMentionTokens();'),
     'tip UI harus memeriksa token asing');
   assert.ok(studio.includes('Token tak dikenal'), 'harus ada pesan jelas');
   assert.ok(studio.includes('token aset diawali "aset-"'), 'pesan harus menjelaskan format token');
@@ -79,7 +80,8 @@ test('D-284: UI memberi panduan 3 langkah (karakter -> gambar -> naskah)', () =>
   assert.ok(html.includes('.st-lipsync-tip{'), 'harus ada CSS tip');
   // Isi tip: 3 langkah.
   assert.ok(studio.includes('1. Pilih karakter'), 'langkah 1 = pilih karakter');
-  assert.ok(studio.includes('2. Mention gambar (ketik @)'), 'langkah 2 = mention gambar');
+  // D-285: langkah 2 kini menunjuk kolom gambar yang eksplisit.
+  assert.ok(studio.includes('2. Pilih gambar (kolom Gambar karakter)'), 'langkah 2 = pilih gambar');
   assert.ok(studio.includes('3. Tulis naskah'), 'langkah 3 = tulis naskah');
   // Ada penanda selesai (ok) vs belum (todo).
   assert.ok(studio.includes("'<b class=\"ok\">"), 'langkah selesai ditandai ok');
@@ -87,8 +89,9 @@ test('D-284: UI memberi panduan 3 langkah (karakter -> gambar -> naskah)', () =>
 });
 
 test('D-284: bar info lipsync tetap menampilkan sumber gambar & durasi', () => {
-  assert.ok(studio.includes('const src = sceneRefs.length ? \'gambar mention\''),
-    'info harus menyebut sumber gambar (mention vs potret karakter)');
+  // D-285: label sumber gambar diperjelas jadi "gambar dipilih".
+  assert.ok(studio.includes('const src = sceneRefs.length ? \'gambar dipilih\''),
+    'info harus menyebut sumber gambar (gambar dipilih vs potret karakter)');
   assert.ok(studio.includes('±\' + est + \' dtk (maks \' + max + \')'),
     'info harus menampilkan estimasi durasi');
   assert.ok(studio.includes('terlalu panjang, pendekkan naskah'),
