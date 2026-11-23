@@ -862,16 +862,86 @@
       }
     } catch { /* galeri diam-diam */ }
   }
-  /** Simpan aset hasil generate langsung ke server sebagai aset. */
+  /**
+   * Simpan aset hasil generate langsung ke server sebagai aset.
+   *
+   * D-273: SEBELUMNYA jalur JSON base64 dipakai, tapi:
+   *   1) `express.json({ limit:'5mb' })` di server, sedangkan Kie AI bisa
+   *      menghasilkan gambar 2K/4K (base64 10-20 MB) -> request DITOLAK;
+   *   2) Vercel serverless juga punya batas body ~4,5 MB;
+   *   3) hasilnya `if (r.ok)` diam-diam diabaikan -> gambar "hilang total"
+   *      tanpa pesan apa pun ke user.
+   * Sekarang: file besar (> 3 MB) pakai jalur signed-upload langsung ke
+   * Supabase Storage (D-263) — bypass limit server sama sekali.
+   * File kecil tetap lewat JSON (lebih cepat).
+   * Kegagalan SELALU memberi tahu user lewat toast.
+   */
   async function persistGenerated(mime, data, prompt, meta) {
+    const safeMime = mime || 'image/png';
+    const fileName = 'generate-' + Date.now() + (safeMime.includes('png') ? '.png'
+      : safeMime.includes('webp') ? '.webp' : safeMime.includes('gif') ? '.gif'
+      : safeMime.includes('mp4') ? '.mp4' : safeMime.includes('webm') ? '.webm' : '.jpg');
     try {
-      const r = await fetch('/api/studio/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ((await window.sherlyGetAccessToken?.()) || '') },
-        body: JSON.stringify({ mime, data, prompt, meta, kind: 'generate' }),
-      });
-      if (r.ok) { const d = await r.json(); if (d?.asset) { assets.unshift(d.asset); renderGallery(); } }
-    } catch { /* simpan aset gagal tidak menggagalkan generate */ }
+      const t = (await window.sherlyGetAccessToken?.()) || '';
+      if (!t) { window.toast?.('Gambar jadi, tapi gagal disimpan: sesi habis. Muat ulang halaman lalu coba lagi.'); return null; }
+      // Base64 -> byte -> Blob (ukuran asli = panjang base64 * 3/4).
+      const bin = atob(data || '');
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: safeMime });
+      // Dimensi gambar (biar galeri bedain vertikal/horizontal).
+      let dim = null;
+      try { dim = await readBlobDimensions(blob, safeMime); } catch { dim = null; }
+      const extra = { prompt, meta, kind: 'generate', width: dim?.width, height: dim?.height };
+      let asset = null;
+      if (blob.size > 3 * 1024 * 1024) {
+        // File besar -> signed upload langsung ke Supabase Storage.
+        asset = await uploadBlobDirect(blob, fileName, safeMime, extra);
+      } else {
+        // File kecil -> JSON base64 (cepat, tanpa ticket).
+        const r = await fetch('/api/studio/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+          body: JSON.stringify({ mime: safeMime, data, prompt, meta, kind: 'generate', width: dim?.width, height: dim?.height }),
+        });
+        const raw = await r.text();
+        let d = null;
+        try { d = raw ? JSON.parse(raw) : null; } catch { d = null; }
+        if (!r.ok || !d?.asset) {
+          // Fallback: kalau JSON ditolak (terlalu besar / limit), coba signed upload.
+          const msg = d?.error || ('HTTP ' + r.status);
+          try {
+            asset = await uploadBlobDirect(blob, fileName, safeMime, extra);
+          } catch {
+            window.toast?.('Gambar jadi, tapi gagal disimpan ke galeri: ' + msg);
+            return null;
+          }
+        } else asset = d.asset;
+      }
+      if (asset) { assets.unshift(asset); renderGallery(); }
+      return asset;
+    } catch (e) {
+      window.toast?.('Gambar jadi, tapi gagal disimpan ke galeri: ' + (e?.message || 'error tidak diketahui'));
+      return null;
+    }
+  }
+  /**
+   * D-273: baca dimensi gambar dari Blob di browser (supaya aset hasil
+   * generate punya rasio yang benar di galeri — vertikal vs horizontal).
+   */
+  function readBlobDimensions(blob, mime) {
+    return new Promise((resolve, reject) => {
+      if (!mime || !mime.startsWith('image/')) return reject(new Error('bukan gambar'));
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const out = { width: img.naturalWidth || 0, height: img.naturalHeight || 0 };
+        URL.revokeObjectURL(url);
+        resolve(out);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('gambar tidak bisa dibaca')); };
+      img.src = url;
+    });
   }
 
   // ===== D-198: Lightbox preview aset =====
@@ -2723,13 +2793,15 @@
         model: d.model || state.imageModel, modelLabel: d.model_label || null,
         resolution: d.resolution || state.imageResolution,
       };
-      await persistGenerated(d.image?.mime || 'image/png', d.image?.data || '', raw, meta);
+      const saved = await persistGenerated(d.image?.mime || 'image/png', d.image?.data || '', raw, meta);
       // D-272: hasil generate FOTO masuk GALERI ASET — bukan Rantai Adegan.
       // Rantai Adegan hanya berisi frame video/adegan berurutan, jadi user
       // tidak lagi bingung "kenapa fotonya masuk rantai adegan?".
       // Kalau user memang mau memakai frame ini sebagai adegan, bisa lewat
       // tombol "Jadikan Referensi" di lightbox aset.
-      window.toast?.('Gambar jadi ✨ — tersimpan di galeri aset.');
+      // D-273: pesan sukses hanya kalau BENAR-BENAR tersimpan (persistGenerated
+      // sudah memberi toast sendiri kalau gagal).
+      if (saved) window.toast?.('Gambar jadi ✨ — tersimpan di galeri aset.');
     } catch (e) {
       skel.remove();
       window.toast?.(e.message || 'Generator gambar gagal.');

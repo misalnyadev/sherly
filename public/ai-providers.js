@@ -488,7 +488,7 @@
     try {
       const d = await cpApi('/api/custom-providers');
       const list = Array.isArray(d.providers) ? d.providers : [];
-      if (!list.length) { box.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0">Belum ada provider kustom \u2014 tambahkan lewat form di bawah.</p>'; return; }
+      if (!list.length) { box.innerHTML = '<div class="vault-empty">Belum ada provider kustom \u2014 tambahkan lewat form di bawah.</div>'; return; }
       box.innerHTML = list.map((c) => '<div class="pl-item" style="cursor:default"><div class="pl-main"><h3 style="font-size:13.5px">' + esc(c.name) + '</h3><p style="white-space:normal">' + esc(c.baseUrl) + (c.model ? ' \u00b7 ' + esc(c.model) : '') + '</p></div><div class="card-actions" style="flex:none"><button type="button" class="outline-btn danger-btn" data-cp-del="' + esc(c.id) + '"><span data-icon="x"></span> Hapus</button></div></div>').join('');
       box.querySelectorAll('[data-cp-del]').forEach((b) => b.addEventListener('click', async () => {
         if (!confirm('Hapus provider kustom ini?')) return;

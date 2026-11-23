@@ -290,6 +290,13 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .modal-actions #probeKeyBtn{margin-right:auto}
 
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+/* D-273: status memuat & kosong dibungkus kotak jelas supaya tidak terlihat
+   seperti tulisan yatim (teks nempel tanpa konteks). */
+.vault-loading{grid-column:1/-1;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;
+  border:1px dashed #49334e;border-radius:14px;padding:18px 16px}
+.vault-loading .st-skel-img{width:26px;height:26px;aspect-ratio:1/1;border-radius:7px;flex:none}
+.vault-empty{grid-column:1/-1;border:1px dashed #49334e;border-radius:14px;padding:18px 16px;
+  color:var(--muted);font-size:12px;line-height:1.6;text-align:center}
 /* D-270: kartu provider lebih compact — jarak antar blok rapi, ada tautan
    resmi untuk mengambil API key tiap provider. */
 .vault-card{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:13px 14px;display:flex;flex-direction:column;gap:9px}
@@ -315,6 +322,12 @@ form > .pink-btn + .form-field,
 form > .outline-btn + .form-field{margin-top:14px}
 /* Di dalam .form-grid jarak sudah diatur oleh gap grid (jangan dobel). */
 .form-grid > .form-field + .form-field{margin-top:0}
+/* D-273: panel Admin (Grup API Key, Provider Kustom, Bank Suara) adalah
+   SAUDARA di dalam #settingsProvidersPane — bukan anak langsung .page-view.
+   Karena itu aturan `.page-view > .panel + .panel` TIDAK pernah kena dan
+   panel-panel itu menempel satu sama lain. Beri jarak antar panel di pane. */
+#settingsProvidersPane > * + *{margin-top:20px}
+#settingsProvidersPane > .panel{scroll-margin-top:16px}
 /* D-271: panel Pengaturan (Provider Kustom, Bank Suara) memakai blok div
    biasa — bukan .form-field — sehingga jaraknya tetap nempel. Beri jarak
    antar blok di dalam panel admin.
@@ -1649,7 +1662,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   <div id="vaultBanner" class="warn-banner" style="display:none"></div>
   <div class="cap-tabs" id="capabilityTabs" role="tablist" aria-label="Kategori kemampuan provider"></div>
   <div class="cap-empty" id="capabilityEmpty" hidden></div>
-  <div class="vault-providers" id="vaultProviderCards"><p style="color:var(--muted)">Memuat status provider...</p></div>
+  <div class="vault-providers" id="vaultProviderCards"><div class="vault-loading"><span class="st-skel-img"></span>Memuat status provider…</div></div>
   <div class="panel" id="vaultGroupsPanel"><div class="section-head"><h2><i data-icon="key"></i> Grup API Key Tersimpan</h2><button class="link" id="refreshKeysBtn"><span data-icon="refresh-cw"></span> Muat ulang</button></div>
    <div class="vault-table-wrap"><table class="vault-table" id="vaultKeysTable"><thead><tr><th>Nama</th><th>Provider</th><th>Key</th><th>Prioritas</th><th>Status</th><th>Kesehatan</th><th>Terakhir dipakai</th><th>Aksi</th></tr></thead><tbody><tr><td colspan="8" style="color:var(--muted)">Memuat...</td></tr></tbody></table></div>
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
