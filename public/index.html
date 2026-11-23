@@ -972,6 +972,30 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:44px}
 .st-scene-hint textarea::placeholder{color:#5d6f88}
 .st-scene-hint textarea:focus{outline:none;border-color:#f044a8}
+/* D-285: label field composer utama ("Prompt" / "Naskah yang dibacakan"). */
+.st-field-label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}
+.st-field-label.st-hidden{display:none}
+/* D-285: kolom "Gambar karakter di lokasi ini" — punya dropdown mention sendiri. */
+.st-mention-box-alt{margin-top:2px}
+.st-mention-box-alt textarea{width:100%;background:#0f1828;color:#fff;border:1px solid #24344e;
+  border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:44px}
+.st-mention-box-alt textarea::placeholder{color:#5d6f88}
+.st-mention-box-alt textarea:focus{outline:none;border-color:#f044a8}
+/* D-285: jarak antar sub-field di dalam kotak arahan supaya jelas tidak menyatu. */
+.st-scene-hint label.st-sub{margin-top:10px}
+/* D-285: dropdown mention di kolom "Gambar karakter" — muncul ke BAWAH
+   (kolom ini ada di bawah composer, jadi dropdown ke-atas akan tertutup
+   oleh isi panel). */
+.st-mention-box-alt .st-mention-list{bottom:auto;top:100%;margin-bottom:0;margin-top:-4px;
+  box-shadow:0 18px 50px #000c}
+/* D-285: preview gambar yang dipilih di kolom "Gambar karakter di lokasi ini". */
+.st-lip-preview{display:none;align-items:center;gap:8px;margin-top:7px;
+  padding:6px;border-radius:10px;border:1px solid #24344e;background:#0c1422}
+.st-lip-preview:not(.st-hidden){display:flex}
+.st-lip-preview img{width:38px;height:38px;object-fit:cover;border-radius:7px;
+  border:1px solid #24344e;flex:none;background:#0f1828}
+.st-lip-preview span{font-size:10.5px;color:var(--muted);line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .st-pop-lipsyncchar{max-height:220px;overflow:auto}
 .st-chain-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfd6e4;margin-bottom:9px}
 .st-chain-head svg{width:15px;height:15px;stroke:#ff72c5}

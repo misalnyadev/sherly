@@ -2332,8 +2332,18 @@ test('D-244: mode Karakter Bicara punya input "Arahan adegan" terpisah dari nask
   assert.ok(!doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus tampil di mode lipsync');
   assert.ok(doc.getElementById('stSceneHint'), 'textarea arahan adegan harus ada');
   assert.ok(doc.getElementById('stSceneHint').getAttribute('maxlength'), 'textarea arahan adegan punya batas panjang');
-  // Placeholder composer naskah menyuruh mention gambar.
-  assert.match(doc.getElementById('stPrompt').placeholder, /mention @ gambar/i);
+  // D-285: di mode Karakter Bicara, composer = NASKAH MURNI (bukan prompt).
+  // Gambar dipilih di kolom "Gambar karakter di lokasi ini" (ada @ sendiri).
+  assert.match(doc.getElementById('stPrompt').placeholder, /naskah/i,
+    'composer harus berisi naskah yang dibacakan');
+  assert.ok(doc.getElementById('stPromptLabel'), 'harus ada label composer');
+  assert.match(doc.getElementById('stPromptLabel').textContent, /naskah/i,
+    'label composer harus menyebut naskah');
+  // Kolom gambar karakter ada dan punya @mention sendiri.
+  assert.ok(doc.getElementById('stLipImage'), 'kolom gambar karakter harus ada');
+  assert.ok(doc.getElementById('stMentionListLip'), 'dropdown mention kolom gambar harus ada');
+  assert.match(doc.getElementById('stLipImage').placeholder, /@/,
+    'kolom gambar harus menyuruh ketik @');
 });
 
 test('D-244: request lipsync mengirim arahan adegan sebagai prompt', async () => {
