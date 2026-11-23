@@ -276,8 +276,44 @@ export async function getVideoTask(supabase, userId, id) {
 }
 
 /** Daftar task video milik user (terbaru dulu). */
+/** D-286: task yang menggantung > 20 menit dianggap mati. */
+export const STALE_VIDEO_TASK_MS = 20 * 60 * 1000;
+
 export async function listVideoTasks(supabase, userId, limit = 10) {
   const { data } = await supabase.from('sherly_video_tasks')
     .select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
-  return Array.isArray(data) ? data : [];
+  const tasks = Array.isArray(data) ? data : [];
+  // D-286: bersihkan task yang menggantung.
+  //
+  // Task yang tetap "running" lebih dari 20 menit hampir pasti sudah mati
+  // (Kie gagal / URL hasil tidak pernah dibaca — bug yang diperbaiki di
+  // pollKieVideoTask). Kalau tidak dibersihkan, user melihat spinner
+  // selamanya tanpa tahu apa yang terjadi.
+  await expireStaleVideoTasks(supabase, userId, tasks);
+  return tasks;
+}
+
+/**
+ * D-286: tandai task video/lipsync yang menggantung sebagai gagal.
+ *
+ * Batas: 20 menit (lipsync Kie biasanya selesai 1-3 menit; 20 menit sudah
+ * jauh melewati batas wajar). Pesan errornya jelas supaya user tahu harus
+ * mencoba lagi, bukan menunggu.
+ */
+export async function expireStaleVideoTasks(supabase, userId, tasks) {
+  const now = Date.now();
+  const stale = (Array.isArray(tasks) ? tasks : []).filter((t) => {
+    if (!t || t.status !== 'running') return false;
+    const started = Date.parse(t.created_at || t.updated_at || '');
+    if (!Number.isFinite(started)) return false;
+    return now - started > STALE_VIDEO_TASK_MS;
+  });
+  for (const t of stale) {
+    await updateVideoTask(supabase, userId, t.id, {
+      status: 'fail',
+      error: 'Generator tidak selesai dalam 20 menit — task dibatalkan. '
+        + 'Coba lagi dengan naskah lebih pendek atau resolusi 480p.',
+    }).catch(() => {});
+  }
+  return stale.map((t) => t.id);
 }

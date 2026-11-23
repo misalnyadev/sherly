@@ -64,6 +64,21 @@ export function lipsyncErrorMessage(err, ctx = {}) {
       + 'dan ukurannya di bawah ~10 MB. ' + `(${raw.slice(0, 120)})`;
   }
 
+  // --- D-286: Kie selesai tapi tidak mengembalikan URL hasil ---
+  if (/tidak mengembalikan URL|tidak mengembalikan url|url hasil kosong|no result url/i.test(raw)) {
+    return `Kie menandai task selesai tapi tidak mengembalikan URL video untuk ${model}. `
+      + 'Ini biasanya terjadi karena format respons Kie berubah atau file hasil '
+      + 'sudah kedaluwarsa. Coba ulang — kalau tetap gagal, pakai model lain '
+      + '(mis. LTX 2.5 Fast). ' + `(${raw.slice(0, 120)})`;
+  }
+
+  // --- D-286: URL input rusak (karakter jejas) ---
+  if (/invalid.*url|url.*invalid|malformed url|bad url/i.test(raw)) {
+    return `Kie menolak URL file input untuk ${model}. `
+      + 'Gambar potret atau audio bermasalah — coba pilih gambar lain atau '
+      + 'upload ulang potret karakter. ' + `(${raw.slice(0, 120)})`;
+  }
+
   // --- Kuota kredit Kie habis ---
   if (/credit|insufficient|quota|balance/i.test(raw)) {
     return 'Kredit Kie AI habis. Cek saldo di kie.ai, atau pakai provider lain. ' + `(${raw.slice(0, 120)})`;
