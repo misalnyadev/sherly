@@ -1,4 +1,4 @@
-# Riset: Motion GraphicsSherlyStudio — durasi, hook, dan TTS
+# Riset: Motion Graphics SherlyStudio — durasi, hook, dan TTS
 
 > Status: **riset** — hasilnya dipakai untuk mencari arah D-275 (belum diimplementasikan).
 > Tanggal riset: 2026-11-23.
@@ -11,7 +11,7 @@
 |---|---|
 | Durasi Motion Graphics paling panjang sekarang? | **10 detik** (template `captioned-clip`: `[6, 8, 10]`) |
 | Batas sebenarnya? | **Bukan** batas template — **4 MB upload** (batas body Vercel). Setelah signed-upload (D-263) aktif, jalur **client** tidak lagi terbatas oleh 4 MB. |
-| BatasWmaksimum yang aman? | **30 detik** untuk hook-style (Reels/TikTok), **60 detik** untuk konten explainer |
+| Batas maksimum yang aman? | **30 detik** untuk hook-style (Reels/TikTok), **60 detik** untuk konten explainer |
 | Kenapa 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
 | TTS untuk audio? | **GPT-SoVITS** (MIT, 5 detik sample) — TAPI **tidak mendukung bahasa Indonesia** |
 | TTS Indonesia yang lebih cocok? | Gemini TTS (sudah dipakai di repo) atau **Qwen3-TTS** (Apache-2.0, 10 bahasa) |
