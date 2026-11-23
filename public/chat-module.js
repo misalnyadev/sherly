@@ -8,9 +8,28 @@
   .ss-chat button{cursor:pointer;font:inherit}
   /* header */
   .ss-chat-toolbar{display:flex;align-items:center;gap:13px;padding:13px 20px;background:none;border-bottom:1px solid rgba(255,255,255,.045);position:relative;z-index:2}
-  .ss-chat-id{display:flex;align-items:center;gap:9px;min-width:0;border:1px solid #49334e;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #f044a814;transition:border-color .18s,box-shadow .18s}
+  .ss-chat-id{position:relative;display:flex;align-items:center;gap:9px;min-width:0;border:1px solid #49334e;background:#111a2e;border-radius:999px;padding:3px 13px 3px 3px;box-shadow:0 0 0 3px #f044a814;transition:border-color .18s,box-shadow .18s}
   .ss-chat-id:hover{border-color:rgba(240,68,168,.6);box-shadow:0 0 0 3px #f044a81f}
   .ss-status-text{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* D-269: status panjang -> klik buat lihat utuh (bubble). Teks pendek tetap
+     inline biasa (tanpa interaksi). */
+  .ss-status-text.is-clickable{cursor:pointer;text-decoration:underline dotted #ffd0ec;text-underline-offset:2px}
+  .ss-status-text.is-clickable:hover{color:#ffd0ec}
+  .ss-status-bubble{position:absolute;z-index:60;top:calc(100% + 8px);left:0;
+    max-width:280px;min-width:180px;padding:9px 12px;border-radius:12px;
+    border:1px solid #49334e;background:#111a2e;box-shadow:0 10px 30px rgba(0,0,0,.45);
+    color:#f4f5fb;font-size:12px;line-height:1.45;white-space:normal;
+    text-decoration:none;pointer-events:auto}
+  .ss-status-bubble[hidden]{display:none}
+  .ss-status-bubble::before{content:"";position:absolute;top:-5px;left:22px;
+    width:9px;height:9px;background:#111a2e;border-left:1px solid #49334e;
+    border-top:1px solid #49334e;transform:rotate(45deg)}
+  .ss-status-bubble b{display:block;font-size:9.5px;font-weight:800;letter-spacing:.1em;
+    color:#ff9bdc;text-transform:uppercase;margin-bottom:3px}
+  .ss-status-bubble-close{position:absolute;top:5px;right:6px;width:20px;height:20px;
+    border:0;background:none;color:#91a2b9;cursor:pointer;border-radius:6px;
+    display:grid;place-items:center;font-size:13px;line-height:1}
+  .ss-status-bubble-close:hover{color:#ffd0ec;background:#24344e}
   .ss-ava-wrap{position:relative;flex:none;display:flex;padding:0;border:0;background:none;appearance:none;-webkit-appearance:none}
   .ss-ava{display:block;width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 16%;border:1px solid rgba(255,255,255,.16);background:#111a2e}
   .ss-chat-name{font-size:13.5px;font-weight:500;color:#ffffff;letter-spacing:0;display:flex;align-items:center;gap:6px;line-height:1.15}
@@ -119,6 +138,12 @@
             <div class="ss-chat-name">Sherly <span class="ss-verified" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 2.1 3-.3 1.4 2.7 2.8 1.1-1 2.9 1 2.9-2.8 1.1-1.4 2.7-3-.3L12 22l-2.4-2.1-3 .3-1.4-2.7-2.8-1.1 1-2.9-1-2.9 2.8-1.1 1.4-2.7 3 .3L12 2zm-1.2 13.6l5-5-1.4-1.4-3.6 3.6-1.8-1.8L7.6 15l3.2 3.2z" opacity=".95"/></svg></span></div>
             <div class="ss-chat-status"><span class="ss-status-dot" aria-hidden="true"></span><span class="ss-status-text" id="ssStatusText">Online · siap bantu ide, strategi &amp; campaign</span></div>
           </button>
+          <!-- D-269: bubble status lengkap (hanya muncul kalau status terpotong & diklik). -->
+          <div class="ss-status-bubble" id="ssStatusBubble" hidden role="dialog" aria-label="Status Sherly">
+            <button type="button" class="ss-status-bubble-close" id="ssStatusBubbleClose" aria-label="Tutup status">&times;</button>
+            <b>Status Sherly</b>
+            <span id="ssStatusBubbleText"></span>
+          </div>
         </div>
         <span class="ss-spacer"></span>
         <button type="button" class="ss-newchat" id="ssNewChat" title="Percakapan baru" aria-label="Percakapan baru"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -160,6 +185,42 @@
   // diganti (1-2x sehari, jam acak 08:00-22:00 WIB) & membersihkan status
   // kedaluwarsa (>24 jam) dari DB. Client hanya menampilkan apa adanya.
   let __sherlyStatusAt = 0;
+  // D-269: status panjang -> klik untuk lihat utuh. Status pendek tetap
+  // inline biasa (tanpa kursor/tanda). Deteksi pakai scrollWidth > clientWidth
+  // (yaitu teks benar-benar terpotong oleh ellipsis).
+  const __sherlyStatusFull = { text: '' };
+  const refreshStatusOverflow = () => {
+    const el = $('ssStatusText');
+    if (!el) return;
+    const truncated = el.scrollWidth > el.clientWidth + 1;
+    el.classList.toggle('is-clickable', truncated);
+    el.setAttribute('role', truncated ? 'button' : 'presentation');
+    if (truncated) {
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('aria-label', 'Status Sherly: ' + __sherlyStatusFull.text + ' (klik untuk lihat utuh)');
+      el.title = 'Klik untuk lihat status lengkap';
+    } else {
+      el.removeAttribute('tabindex');
+      el.removeAttribute('aria-label');
+      el.title = `Status Sherly · berlaku 24 jam`;
+    }
+  };
+  const closeStatusBubble = () => {
+    const b = $('ssStatusBubble');
+    if (b) b.hidden = true;
+  };
+  const openStatusBubble = () => {
+    const b = $('ssStatusBubble');
+    const t = $('ssStatusBubbleText');
+    if (!b || !t) return;
+    t.textContent = __sherlyStatusFull.text;
+    b.hidden = false;
+  };
+  const toggleStatusBubble = () => {
+    const b = $('ssStatusBubble');
+    if (!b) return;
+    if (b.hidden) openStatusBubble(); else closeStatusBubble();
+  };
   const loadSherlyStatus = async (force = false) => {
     const el = $('ssStatusText');
     if (!el) return null;
@@ -171,17 +232,54 @@
       const text = typeof data?.status === 'string' ? data.status.trim() : '';
       if (text) {
         el.textContent = text;
+        __sherlyStatusFull.text = text;
         el.title = `Status Sherly · berlaku 24 jam${data?.expires_at ? ' (sampai ' + new Date(data.expires_at).toLocaleString('id-ID') + ')' : ''}`;
         // Panel "Chat Sherly" di Beranda ikut menampilkan status yang sama.
         const home = document.getElementById('homeSherlyStatus');
         if (home) home.textContent = '● ' + text;
         __sherlyStatusAt = Date.now();
+        refreshStatusOverflow();
         return text;
       }
     } catch { /* offline / server belum siap — biarkan teks bawaan */ }
     return el.textContent;
   };
   window.sherlyLoadStatus = loadSherlyStatus;
+  // D-269: klik status (hanya kalau terpotong) -> bubble berisi status utuh.
+  $('ssStatusText')?.addEventListener('click', (e) => {
+    if (!e.currentTarget.classList.contains('is-clickable')) return;
+    e.stopPropagation();
+    toggleStatusBubble();
+  });
+  $('ssStatusText')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!e.currentTarget.classList.contains('is-clickable')) return;
+    e.preventDefault(); e.stopPropagation();
+    toggleStatusBubble();
+  });
+  $('ssStatusBubbleClose')?.addEventListener('click', (e) => { e.stopPropagation(); closeStatusBubble(); });
+  document.addEventListener('click', (e) => {
+    const b = $('ssStatusBubble');
+    if (!b || b.hidden) return;
+    if (b.contains(e.target) || e.target.closest?.('#ssStatusText')) return;
+    closeStatusBubble();
+  });
+  // Escape menutup bubble.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    closeStatusBubble();
+  });
+  window.addEventListener('resize', () => { refreshStatusOverflow(); closeStatusBubble(); });
+  // D-269: font & layout chat belum settle saat script jalan -> pakai
+  // ResizeObserver supaya deteksi terpotong akurat setelah render.
+  if (typeof ResizeObserver !== 'undefined' && $('ssStatusText')) {
+    const ro = new ResizeObserver(() => refreshStatusOverflow());
+    ro.observe($('ssStatusText'));
+  }
+  refreshStatusOverflow();
+  // sekali lagi setelah layout jadi
+  requestAnimationFrame(() => refreshStatusOverflow());
+  setTimeout(() => refreshStatusOverflow(), 400);
   let token = window.sherlyStoredToken?.()?.access_token || null, conversationId = null, sending = false;
   const hasToken = () => Boolean(window.sherlyStoredToken?.()?.access_token || token);
   const authHeaders = async () => ({'Content-Type':'application/json','Authorization':`Bearer ${(await window.sherlyGetAccessToken?.()) || token}`});
