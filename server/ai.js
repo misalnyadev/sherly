@@ -630,11 +630,19 @@ export async function pollKieVideoTask(auth = {}, taskId) {
       const list = kieResultUrls(rj, d);
       // D-286: state dinormalisasi (sukses tanpa URL = gagal, bukan menggantung).
       const norm = kieNormalizeState(state, list, d);
+      // D-287: sertakan state mentah Kie + kunci yang ada di resultJson.
+      // Tanpa ini, error "tidak mengembalikan URL" tidak bisa dipetakan ke
+      // penyebabnya (user cuma lihat "gagal" tanpa petunjuk).
+      const rawKeys = rj && typeof rj === 'object' ? Object.keys(rj).join(',') : '';
       return {
         state: norm.state,
         progress: Number(d.progress) || 0,
         resultUrls: list,
         error: norm.error,
+        // D-287: info diagnostik (disimpan di meta task saat gagal).
+        rawState: state || '',
+        rawKeys,
+        hasResultJson: !!d.resultJson,
       };
     } catch (error) { lastError = error; }
   }
