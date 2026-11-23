@@ -69,7 +69,7 @@ create table if not exists public.ai_conversations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null default 'Percakapan Sherly AI',
-  provider text not null default 'groq' check (provider in ('gemini','groq','openrouter')),
+  provider text not null default 'groq' check (provider in ('gemini','groq','openrouter','kie','custom')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -418,8 +418,24 @@ export async function probeProviderKey(provider, apiKey, baseUrl) {
   const controller = AbortSignal.timeout(20000);
   const key = apiKey.trim();
   if (provider === 'kie') {
-    // Kie belum punya endpoint listing gratis yang diketahui — validasi format saja; kunci teruji sungguhan saat generate pertama.
-    return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
+    // Kie AI: endpoint resmi cek saldo kredit — balas 401 kalau kunci salah/tidak ada.
+    try {
+      const res = await fetch('https://api.kie.ai/api/v1/chat/credit', {
+        headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
+        signal: controller,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && (data?.code === undefined || data?.code === 200)) {
+        const credit = typeof data?.data === 'number' ? data.data : null;
+        return { ok: true, status: res.status, note: credit !== null ? `Kunci valid — saldo ${credit} kredit.` : 'Kunci valid.' };
+      }
+      const msg = data?.msg || data?.message || `kie.ai error (${res.status})`;
+      return { ok: false, status: res.status, error: msg };
+    } catch (error) {
+      if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
+      // Jaringan/API tidak terjangkau — jangan blokir penyimpanan key yang valid.
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
+    }
   }
   try {
     let res;

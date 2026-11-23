@@ -6,7 +6,7 @@
 create table if not exists public.ai_provider_keys (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  provider text not null check (provider in ('groq','gemini','openrouter')),
+  provider text not null check (provider in ('groq','gemini','openrouter','kie','custom')),
   key_name text not null,
   ciphertext text not null,
   iv text not null,
