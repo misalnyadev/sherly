@@ -249,8 +249,39 @@ export async function kieUploadBase64(apiKey, mime, data, { uploadPath = 'images
   }).catch(() => null);
   if (!res || !res.ok) throw new Error('Upload ' + label + ' ke Kie gagal.');
   const d = await res.json().catch(() => ({}));
-  const u = d?.data?.downloadUrl || d?.data?.fileUrl || d?.data?.url || d?.downloadUrl || d?.url;
-  if (!u) throw new Error('Kie tidak mengembalikan URL upload ' + label + '.');
+  const raw = d?.data?.downloadUrl || d?.data?.fileUrl || d?.data?.url || d?.downloadUrl || d?.url;
+  if (!raw) throw new Error('Kie tidak mengembalikan URL upload ' + label + '.');
+  // D-286: bersihkan URL upload sebelum dipakai sebagai `image_url`/`audio_url`.
+  //
+  // ⚠️ Gejala yang dilaporkan user: Kie menerima payload seperti
+  //   image_url = "[https://tempfile.redpandaai.co/.../lipsync-xxx.jpg"
+  //   prompt    = "Novi] berbicara natural. ..."   <- ada "]" nyasar
+  //
+  // Karakter "[", "]", spasi, newline, dan quote nyasar bisa masuk dari
+  // berbagai tempat (field upload Kie, copy-paste, wrapper API). URL yang
+  // rusak = video gagal dibuat tanpa pesan jelas.
+  const u = sanitizeMediaUrl(raw);
+  if (!u) throw new Error('URL upload ' + label + ' dari Kie tidak valid.');
+  return u;
+}
+
+/**
+ * D-286: bersihkan URL media (upload Kie) supaya bebas dari karakter jejas
+ * yang membuat API Kie menolak atau gagal diam-diam.
+ *
+ * Buang: kurung siku, spasi, newline, tab, backtick, dan quote nyasar di
+ * ujung. Pertahankan karakter yang sah di URL ( termasuk "=" di query string
+ * dan "%" di-encode).
+ */
+export function sanitizeMediaUrl(value) {
+  let u = String(value == null ? '' : value).trim();
+  if (!u) return '';
+  // Buang karakter jejas: kurung siku, kurung kurawal, backtick, quote,
+  // dan semua whitespace (URL tidak boleh punya spasi).
+  u = u.replace(/[\[\]{}`\"'\s]/g, '');
+  // Buang pembungkus yang bisa nyangkut di ujung: "<", "(", ">", ")".
+  // Kurung di TENGAH URL tetap boleh (sah sebagai bagian path).
+  u = u.replace(/^[<(]+/, '').replace(/[>)]+$/, '');
   return u;
 }
 
@@ -474,6 +505,90 @@ export async function generateLipsyncWithKie(auth = {}, opts = {}) {
  * Cek status task video di Kie (dipisah dari pembuatan task).
  * Return { state, progress, resultUrls, error }.
  */
+/**
+ * D-286: kumpulkan URL hasil dari respons Kie, dari SEMUA tempat Kie
+ * menyimpannya.
+ *
+ * ⚠️ BUG YANG DIPERBAIKI: sebelumnya memakai operator `||` berantai:
+ *   rj?.resultUrls || rj?.data?.result_urls || ... || rj?.data?.origin_urls
+ * Array KOSONG (`[]`) itu TRUTHY di JavaScript -> rantai `||` BERHENTI di
+ * `result_urls: []` dan TIDAK PERNAH mencoba `origin_urls`.
+ *
+ * Kie (terbukti di data produksi) menjawab:
+ *   resultJson = { code, data: { result_urls: [...], origin_urls: [...] } }
+ * Kalau `result_urls` kosong tapi `origin_urls` berisi URL video ->
+ * `resultUrls` kosong -> task menggantung di status "running" SELAMANYA
+ * (user klik "Buat" -> spinner jalan -> video tidak pernah muncul).
+ */
+export function kieResultUrls(rj, d = {}) {
+  const candidates = [
+    rj?.resultUrls,
+    rj?.data?.result_urls,
+    rj?.data?.resultUrls,
+    d.resultUrls,
+    d.result_urls,
+    rj?.data?.origin_urls,
+    rj?.origin_urls,
+    d.origin_urls,
+    // D-286: beberapa model (mis. OmniHuman) menaruh URL di
+    // `response.data[].video_url` / `origin_url`.
+    ...(Array.isArray(rj?.data?.response?.data) ? rj.data.response.data : []).map((x) => x?.video_url || x?.origin_url || x?.url),
+    ...(Array.isArray(d.response?.data) ? d.response.data : []).map((x) => x?.video_url || x?.origin_url || x?.url),
+  ];
+  const list = [];
+  for (const c of candidates) {
+    if (!c) continue;
+    if (Array.isArray(c)) {
+      for (const u of c) {
+        const url = typeof u === 'string' ? u : (u?.url || u?.video_url || u?.origin_url);
+        if (url && !list.includes(url)) list.push(url);
+      }
+    } else if (typeof c === 'string' && c) {
+      if (!list.includes(c)) list.push(c);
+    }
+    // URL pertama yang ketemu sudah cukup — jangan ambil duplikat dari
+    // sumber lain (mis. result_urls & origin_urls menunjuk file yang sama).
+    if (list.length) break;
+  }
+  return list;
+}
+
+/**
+ * D-286: normalisasi state Kie.
+ *
+ * Kie documented states: waiting | queuing | generating | success | fail.
+ * Beberapa model menjawab "completed" atau "succeed"/"finished". Sebaliknya,
+ * beberapa task GAGAL tapi state-nya tetap "success" dengan URL kosong ->
+ * harus dianggap gagal, bukan menggantung.
+ */
+export function kieNormalizeState(state, list, d = {}) {
+  const s = String(state || '').toLowerCase();
+  // Kie documented states: waiting | queuing | generating | success | fail.
+  const SUCCESS_STATES = ['success', 'succeed', 'succeeded', 'completed', 'complete', 'finished', 'done'];
+  const FAIL_STATES = ['fail', 'failed', 'failure', 'error', 'cancelled', 'canceled', 'timeout'];
+  // State in-flight -> tetap "running" (client lanjut polling).
+  const RUNNING_STATES = ['waiting', 'queuing', 'queued', 'generating', 'processing', 'pending', 'running', 'in_progress', 'created'];
+  if (SUCCESS_STATES.includes(s)) {
+    // Sukses tapi TIDAK ada URL hasil -> task tidak bisa diunduh.
+    if (!list.length) {
+      return {
+        state: 'fail',
+        error: d.failMsg || d.failCode
+          || 'Kie menandai task selesai tapi tidak mengembalikan URL video. '
+            + 'Coba ulang dengan naskah lebih pendek atau resolusi 480p.',
+      };
+    }
+    return { state: 'success', error: d.failMsg || d.failCode || null };
+  }
+  if (FAIL_STATES.includes(s)) {
+    return { state: 'fail', error: d.failMsg || d.failCode || null };
+  }
+  if (RUNNING_STATES.includes(s)) {
+    return { state: 'running', error: d.failMsg || d.failCode || null };
+  }
+  return { state: s || 'running', error: d.failMsg || d.failCode || null };
+}
+
 export async function pollKieVideoTask(auth = {}, taskId) {
   if (!taskId) throw Object.assign(new Error('Task video tidak ditemukan.'), { status: 400 });
   const attempts = await kieAttempts(auth);
@@ -495,14 +610,31 @@ export async function pollKieVideoTask(auth = {}, taskId) {
       const state = String(d.state || d.status || '').toLowerCase();
       let rj = d.resultJson || d.result;
       if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch {} }
-      const urls = rj?.resultUrls || rj?.data?.result_urls || rj?.data?.resultUrls || d.resultUrls
-        || (Array.isArray(rj?.data?.origin_urls) ? rj.data.origin_urls : null);
-      const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+      // D-286: Kumpulkan URL hasil dari SEMUA tempat Kie menyimpannya.
+      //
+      // ⚠️ BUG YANG DIPERBAIKI: sebelumnya memakai operator `||` berantai:
+      //   rj?.resultUrls || rj?.data?.result_urls || ... || rj?.data?.origin_urls
+      // Array KOSONG (`[]`) itu TRUTHY di JavaScript -> rantai `||` BERHENTI
+      // di `result_urls: []` dan TIDAK pernah mencoba `origin_urls`.
+      // Padahal Kie (terbukti di data produksi) menjawab:
+      //   resultJson = { code, data: { result_urls: [...], origin_urls: [...] } }
+      // Kalau `result_urls` kosong tapi `origin_urls` berisi URL video ->
+      // `resultUrls` kosong -> task menggantung di status "running" SELAMANYA
+      // (user klik "Buat" -> spinner jalan -> video tidak pernah muncul).
+      //
+      // Perbaikan: ambil SEMUA kandidat, filter yang kosong, pakai yang pertama
+      // yang benar-benar berisi URL.
+      // D-286: URL hasil diambil dari SEMUA tempat Kie menyimpannya
+      // (result_urls / origin_urls / response.data[].video_url / ...).
+      // Lihat kieResultUrls() untuk penjelasan bug array kosong = truthy.
+      const list = kieResultUrls(rj, d);
+      // D-286: state dinormalisasi (sukses tanpa URL = gagal, bukan menggantung).
+      const norm = kieNormalizeState(state, list, d);
       return {
-        state: state || 'running',
+        state: norm.state,
         progress: Number(d.progress) || 0,
         resultUrls: list,
-        error: d.failMsg || d.failCode || null,
+        error: norm.error,
       };
     } catch (error) { lastError = error; }
   }
@@ -613,14 +745,16 @@ export async function pollKieImageTask(auth = {}, taskId) {
       const state = String(d.state || d.status || '').toLowerCase();
       let rj = d.resultJson || d.result;
       if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch { /* bukan JSON */ } }
-      const urls = rj?.resultUrls || rj?.data?.result_urls || rj?.data?.resultUrls
-        || d.resultUrls || (Array.isArray(rj?.data?.origin_urls) ? rj.data.origin_urls : null);
-      const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+      // D-286: sama seperti polling video — URL hasil dari semua tempat
+      // (result_urls / origin_urls / response.data[].video_url), dan state
+      // dinormalisasi (sukses tanpa URL = gagal, bukan menggantung).
+      const list = kieResultUrls(rj, d);
+      const norm = kieNormalizeState(state, list, d);
       return {
-        state: state || 'running',
+        state: norm.state,
         progress: Number(d.progress) || 0,
         resultUrls: list,
-        error: d.failMsg || d.failCode || null,
+        error: norm.error,
       };
     } catch (error) { lastError = error; }
   }
@@ -694,7 +828,10 @@ async function kiePollImageTask(apiKey, base, taskId) {
     if (st === 'success' || st === 'completed') {
       let rj = d.resultJson || d.result;
       if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch {} }
-      const u = rj?.resultUrls?.[0] || d.resultUrls?.[0] || rj?.data?.result_urls?.[0];
+      // D-286: URL hasil dari semua tempat Kie menyimpannya (result_urls /
+      // origin_urls / response.data[].video_url) — array kosong = truthy,
+      // jadi jangan pakai `||` berantai di sini.
+      const u = kieResultUrls(rj, d)[0];
       if (!u) throw new Error('Kie sukses tapi URL hasil kosong.');
       const imgRes = await fetch(u, { signal: AbortSignal.timeout(30000) });
       if (!imgRes.ok) throw new Error('Gagal mengunduh hasil dari Kie (' + imgRes.status + ').');
