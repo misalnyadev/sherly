@@ -334,12 +334,50 @@ form > .pink-btn + .form-field,
 form > .outline-btn + .form-field{margin-top:14px}
 /* Di dalam .form-grid jarak sudah diatur oleh gap grid (jangan dobel). */
 .form-grid > .form-field + .form-field{margin-top:0}
+/* D-282: "Provider Kustom — Generator Studio" dan "Bank Suara Sherly"
+   ditata jadi 2 KOLOM kiri-kanan (bukan bertumpuk), dan font-nya dikecilkan
+   disamakan dengan form Pengaturan lain:
+     - label form  : 11px (sama seperti .form-field label bawaan)
+     - teks/desc   : 11px
+     - isi input    : 12px
+   Dulu: deskripsi 12px, judul sub 14px, label 11px, isi input inherit(14px).
+   Sekarang semuanya turun satu tingkat supaya panel terlihat compact dan
+   sejajar dengan form di halaman yang sama. */
+.providers-duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.providers-duo > .panel{min-width:0;margin:0}
+@media(max-width:900px){.providers-duo{grid-template-columns:1fr}}
+/* Font compact di dalam dua panel duo (override inline style juga perlu). */
+.providers-duo .section-head h2{font-size:13.5px}
+.providers-duo .section-head h2 [data-icon] svg{width:14px;height:14px}
+.providers-duo p{font-size:11px !important;line-height:1.55}
+.providers-duo .form-field label{font-size:11px}
+.providers-duo .form-field input,
+.providers-duo .form-field textarea,
+.providers-duo .form-field select{font-size:12px;padding:8px 10px}
+.providers-duo .form-field small{font-size:10px}
+.providers-duo .pl-item{padding:10px 12px;border-radius:12px;gap:10px}
+.providers-duo .pl-main h3{font-size:12.5px}
+.providers-duo .pl-main p{font-size:11px}
+/* Bank Suara: judul sub + counter tetap compact. */
+.providers-duo .bank-stat{padding:9px 11px;border-radius:10px}
+.providers-duo .bank-stat b{font-size:16px}
+.providers-duo .bank-stat span{font-size:10px}
+.providers-duo .bank-upload{padding:13px 14px;border-radius:10px}
+.providers-duo .bank-upload-head h3{font-size:12px}
+.providers-duo .bank-upload-head span,
+.providers-duo .bank-upload-note{font-size:10px}
+.providers-duo .bank-upload-row input{font-size:11px;padding:6px 8px}
+.providers-duo .bank-upload-count{font-size:11px}
+.providers-duo .bank-suara-progress{font-size:11px}
+.providers-duo .bank-suara-empty{font-size:11px;padding:18px 8px}
 /* D-273: panel Admin (Grup API Key, Provider Kustom, Bank Suara) adalah
    SAUDARA di dalam #settingsProvidersPane — bukan anak langsung .page-view.
    Karena itu aturan `.page-view > .panel + .panel` TIDAK pernah kena dan
    panel-panel itu menempel satu sama lain. Beri jarak antar panel di pane. */
 #settingsProvidersPane > * + *{margin-top:20px}
 #settingsProvidersPane > .panel{scroll-margin-top:16px}
+/* D-282: dua panel kini hidup di dalam .providers-duo → jarak antar panel
+   diambil dari gap grid, jadi margin antar panel sibling tidak berlaku. */
 /* D-271: panel Pengaturan (Provider Kustom, Bank Suara) memakai blok div
    biasa — bukan .form-field — sehingga jaraknya tetap nempel. Beri jarak
    antar blok di dalam panel admin.
@@ -360,6 +398,12 @@ form > .outline-btn + .form-field{margin-top:14px}
 #bankSuaraPanel .bank-upload-foot{margin-top:18px;padding-top:16px;border-top:1px dashed #f044a833}
 #bankSuaraPanel .bank-suara-list{margin-top:18px}
 #bankSuaraPanel .bank-suara-empty{padding:26px 8px}
+/* D-282: jarak antar BLOK di dalam panel TETAP 22px (D-272/D-273 — user minta
+   jarak antar panel jelas, jangan dipangkas). Yang dikecilkan D-282 cuma
+   FONT + padding dalam, supaya 2 kolom ini tetap compact tanpa kehilangan
+   kejelasan jarak. */
+#customProvidersPanel > .form-grid .form-field.full{margin-top:10px;padding-top:14px}
+#bankSuaraPanel .bank-upload-foot{padding-top:13px}
 /* Bank Prompt: baris tombol "Simpan" juga dipisah dari field di atasnya. */
 #pbFormPanel .form-grid .form-field.full{margin-top:10px;padding-top:18px;border-top:1px solid var(--line)}
 /* Grup API Key: catatan bawah tabel diberi jarak dari tabel. */
@@ -1698,6 +1742,10 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    <div class="vault-table-wrap"><table class="vault-table" id="vaultKeysTable"><thead><tr><th>Nama</th><th>Provider</th><th>Key</th><th>Prioritas</th><th>Status</th><th>Kesehatan</th><th>Terakhir dipakai</th><th>Aksi</th></tr></thead><tbody><tr><td colspan="8" style="color:var(--muted)">Memuat...</td></tr></tbody></table></div>
    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">Satu label bisa menyimpan banyak key — rotasi berjalan antar key dalam provider (angka prioritas terkecil lebih dulu), dan satu key dinonaktifkan otomatis setelah 5 kegagalan berturut-turut. Mode <b>Auto</b> mencoba: <b>Groq → Gemini → OpenRouter</b>. Model chat bisa diatur per provider di kartu di atas; gunakan tombol <b>Ambil daftar</b> untuk memuat model terbaru langsung dari provider. Jika model yang tersimpan sudah tidak tersedia, Sherly otomatis beralih ke model terbaru yang tersedia.</p>
   </div>
+  <!-- D-282: "Provider Kustom — Generator Studio" & "Bank Suara Sherly"
+       jadi 2 kolom kiri-kanan, dengan font compact yang sama dengan form
+       pengaturan lain (label 11px, teks 11px, input 12px). -->
+  <div class="providers-duo">
   <div class="panel" id="customProvidersPanel">
    <div class="section-head"><h2><i data-icon="sparkles"></i> Provider Kustom — Generator Studio</h2></div>
    <p style="color:var(--muted);font-size:12px;line-height:1.6;margin:0 0 12px">Tambah provider generator gambar apa pun yang kompatibel OpenAI (endpoint <b>/images/generations</b>) — agregator lain, self-host, dsb. API key dienkripsi server-side (AES-256-GCM). Setiap provider di sini otomatis muncul di pil <b>Mesin</b> halaman Studio.</p>
@@ -1707,7 +1755,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
      <div class="form-field"><label for="cpBase">Base URL *</label><input id="cpBase" maxlength="200" placeholder="cth: https://api.kie.ai/v1"></div>
      <div class="form-field"><label for="cpModel">Model (opsional)</label><input id="cpModel" maxlength="120" placeholder="cth: flux/dev"></div>
      <div class="form-field"><label for="cpKey">API Key *</label><input id="cpKey" type="password" maxlength="300" autocomplete="off" placeholder="Tempel API key di sini"></div>
-     <div class="form-field full" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="pink-btn" id="cpAddBtn"><span data-icon="plus"></span> Tambah Provider</button><span id="cpMsg" style="font-size:11.5px;color:var(--muted)"></span></div>
+     <div class="form-field full" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="pink-btn" id="cpAddBtn"><span data-icon="plus"></span> Tambah Provider</button><span id="cpMsg" style="font-size:11px;color:var(--muted)"></span></div>
    </div>
   </div>
   <div class="panel" id="bankSuaraPanel">
@@ -1731,6 +1779,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    <p class="bank-suara-progress" id="bankProgress" role="status"></p>
    <div class="bank-suara-list" id="bankSuaraList"><p class="bank-suara-empty">Memuat Bank Suara...</p></div>
   </div>
+  </div><!-- /.providers-duo -->
   </div>
   <div id="settingsPersonaPane" hidden>
    <div class="page-heading sub"><div><h1 style="font-size:19px">Persona Sherly</h1><p>Ubah identitas &amp; suara Sherly — perubahan langsung tampil di halaman Persona; nama pemilik studio dipakai saat Sherly berbincang.</p></div></div>
