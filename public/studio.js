@@ -306,11 +306,27 @@
   });
 
   // ===== D-196: rantai adegan lokal =====
-  function loadChain() { try { const a = JSON.parse(localStorage.getItem(CHAIN_KEY)); chain = Array.isArray(a) ? a : []; } catch { chain = []; } }
+  // D-272: hasil generate FOTO tidak lagi otomatis masuk rantai adegan.
+  // Rantai sekarang hanya diisi eksplisit user (tombol "Masukkan Rantai").
+  // Rantai lama (berisi foto hasil generate otomatis) dibersihkan saat load
+  // supaya user tidak bingung frame lama tiba-tiba muncul lagi.
+  const CHAIN_VERSION = 2;
+  function loadChain() {
+    try {
+      const raw = localStorage.getItem(CHAIN_KEY);
+      if (!raw) { chain = []; return; }
+      const parsed = JSON.parse(raw);
+      // Format lama: array langsung. Format baru: { v, frames }.
+      if (Array.isArray(parsed) || !parsed || parsed.v !== CHAIN_VERSION || !Array.isArray(parsed.frames)) {
+        chain = []; try { localStorage.removeItem(CHAIN_KEY); } catch {} return;
+      }
+      chain = parsed.frames;
+    } catch { chain = []; }
+  }
   function saveChain() {
     while (chain.length > MAX_CHAIN) chain.shift();
     for (;;) {
-      try { localStorage.setItem(CHAIN_KEY, JSON.stringify(chain)); return; }
+      try { localStorage.setItem(CHAIN_KEY, JSON.stringify({ v: CHAIN_VERSION, frames: chain })); return; }
       catch {
         if (chain.length > 1) chain.shift();
         else { try { localStorage.removeItem(CHAIN_KEY); } catch {} return; }
@@ -887,14 +903,45 @@
       + '<div class="st-lb-actions">'
       + '<a class="st-act" href="' + esc(a.url) + '" download="' + esc(a.file_name || 'aset') + '">' + icon('download') + ' Unduh</a>'
       + '<button type="button" class="st-act" data-lb-ref="1">' + icon('layers') + ' Jadikan Referensi</button>'
+      + (isVideo ? '' : '<button type="button" class="st-act" data-lb-chain="1">' + icon('film') + ' Masukkan Rantai</button>')
       + (isVideo ? '<button type="button" class="st-act" data-lb-edit="1">' + icon('film') + ' Edit Video</button>' : '')
       + '<button type="button" class="st-act danger" data-lb-del="1">' + icon('x') + ' Hapus</button>'
       + '</div></div>';
     box.classList.add('open');
     box.querySelectorAll('[data-lb-close]').forEach((b) => b.addEventListener('click', closePreview));
     box.querySelector('[data-lb-ref]')?.addEventListener('click', () => { useAssetAsReference(a); closePreview(); });
+    box.querySelector('[data-lb-chain]')?.addEventListener('click', () => { addAssetToChain(a); closePreview(); });
     box.querySelector('[data-lb-edit]')?.addEventListener('click', () => { editAsset(a); closePreview(); });
     box.querySelector('[data-lb-del]')?.addEventListener('click', () => { deleteAsset(a); closePreview(); });
+  }
+  /**
+   * D-272: masukkan aset gambar ke Rantai Adegan.
+   *
+   * Dulu hasil generate foto langsung masuk rantai; sekarang hasil generate
+   * hanya masuk GALERI ASET. Rantai tetap bisa dipakai secara eksplisit lewat
+   * tombol "Masukkan Rantai" di lightbox aset (untuk menyusun adegan berurutan).
+   */
+  async function addAssetToChain(a) {
+    if (!a || !a.url) return;
+    if (a.media_type === 'video') { window.toast?.('Rantai adegan hanya untuk gambar.'); return; }
+    try {
+      const res = await fetch(a.url);
+      const blob = await res.blob();
+      // blobToDataUrl() sudah mengembalikan base64 TANPA prefix "data:...;base64,".
+      const b64 = await blobToDataUrl(blob);
+      const frame = {
+        id: 'f' + Date.now(),
+        mime: blob.type || 'image/png',
+        data: b64 || '',
+        prompt: a.prompt || a.file_name || '',
+        ts: Date.now(),
+      };
+      if (!frame.data) { window.toast?.('Gagal membaca gambar aset.'); return; }
+      chain = chain.filter((f) => f.id !== frame.id);
+      chain.push(frame); saveChain();
+      renderChain();
+      window.toast?.('Masuk Rantai Adegan.');
+    } catch { window.toast?.('Gagal menambahkan aset ke rantai adegan.'); }
   }
   function closePreview() {
     const box = $('stLightbox'); if (!box) return;
@@ -2677,14 +2724,12 @@
         resolution: d.resolution || state.imageResolution,
       };
       await persistGenerated(d.image?.mime || 'image/png', d.image?.data || '', raw, meta);
-      // Rantai adegan: simpan frame terakhir sebagai referensi adegan berikutnya.
-      if (d.image?.data) {
-        const frame = { id: 'f' + Date.now(), mime: d.image?.mime || 'image/png', data: d.image.data, prompt: raw, ts: Date.now() };
-        chain = chain.filter((f) => f.id !== frame.id);
-        chain.push(frame); saveChain();
-        renderChain();
-      }
-      window.toast?.('Gambar jadi ✨');
+      // D-272: hasil generate FOTO masuk GALERI ASET — bukan Rantai Adegan.
+      // Rantai Adegan hanya berisi frame video/adegan berurutan, jadi user
+      // tidak lagi bingung "kenapa fotonya masuk rantai adegan?".
+      // Kalau user memang mau memakai frame ini sebagai adegan, bisa lewat
+      // tombol "Jadikan Referensi" di lightbox aset.
+      window.toast?.('Gambar jadi ✨ — tersimpan di galeri aset.');
     } catch (e) {
       skel.remove();
       window.toast?.(e.message || 'Generator gambar gagal.');
