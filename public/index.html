@@ -151,12 +151,14 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 @media(max-width:600px){.form-grid{grid-template-columns:1fr}.form-field.full{grid-column:auto}.page-heading{align-items:flex-start;flex-direction:column}}
 </style><style>
 /* AI Key Vault */
-.vault-model{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
-.vault-model label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px}
+.vault-model{margin-top:auto;border-top:1px solid var(--line);padding-top:9px}
+.vault-model label{font-size:10.5px;color:#cfd6e4;display:block;margin-bottom:5px}
 .vault-model-row{display:flex;gap:6px}
 .vault-model-row input{flex:1;min-width:0;background:#0f1828;color:#fff;border:1px solid #24344e;border-radius:9px;padding:8px;font-size:11px}
 .vault-model-row .outline-btn{padding:8px 12px;font-size:10px;white-space:nowrap}
-.vault-model-src{font-size:9px;color:var(--muted);margin-top:4px}
+/* D-270: di HP baris model boleh membungkus supaya kartu tidak melebar. */
+@media(max-width:560px){.vault-model-row{flex-wrap:wrap}.vault-model-row input{flex:1 1 100%}.vault-model-row .outline-btn{flex:1 1 0}}
+.vault-model-src{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4}
 .member-row>td{background:#0a1220;padding:10px}
 .member-table{width:100%;border-collapse:collapse;font-size:11px}
 .member-table th,.member-table td{text-align:left;padding:6px 8px;border-bottom:1px solid #111a2e;white-space:nowrap}
@@ -288,10 +290,31 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .modal-actions #probeKeyBtn{margin-right:auto}
 
 .vault-providers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.vault-card{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:16px}
-.vault-card h3{margin:0 0 2px;font-size:14px;display:flex;align-items:center;gap:8px;text-transform:capitalize}
-.vault-card p{margin:6px 0 10px;color:var(--muted);font-size:11px}
+/* D-270: kartu provider lebih compact — jarak antar blok rapi, ada tautan
+   resmi untuk mengambil API key tiap provider. */
+.vault-card{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid var(--line);border-radius:15px;padding:13px 14px;display:flex;flex-direction:column;gap:9px}
+.vault-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.vault-card h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px;text-transform:capitalize}
+.vault-card p.vault-detail{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
 .vault-card .vault-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:10px;color:var(--muted)}
+/* Tautan resmi untuk mengambil API key + dokumentasi provider. */
+.vault-keylinks{display:flex;gap:6px;flex-wrap:wrap}
+.vault-keylink{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;
+  border:1px solid #74436c;border-radius:8px;background:transparent;color:#ffd0ec;
+  font-size:10.5px;font-weight:700;text-decoration:none;line-height:1.2;transition:filter .18s}
+.vault-keylink svg{width:12px;height:12px;stroke:currentColor}
+.vault-keylink:hover{filter:brightness(1.18)}
+.vault-keylink.ghost{border-color:#24344e;color:#a9b8cd}
+.vault-card .vault-keyhint{margin:0;color:var(--muted);font-size:10px;line-height:1.4;opacity:.85}
+/* D-270: field form yang ditumpuk (bukan di dalam .form-grid) sebelumnya
+   nempel tanpa jarak -> beri jarak lega antar field. */
+form > .form-field + .form-field{margin-top:12px}
+form > .form-field + .pink-btn,
+form > .form-field + .outline-btn,
+form > .pink-btn + .form-field,
+form > .outline-btn + .form-field{margin-top:14px}
+/* Di dalam .form-grid jarak sudah diatur oleh gap grid (jangan dobel). */
+.form-grid > .form-field + .form-field{margin-top:0}
 .pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;border:1px solid transparent}
 .pill.ok{background:#311738;color:#ff9bdc;border-color:#49334e}
 .pill.failing{background:#24142a;color:#ff9bdc;border-color:#5b1f4e}
@@ -305,7 +328,7 @@ table.vault-table{width:100%;border-collapse:collapse;font-size:12px}
 .toggle-btn.off{border-color:#24344e;background:#111a2e;color:#a9b8cd}
 .warn-banner{border:1px solid #49334e;background:#24142a;color:#ffd0ec;border-radius:12px;padding:12px 14px;font-size:12px;margin-bottom:14px}
 .icon-btn{padding:7px 9px}
-@media(max-width:1100px){.vault-providers{grid-template-columns:1fr}}
+@media(max-width:1100px){.vault-providers{grid-template-columns:minmax(0,1fr)}}
 /* Pass konsistensi menyeluruh — ikon heading, fokus input & hover seragam */
 .section-head h2 [data-icon],.chat h3 [data-icon]{margin-right:7px}
 .form-field input,.form-field textarea,.form-field select,.character-toolbar input,.vault-model-row input,.model-search{transition:border-color .18s,box-shadow .18s}
@@ -2010,7 +2033,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 </section>
  <div class="modal-backdrop" id="keyModal"><div class="modal"><h2 id="keyModalTitle">Tambah API Key</h2><p class="modal-sub">Key dienkripsi server-side sebelum disimpan. Klik <b>Tes koneksi</b> untuk menguji <b>kunci API-nya saja</b> (tanpa memakai model apa pun), atau langsung <b>Simpan Key</b> — server selalu menguji lebih dulu dan key yang gagal <b>tidak akan disimpan</b>. Pemilihan model chat dilakukan di kartu provider (tombol <b>Ambil daftar</b>) setelah key tersimpan. Hanya 4 digit terakhir yang bisa dilihat kembali.</p>
  <form id="keyForm"><input type="hidden" id="keyFormId"><div class="form-grid">
-  <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option><option value="kie">Kie AI</option><option value="custom" id="ssProviderCustom" hidden>Kustom (key sendiri)</option></select></div>
+  <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option><option value="kie">Kie AI</option><option value="custom" id="ssProviderCustom" hidden>Kustom (key sendiri)</option></select><small id="keyProviderHint"></small><a class="vault-keylink" id="keyProviderLink" href="#" target="_blank" rel="noopener noreferrer" hidden><span>Ambil API key di situs resmi</span></a></div>
   <div class="form-field"><label>Nama grup / label key *</label><input id="keyName" required maxlength="80" list="keyNameSuggestions" placeholder="mis. groq-utama"><small>Pakai label yang sama untuk menggabungkan banyak key ke satu grup.</small><datalist id="keyNameSuggestions"></datalist></div>
   <div class="form-field full"><label id="keyValueLabel">API Key *</label><input id="keyValue" type="password" required minlength="8" autocomplete="off" placeholder="Tempel API key di sini"><small id="keyValueNote">Minimal 8 karakter. Nilai asli tidak pernah tersimpan di server/frontend.</small></div>
   <div class="form-field"><label>Prioritas (kecil = lebih didahulukan)</label><input id="keyPriority" type="number" min="1" max="1000" value="100"></div>

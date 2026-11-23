@@ -5,6 +5,16 @@
   const $ = (id) => document.getElementById(id);
   const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
   const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
+  // D-270: tautan resmi untuk mendapatkan API key (server jadi sumber utama;
+  // fallback di bawah supaya UI tetap hidup bila payload lama).
+  const FALLBACK_PROVIDER_INFO = {
+    groq: { label: 'Groq', keyUrl: 'https://console.groq.com/keys', docsUrl: 'https://console.groq.com/docs/overview', hint: 'Tier gratis tersedia, tanpa kartu kredit.' },
+    gemini: { label: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs', hint: 'Tier gratis tersedia di Google AI Studio.' },
+    openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
+    kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
+  };
+  let providerInfo = FALLBACK_PROVIDER_INFO;
+  const infoOf = (p) => providerInfo[p] || FALLBACK_PROVIDER_INFO[p] || null;
   let groupCache = [];
   let modelCache = {};
   let keyModalMode = 'add'; // add | edit | rotate
@@ -104,20 +114,30 @@
       const current = modelCache[p]?.model || '—';
       const source = modelCache[p]?.source || 'default';
       const sourceLabel = source === 'settings' ? 'tersimpan di pengaturan' : 'default aplikasi/env';
+      // D-270: tautan resmi untuk mendapatkan API key provider ini.
+      const info = infoOf(p);
+      const keyLinks = info && info.keyUrl ? `<div class="vault-keylinks">
+        <a class="vault-keylink" href="${esc(info.keyUrl)}" target="_blank" rel="noopener noreferrer">${iconSvg('arrow-up-right')}<span>Ambil API key</span></a>
+        ${info.docsUrl ? `<a class="vault-keylink ghost" href="${esc(info.docsUrl)}" target="_blank" rel="noopener noreferrer">${iconSvg('book-open')}<span>Dokumentasi</span></a>` : ''}
+      </div>
+      ${info.hint ? `<p class="vault-keyhint">${esc(info.hint)}</p>` : ''}` : '';
       return `<div class="vault-card">
-        <h3>${esc(PROVIDER_LABEL[p])}</h3>
-        <div class="cap-badges">${capabilityBadges(p)}</div>
-        <p>${esc(detail)}</p>
+        <div class="vault-card-head">
+          <h3>${esc(PROVIDER_LABEL[p])}</h3>
+          <div class="cap-badges">${capabilityBadges(p)}</div>
+        </div>
         <div class="vault-meta">${pill(headlineClass === 'ok' ? 'ok' : headlineClass)} <span>${esc(headline)}</span> ${env[p] ? '<span class="pill env">ENV FALLBACK</span>' : ''} ${failing ? `<span class="pill failing">${failing} FAILING</span>` : ''}</div>
+        <p class="vault-detail">${esc(detail)}</p>
+        ${keyLinks}
         <div class="vault-model">
-          <label for="model-${p}">Model yang dipakai Chat Sherly</label>
+          <label for="model-${p}">Model untuk Chat Sherly</label>
           <div class="vault-model-row">
             <input id="model-${p}" value="${esc(current)}" placeholder="model-id" autocomplete="off" spellcheck="false" aria-label="Model ${esc(PROVIDER_LABEL[p])}">
             <button class="outline-btn" data-fetch-models="${p}" type="button">Ambil daftar</button>
             <button class="outline-btn" data-save-model="${p}" type="button">Simpan</button>
           </div>
           <div class="model-picker" id="picker-${p}" hidden></div>
-          <div class="vault-model-src">Sumber model: ${esc(sourceLabel)} · “Ambil daftar” memuat model terbaru langsung dari ${esc(PROVIDER_LABEL[p])}</div>
+          <div class="vault-model-src">Sumber: ${esc(sourceLabel)} · “Ambil daftar” memuat model terbaru langsung dari ${esc(PROVIDER_LABEL[p])}</div>
         </div>
       </div>`;
     }).join('');
@@ -255,6 +275,10 @@
       lastAIPayload = data;
       capabilityRegistry = (Array.isArray(data.capabilities) && data.capabilities.length) ? data.capabilities : FALLBACK_CAPABILITIES;
       providerCapabilities = data.providerCapabilities || FALLBACK_PROVIDER_CAPS;
+      // D-270: info provider (tautan ambil API key) dari server.
+      if (data.providerInfo && typeof data.providerInfo === 'object') {
+        providerInfo = { ...FALLBACK_PROVIDER_INFO, ...data.providerInfo };
+      }
       renderCapabilityTabs();
       groupCache = data.groups || [];
       modelCache = data.models || {};
@@ -282,6 +306,24 @@
   window.loadAIProviders = loadAIProviders;
 
   // ---------- Modal (add to group | edit | rotate) ----------
+  // D-270: tampilkan tautan resmi ambil API key sesuai provider terpilih.
+  function syncProviderLink() {
+    const link = $('keyProviderLink');
+    const hint = $('keyProviderHint');
+    const p = $('keyProvider')?.value;
+    const info = infoOf(p);
+    if (hint) hint.textContent = info && info.hint ? info.hint : '';
+    if (!link) return;
+    if (info && info.keyUrl) {
+      link.href = info.keyUrl;
+      link.hidden = false;
+    } else {
+      link.removeAttribute('href');
+      link.hidden = true;
+    }
+  }
+  $('keyProvider')?.addEventListener('change', () => { syncProviderLink(); resetProbeResult(); });
+
   function openKeyModal(mode, item, groupPrefill) {
     keyModalMode = mode;
     addPrefill = groupPrefill || (mode === 'add' && item ? { provider: item.provider, key_name: item.key_name } : null);
@@ -299,6 +341,7 @@
     $('saveKeyBtn').textContent = mode === 'rotate' ? 'Simpan Key Baru' : 'Simpan Key';
     $('probeKeyBtn').style.display = mode === 'edit' ? 'none' : '';
     resetProbeResult();
+    syncProviderLink();
     $('keyModal').classList.add('open');
   }
   function closeKeyModal() { $('keyModal').classList.remove('open'); }
@@ -425,7 +468,6 @@
   $('addProviderKeyBtn')?.addEventListener('click', () => openKeyModal('add', null));
   $('cancelKeyBtn')?.addEventListener('click', closeKeyModal);
   $('probeKeyBtn')?.addEventListener('click', testKeyBeforeSave);
-  $('keyProvider')?.addEventListener('change', resetProbeResult);
   $('keyValue')?.addEventListener('input', resetProbeResult);
   $('refreshKeysBtn')?.addEventListener('click', loadAIProviders);
   $('keyForm')?.addEventListener('submit', submitKeyForm);
