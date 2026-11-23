@@ -40,6 +40,23 @@ const MG_ENTRY = path.join(MG_PROJECT, 'src', 'index.ts');
 
 export const MOTION_GRAPHICS_PROVIDER = 'remotion';
 
+/**
+ * D-275: durasi Motion Graphics dibuka sampai 30 detik.
+ *
+ * Sebelumnya maks 10 detik (hanya `captioned-clip` = [6, 8, 10]). Itu bukan
+ * batas upload — jalur render client sudah lewat signed-upload (D-263) untuk
+ * file >= 4 MB, jadi batas sebenarnya adalah KUALITAS: `bitrateForDuration()`
+ * sizing ke 4 MB, dan di 45+ detik bitrate menyentuh lantai 800 kbps
+ * (video jadi pecil).
+ *
+ * Durasi 30 detik aman: ~1,4-1,6 Mbps (lihat public/motion-graphics.js).
+ * Semua durasi di sini harus SINKRON dengan public/motion-graphics.js.
+ */
+export const MG_MAX_DURATION = 30;
+
+/** Durasi yang boleh dipilih (detik). */
+export const MG_DURATIONS = [5, 6, 8, 10, 12, 15, 20, 25, 30];
+
 /** Template yang bisa dipilih user. */
 export const MG_TEMPLATES = [
   {
@@ -48,7 +65,7 @@ export const MG_TEMPLATES = [
     hint: 'Judul + subjudul + logo Sherly, cocok buat pembuka konten.',
     icon: 'sparkles',
     defaultDuration: 6,
-    durations: [5, 6, 8],
+    durations: [5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'title', label: 'Judul', placeholder: 'Contoh: Kreasi Tanpa Batas', required: true},
@@ -61,7 +78,7 @@ export const MG_TEMPLATES = [
     hint: 'Tempel video lalu kasih subtitle per baris.',
     icon: 'captions',
     defaultDuration: 8,
-    durations: [6, 8, 10],
+    durations: [6, 8, 10, 12, 15, 20, 25, 30],
     aspects: ['9:16', '16:9'],
     fields: [
       {key: 'src', label: 'URL video', placeholder: 'https://… (kosong = latarnya teks saja)'},
@@ -74,7 +91,7 @@ export const MG_TEMPLATES = [
     hint: 'Satu angka besar + label, buat kutipan atau ringkasan data.',
     icon: 'bar-chart',
     defaultDuration: 5,
-    durations: [4, 5, 6],
+    durations: [4, 5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'value', label: 'Nilai', placeholder: 'Contoh: 3.2x', required: true},
@@ -257,10 +274,19 @@ export async function renderMotionGraphic(req, opts = {}) {
     inputProps: req.inputProps,
     ...(browserExecutable ? {browserExecutable} : {}),
   });
+  // D-275: komposisi Remotion didaftarkan dengan `durationInFrames` statis
+  // (default template). Durasi yang DIPILIH user harus dipakai — kalau tidak,
+  // render server selalu menghasilkan durasi default (6/8/5 detik) dan
+  // pilihan durasi di UI jadi tidak berefek.
+  // `durationInFrames` dihitung dari durasi yang diminta user.
+  const compositionWithDuration = {
+    ...composition,
+    durationInFrames,
+  };
   const license = licenseConfig();
 
   await renderer.renderMedia({
-    composition,
+    composition: compositionWithDuration,
     serveUrl,
     codec: 'h264',
     outputLocation,

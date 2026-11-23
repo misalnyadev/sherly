@@ -42,16 +42,24 @@ export const BrandedIntro: React.FC<BrandedIntroProps> = ({
 
   const total = Math.max(1, Math.round(durationInSeconds * fps));
 
+  // D-275: intro bisa sampai 15 detik. Animasi masuk selesai di ~1,6 detik,
+  // jadi durasi panjang akan jadi "layar diam". Perbaikan: intro tetap
+  // ditampilkan (hold) dan gerakannya "bernapas" pelan sampai fade out.
+  const INTRO_MAX_FRAMES = Math.round(2.4 * fps);
+  const introLen = Math.min(total, INTRO_MAX_FRAMES);
+  const animFrame = Math.min(frame, introLen);
+  const isHolding = frame > introLen;
+
   // Judul: masuk dengan spring, settles di ~60% durasi.
   const titleIn = spring({
-    frame: frame - Math.round(0.35 * fps),
+    frame: animFrame - Math.round(0.35 * fps),
     fps,
     config: {damping: 200, mass: 0.7},
   });
 
   // Subjudul: muncul sedikit setelah judul.
   const subIn = spring({
-    frame: frame - Math.round(1.15 * fps),
+    frame: animFrame - Math.round(1.15 * fps),
     fps,
     config: {damping: 200, mass: 0.9},
   });
@@ -62,6 +70,12 @@ export const BrandedIntro: React.FC<BrandedIntroProps> = ({
     [-1, 1],
     [0.72, 1],
   );
+
+  // Napas pelan saat menahan (supaya layar tidak benar-benar statis).
+  const breath = isHolding
+    ? Math.sin(((frame - introLen) / Math.max(1, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.012;
 
   // Fade out di 12% terakhir.
   const fadeOut = interpolate(frame, [total - Math.round(0.6 * fps), total], [1, 0], {
@@ -110,6 +124,8 @@ export const BrandedIntro: React.FC<BrandedIntroProps> = ({
           textAlign: 'center',
           flexDirection: 'column',
           gap: Math.round(width * 0.022),
+          // D-275: napas pelan saat menahan (durasi > 2,4 detik).
+          transform: `scale(${breathScale})`,
         }}
       >
         {/* Logo Sherly —基督 "sherlyheart" Equivalent: hati pink */}

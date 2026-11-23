@@ -2197,7 +2197,13 @@
     // D-249: template & durasi render Motion Graphics.
     if (which === 'mgtpl') return motionTemplates.map((t) => ({ v: t.id, l: t.label, note: t.hint || '' }));
     if (which === 'mgdur') {
-      const tpl = motionTemplate();
+      // D-275: template yang dipakai = template di DRAFT panel Pengaturan
+      // (kalau panel terbuka), bukan template yang sudah tersimpan di state.
+      // Kalau tidak, user memilih "Klip Bersubtitle" (30 detik) di panel
+      // tapi daftar durasi masih milik template lama (mis. intro, 15 detik)
+      // — opsi baru ikut tersembunyi sampai panel ditutup.
+      const tplId = ctx.motionTemplateId;
+      const tpl = motionTemplates.find((t) => t.id === tplId) || motionTemplate();
       return (tpl?.durations || [5, 6, 8]).map((d) => ({ v: String(d), l: d + ' detik' }));
     }
     if (which === 'tier') return tierOptions(ctx).map(([v, l]) => ({ v, l }));

@@ -49,13 +49,39 @@ const MG_FPS = 30;
 export const MG_UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // 4 MB (sisakan ruang untuk multipart)
 
 /**
+ * D-275: durasi maksimum Motion Graphics = 30 detik.
+ *
+ * ANGKA-ANGKA INI WAJIB SINKRON dengan server/motion-graphics.js.
+ * Batas sebenarnya bukan upload — jalur client lewat signed-upload (D-263)
+ * untuk file >= 4 MB. Yang membatasi adalah KUALITAS: di 45+ detik bitrate
+ * menyentuh lantai 800 kbps dan video jadi pecil. 30 detik masih ~950 kbps.
+ */
+export const MG_MAX_DURATION = 30;
+
+/** Durasi yang boleh dipilih (detik). */
+export const MG_DURATIONS = [5, 6, 8, 10, 12, 15, 20, 25, 30];
+
+/**
  * Bitrate (bit/detik) supaya hasil muat di bawah batas upload.
+ *
+ * D-275: untuk durasi pendek (<= 12 detik) tetap sizing ke 4 MB supaya file
+ * kecil & upload cepat. Untuk durasi panjang, file LEBIH besar diizinkan
+ * (signed-upload, tanpa batas body) — jadi bitrate dinaikkan ke ~1,8-2,5 Mbps
+ * supaya tidak pecil, bukan diturunkan.
+ *
  * @param {number} durationInSeconds
  * @returns {number}
  */
 export function bitrateForDuration(durationInSeconds) {
   const dur = Math.max(1, Number(durationInSeconds) || 1);
-  // Sisakan ~15% untuk overhead multipart + muxing.
+  if (dur > 12) {
+    // Durasi panjang: file boleh lebih besar (signed-upload), tapi jangan
+    // berlebihan supaya render & upload tetap cepat.
+    // 15s -> 2,5 Mbps | 20s -> 2,0 | 25s -> 1,8 | 30s -> 1,6
+    const bits = Math.floor((3_200_000 * 12) / dur);
+    return Math.min(Math.max(bits, 1_400_000), 2_500_000);
+  }
+  // Durasi pendek: sisakan ~15% untuk overhead multipart + muxing.
   const targetBytes = MG_UPLOAD_MAX_BYTES * 0.85;
   const bits = Math.floor((targetBytes * 8) / dur);
   // Batas bawah & atas supaya tidak terlalu pecil nor overly besar.
@@ -70,7 +96,7 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Judul + subjudul + logo Sherly, cocok buat pembuka konten.',
     icon: 'sparkles',
     defaultDuration: 6,
-    durations: [5, 6, 8],
+    durations: [5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'title', label: 'Judul', placeholder: 'Contoh: Kreasi Tanpa Batas', required: true},
@@ -83,7 +109,7 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Tempel video lalu kasih subtitle per baris.',
     icon: 'captions',
     defaultDuration: 8,
-    durations: [6, 8, 10],
+    durations: [6, 8, 10, 12, 15, 20, 25, 30],
     aspects: ['9:16', '16:9'],
     fields: [
       {key: 'src', label: 'URL video', placeholder: 'https://… (kosong = latarnya teks saja)'},
@@ -96,7 +122,7 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Satu angka besar + label, buat kutipan atau ringkasan data.',
     icon: 'bar-chart',
     defaultDuration: 5,
-    durations: [4, 5, 6],
+    durations: [4, 5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'value', label: 'Nilai', placeholder: 'Contoh: 3.2x', required: true},
@@ -321,12 +347,29 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
   const total = Math.max(1, totalSeconds);
   const fadeOut = interpolate(t, [total - 0.6, total], [1, 0]);
 
-  // Spring: judul masuk ~0.35 dtk, subjudul ~1.15 dtk.
-  const titleIn = spring(t - 0.35, {damping: 200, mass: 0.7});
-  const subIn = spring(t - 1.15, {damping: 200, mass: 0.9});
+  // D-275: intro bisa dipilih sampai 15 detik. Animasi lama selesai di
+  // ~1,5 detik, jadi video 10+ detik akan jadi "layar diam" yang membosankan.
+  // Perbaikan: intro tetap tampil sebagai BERTAHAN (hold), dan gerakannya
+  // "bernapas" pelan supaya layar tidak benar-benar statis.
+  //   - Timeline intro dipadatkan ke max 2,4 detik.
+  //   - Setelah masuk, konten "napas" pelan (scale + opacity denyut kecil).
+  const INTRO_MAX = 2.4;
+  const introLen = Math.min(total, INTRO_MAX);
+  // Skala waktu: kalau durasi > INTRO_MAX, animasi tetap pakai langkah
+  // waktu asli (tidak dipercepat) tapi tidak boleh melebihi introLen.
+  const animT = Math.min(t, introLen);
+  const isHolding = t > introLen;
 
-  // Denyut cahaya (loop).
+  // Spring: judul masuk ~0.35 dtk, subjudul ~1.15 dtk.
+  const titleIn = spring(animT - 0.35, {damping: 200, mass: 0.7});
+  const subIn = spring(animT - 1.15, {damping: 200, mass: 0.9});
+
+  // Denyut cahaya (loop) + "napas" pelan saat menahan.
   const pulse = 0.72 + 0.28 * ((Math.sin(t * Math.PI * 0.9) + 1) / 2);
+  const breath = isHolding
+    ? Math.sin(((t - introLen) / Math.max(0.6, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.012;
 
   ctx.save();
   ctx.globalAlpha = fadeOut;
@@ -334,6 +377,11 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
 
   const cx = w / 2;
   const cy = h / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(breathScale, breathScale);
+  ctx.translate(-cx, -cy);
 
   // Logo hati.
   const heartSize = Math.round(w * 0.085);
@@ -390,6 +438,7 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
     drawLines(ctx, subLines, cx, subY, type.subhead * 1.35);
   }
 
+  ctx.restore();
   ctx.restore();
 }
 
@@ -480,10 +529,22 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
 
   const total = Math.max(1, totalSeconds);
   const fadeOut = interpolate(t, [total - 0.5, total], [1, 0]);
-  const valueIn = spring(t - 0.3, {damping: 200, mass: 0.8});
-  const labelIn = spring(t - 0.85, {damping: 200, mass: 1});
-  const noteIn = spring(t - 1.35, {damping: 200, mass: 1.1});
+  // D-275: kartu statistik bisa sampai 15 detik. Animasi masuk selesai di
+  // ~1,6 detik, jadi durasi panjang perlu "tahan" + napas pelan supaya
+  // layarnya tidak diam total.
+  const INTRO_MAX = 2.4;
+  const introLen = Math.min(total, INTRO_MAX);
+  const animT = Math.min(t, introLen);
+  const isHolding = t > introLen;
+  const valueIn = spring(animT - 0.3, {damping: 200, mass: 0.8});
+  const labelIn = spring(animT - 0.85, {damping: 200, mass: 1});
+  const noteIn = spring(animT - 1.35, {damping: 200, mass: 1.1});
   const cardScale = lerp(0.94, 1, clamp(valueIn, 0, 1));
+  // Napas pelan saat menahan.
+  const breath = isHolding
+    ? Math.sin(((t - introLen) / Math.max(0.6, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.014;
 
   ctx.save();
   ctx.globalAlpha = fadeOut;
@@ -494,7 +555,7 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(cardScale, cardScale);
+  ctx.scale(cardScale * breathScale, cardScale * breathScale);
   ctx.translate(-cx, -cy);
   ctx.globalAlpha = fadeOut * clamp(valueIn, 0, 1);
 
@@ -677,9 +738,13 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
   for (let frame = 0; frame < totalFrames; frame++) {
     const t = frame / MG_FPS;
     // Frame video ikut disinkronkan ke waktu render.
+    // D-275: kalau video sumber lebih pendek dari durasi pilihan, video
+    // diulang (loop) supaya layar tidak beku di frame terakhir.
     if (videoEl) {
       try {
-        videoEl.currentTime = Math.min(t, videoEl.duration || t);
+        const vDur = Number(videoEl.duration) || 0;
+        const seek = vDur > 0 ? (t % vDur) : t;
+        videoEl.currentTime = Math.min(seek, vDur > 0 ? vDur : t);
       } catch { /* seeking belum siap */ }
     }
     draw(ctx, size.width, size.height, t, props, durationInSeconds, videoEl);
@@ -714,7 +779,13 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     opts.onProgress?.({progress: 98, phase: 'compressing'});
     finalBlob = await reencodeSmaller(canvas, size, durationInSeconds, videoCodec, finalBlob.size);
   }
-  if (finalBlob.size > MG_UPLOAD_MAX_BYTES) {
+  // D-275: durasi panjang menghasilkan file > 4 MB. Jalur client-side
+  // mengirim file >= 4 MB lewat signed-upload (uploadBlobDirect) yang tidak
+  // punya batas body, jadi batas keras di sini hanya relevan untuk jalur
+  // multipart server (limit ~4,5 MB Vercel).
+  // Batas client: 24 MB — cukup untuk 30 detik di bitrate 1,4 Mbps (~5 MB).
+  const HARD_MAX_BYTES = 24 * 1024 * 1024;
+  if (finalBlob.size > HARD_MAX_BYTES) {
     throw Object.assign(
       new Error('Video terlalu besar untuk dikirim (' + (finalBlob.size / 1024 / 1024).toFixed(1) + ' MB). Pilih durasi lebih pendek.'),
       {status: 413},
@@ -733,12 +804,19 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
 
 /**
  * D-252: render ulang dengan bitrate lebih rendah sampai muat.
+ *
+ * D-275: target ukuran mengikuti jalur upload yang akan dipakai:
+ *  - durasi pendek (<= 12 detik) -> 4 MB (multipart server, Vercel ~4,5 MB)
+ *  - durasi panjang (> 12 detik)  -> 24 MB (signed-upload, tanpa batas body)
  * @returns {Promise<Blob>}
  */
 async function reencodeSmaller(canvas, size, durationInSeconds, codec, previousSize) {
   const mediabunny = await import('./vendor/mediabunny.min.mjs');
   const {Output, Mp4OutputFormat, BufferTarget, CanvasSource} = mediabunny;
   const totalFrames = Math.max(1, Math.round(durationInSeconds * MG_FPS));
+  const targetBytes = durationInSeconds > 12
+    ? 24 * 1024 * 1024
+    : MG_UPLOAD_MAX_BYTES;
 
   // Bitrate turun bertahap: 60% -> 40% -> 25% dari nilai semula.
   const base = bitrateForDuration(durationInSeconds);
@@ -760,7 +838,7 @@ async function reencodeSmaller(canvas, size, durationInSeconds, codec, previousS
     }
     await output.finalize();
     const blob = new Blob([output.target.buffer], {type: 'video/mp4'});
-    if (blob.size <= MG_UPLOAD_MAX_BYTES) return blob;
+    if (blob.size <= targetBytes) return blob;
     if (blob.size >= previousSize) break;
   }
   return new Blob([], {type: 'video/mp4'});

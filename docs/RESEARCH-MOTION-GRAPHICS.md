@@ -1,6 +1,7 @@
 # Riset: Motion Graphics SherlyStudio — durasi, hook, dan TTS
 
-> Status: **riset** — hasilnya dipakai untuk mencari arah D-275 (belum diimplementasikan).
+> Status: **bagian durasi sudah diimplementasikan (D-275)** — lihat §2.5.
+> Bagian hook/beat/CTA/TTS masih **riset** (belum diimplementasikan).
 > Tanggal riset: 2026-11-23.
 
 ---
@@ -9,10 +10,11 @@
 
 | Pertanyaan | Jawaban |
 |---|---|
-| Durasi Motion Graphics paling panjang sekarang? | **10 detik** (template `captioned-clip`: `[6, 8, 10]`) |
+| Durasi Motion Graphics paling panjang **sebelum** D-275? | **10 detik** (template `captioned-clip`: `[6, 8, 10]`) |
+| Durasi Motion Graphics paling panjang **sekarang**? | **30 detik** (`captioned-clip`: `[6, 8, 10, 12, 15, 20, 25, 30]`) |
 | Batas sebenarnya? | **Bukan** batas template — **4 MB upload** (batas body Vercel). Setelah signed-upload (D-263) aktif, jalur **client** tidak lagi terbatas oleh 4 MB. |
 | Batas maksimum yang aman? | **30 detik** untuk hook-style (Reels/TikTok), **60 detik** untuk konten explainer |
-| Kenapa 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
+| Kenapa dulu cuma 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
 | TTS untuk audio? | **GPT-SoVITS** (MIT, 5 detik sample) — TAPI **tidak mendukung bahasa Indonesia** |
 | TTS Indonesia yang lebih cocok? | Gemini TTS (sudah dipakai di repo) atau **Qwen3-TTS** (Apache-2.0, 10 bahasa) |
 
@@ -20,16 +22,18 @@
 
 ## 2. Durasi Motion Graphics — Analisis Batasan
 
-### 2.1 Kondisi sekarang
+### 2.1 Kondisi sebelum D-275
 
 ```
 server/motion-graphics.js  → MG_TEMPLATES[].durations
   branded-intro   : [5, 6, 8]      default 6
-  captioned-clip  : [6, 8, 10]     default 8     ← MAKSIMUM 10 detik
+  captioned-clip  : [6, 8, 10]     default 8     ← MAKSIMUM 10 detik (sebelum D-275)
   stat-card       : [4, 5, 6]      default 5
 ```
 
 Client (`public/motion-graphics.js`) punya salinan identik (`MG_CLIENT_TEMPLATES`) — **wajib disinkronkan manual**.
+Sesudah D-275 daftar durasinya berubah; angka barunya ada di §2.5 dan dijaga oleh
+`test/motion-graphics-duration.test.js` (test "durasi server & client SINKRON").
 
 ### 2.2 Yang sebenarnya membatasi (bukan template)
 
@@ -88,6 +92,56 @@ Hasil hitungannya:
 | Explainer panjang | 45–60 detik | Hanya kalau script-nya kuat |
 
 Rekomendasi teknis: **buka 30 detik**, sediakan bitrate terpisah untuk durasi panjang (turunkan `keyFrameInterval`, naikkan `bitrate` di 30–60 detik ke 1,5–2,5 Mbps karena file boleh lebih besar lewat signed-upload).
+
+### 2.5 D-275 — Implementasi durasi (sudah dikerjakan)
+
+Riset di atas dipakai untuk membuka durasi Motion Graphics jadi **maksimum 30 detik**.
+Semua angka durasi di `server/motion-graphics.js` dan `public/motion-graphics.js` harus
+**sinkron** (ada test yang menjaga ini).
+
+| Template | Durasi sebelum | Durasi sekarang |
+|---|---|---|
+| `branded-intro` | 5 / 6 / 8 | 5 / 6 / 8 / 10 / 12 / 15 |
+| `captioned-clip` | 6 / 8 / 10 | 6 / 8 / 10 / 12 / 15 / 20 / 25 / **30** |
+| `stat-card` | 4 / 5 / 6 | 4 / 5 / 6 / 8 / 10 / 12 / 15 |
+
+Yang ikut berubah (bukan cuma daftar dropdown):
+
+1. **Bug render server diperbaiki.** `renderMotionGraphic()` pernah menghitung
+   `durationInFrames` lalu membuangnya, sehingga `renderMedia()` selalu memakai
+   durasi statis dari `Root.tsx` (6/8/5 detik) — pilihan durasi di UI tidak
+   berefek. Sekarang `compositionWithDuration` diteruskan ke `renderMedia()`.
+2. **`calculateMetadata` di `Root.tsx`.** Semua 8 komposisi punya
+   `calculateMetadata` yang membaca `durationInSeconds` dari props dan
+   overriding `durationInFrames` sebelum render (dibatasi 1–30 detik).
+3. **Bitrate durasi panjang dinaikkan, bukan diturunkan.** Durasi > 12 detik
+   memakai jalur signed-upload (tanpa batas body), jadi file boleh lebih besar:
+   15s → 2,5 Mbps · 20s → 2,0 · 25s → 1,8 · 30s → 1,4 (≈ 5 MB). Durasi ≤ 12
+   detik tetap sizing ke 4 MB supaya upload lewat multipart server tetap aman.
+4. **Intro & kartu statistik "menahan" (hold) + bernapas.** Animasi masuk
+   selesai di ~1,6 detik; tanpa perubahan, video 10+ detik jadi layar diam.
+   Sekarang intro ditahan sampai fade out dengan napas pelan (scale ±1,2 %).
+5. **Video sumber di-loop** kalau lebih pendek dari durasi pilihan, supaya
+   layar tidak beku di frame terakhir (`t % vDur` di client, `loop` di Remotion).
+6. **Subtitle ikut mengisi durasi baru** — `parseCaptions()` sudah
+   mend distribusikan cue berdasarkan `totalMs`, jadi baris subtitle otomatis
+   memenuhi video 30 detik.
+7. **Bug panel Pengaturan diperbaiki.** `settingChoices('mgdur')` memakai
+   `motionTemplate()` yang membaca `state.motionTemplateId`. Padahal di panel
+   Pengaturan, template yang dipilih ada di `settingsDraft`. Akibatnya user
+   memilih "Klip Bersubtitle" (30 detik) di panel, tapi daftar durasi masih
+   milik template lama (intro, 15 detik) — opsi 20/25/30 detik ikut
+   tersembunyi sampai panel ditutup & dibuka lagi. Sekarang daftar durasi
+   membaca `ctx.motionTemplateId` (draft lebih dulu, lalu state).
+
+Verifikasi end-to-end (Remotion 4.0.545, Chromium lokal):
+
+```
+durationInSeconds=5  -> 150f (5.00s)   | 20 -> 600f (20.00s)
+durationInSeconds=12 -> 360f (12.00s)  | 30 -> 900f (30.00s)
+clamp 999            -> 900f (30.00s)
+render MP4 30 detik  -> mvhd duration = 30000/1000 = 30.000 detik
+```
 
 ---
 

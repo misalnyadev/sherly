@@ -153,6 +153,9 @@ export const CaptionedClip: React.FC<CaptionedClipProps> = ({
         <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center'}}>
           <video
             src={src}
+            // D-275: kalau video sumber lebih pendek dari durasi pilihan,
+            // ulangi supaya layar tidak beku di frame terakhir.
+            loop
             style={{
               width: '100%',
               height: '100%',
