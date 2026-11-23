@@ -514,6 +514,45 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
   ("elevenlabs.io"/"11.ai") kalau audio dipublikasikan. Karena itu ElevenLabs
   hanya jadi cadangan **terakhir**.
 
+##### ⚠️ D-281 — WAJIB: key baru ElevenLabs MATI secara default
+
+Ini penyebab paling umum "401 padahal key baru":
+
+> **ElevenLabs menyalakan "Restrict Key" untuk SETIAP key baru, dengan SEMUA
+> permission = "No Access".** Key yang baru dibuat **tidak bisa melakukan
+> apa-apa** sampai user meng-editnya.
+
+Permission yang wajib untuk Sherly:
+
+| Permission | Nilai | Untuk apa |
+|---|---|---|
+| **Text to Speech** | `Access` | synthesize suara (wajib) |
+| **Voices** | `Read` | ambil daftar voice |
+| **User** | `Read` | cek kuota & status plan |
+
+Langkah: **Profile → API Keys → ⋯ → Edit → nyalakan permission di atas → Save Changes**.
+Kuncinya sendiri **tidak berubah**, jadi tidak perlu paste ulang.
+
+##### ⚠️ Bedakan "API Key" vs "API Key ID"
+
+Di halaman API Keys ada dua kolom. Yang dipakai adalah **API Key penuh**
+(awalan `sk_`, 51 karakter) — **bukan** "API Key ID". ElevenLabs kini menolak
+key ID (`400 invalid_api_key_prefix`).
+
+##### ⚠️ Free tier dari data center / VPN
+
+ElevenLabs kadang memblokir akun gratis yang dipakai dari alamat **data-center
+atau VPN** (`401 free_tier_usage_disabled`) — dan flag itu **tidak bisa
+dibatalkan** oleh ElevenLabs. ⚠️ **Server Sherly berjalan di Vercel (data
+center)**, jadi ini bisa terjadi. Solusinya: pakai TTSForFree sebagai cadangan
+utama, atau tambah prepaid credit / plan berbayar.
+
+##### ⚠️ Free plan tidak boleh pakai Voice Library
+
+`402 paid_plan_required` — free plan hanya boleh memakai **premade voices**
+(Contoh: Rachel `21m00Tcm4TlvDq8ikWAM`, Sarah `EXAVITQu4vr4xnSDxMaL`), bukan
+Voice Library.
+
 #### 4.6.4.5 Urutan fallback final (D-280)
 
 ```

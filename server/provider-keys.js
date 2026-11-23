@@ -58,7 +58,7 @@ export const PROVIDER_INFO = {
     keyUrl: 'https://elevenlabs.io/app/settings/api-keys',
     signupUrl: 'https://elevenlabs.io/sign-up',
     docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech',
-    hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit audio), API key tanpa kartu kredit. Paket gratis tidak termasuk hak komersial — wajib atribusi.',
+    hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. ⚠️ WAJIB: setelah membuat key, edit key-nya → nyalakan permission "Text to Speech: Access" + "Voices: Read" + "User: Read" (key baru default-nya semua No Access). Paste API KEY PENUH berawalan "sk_", bukan "API Key ID". Paket gratis tanpa hak komersial — wajib atribusi.',
   },
 };
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
@@ -500,23 +500,81 @@ export async function probeProviderKey(provider, apiKey, baseUrl) {
     }
   }
   if (provider === 'elevenlabs') {
-    // D-278: ElevenLabs — endpoint resmi GET /v1/voices (header xi-api-key).
-    try {
-      const res = await fetch('https://api.elevenlabs.io/v1/voices', {
-        headers: { Accept: 'application/json', 'xi-api-key': key },
-        signal: controller,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const count = Array.isArray(data?.voices) ? data.voices.length : 0;
-        return { ok: true, status: res.status, note: count ? `Kunci valid — ${count} voice tersedia.` : 'Kunci valid.' };
+    // D-281: ElevenLabs — probe BERTAHAP.
+    //
+    // Alasan: key baru ElevenLabs mati secara default ("Restrict Key" aktif,
+    // semua permission = "No Access"). Endpoint yang butuh permission
+    // berbeda akan gagal dengan alasan berbeda, jadi kita coba dari yang
+    // paling ringan:
+    //   1. `GET /v1/user/subscription` → butuh permission `user_read`
+    //   2. `GET /v1/voices`           → butuh permission `voices_read`
+    //
+    // Kalau (1) sukses tapi (2) gagal → key-nya **valid**, hanya permission
+    // `voices_read` yang belum dinyalakan → key TETAP disimpan (TTS tetap jalan).
+    const {elevenlabsErrorMessage, parseElevenlabsError} = await import('./elevenlabs-errors.js');
+    const headers = {Accept: 'application/json', 'xi-api-key': key};
+
+    const call = async (url) => {
+      try {
+        const res = await fetch(url, {headers, signal: controller});
+        const data = await res.json().catch(() => ({}));
+        return {res, data};
+      } catch (error) {
+        if (error.name === 'TimeoutError') throw error;
+        return {res: {ok: false, status: 0}, data: {}, networkError: error};
       }
-      const detail = data?.detail;
-      const msg = String((Array.isArray(detail) && detail[0]?.msg) || (typeof detail === 'string' ? detail : '') || `elevenlabs error (${res.status})`);
-      return { ok: false, status: res.status, error: msg };
+    };
+
+    try {
+      // Langkah 1 — subscription (permission paling ringan).
+      const sub = await call('https://api.elevenlabs.io/v1/user/subscription');
+      if (sub.networkError) {
+        return {ok: true, status: 0, note: 'Validasi format saja — kunci ElevenLabs teruji saat synthesize pertama.'};
+      }
+      if (sub.res.ok) {
+        const tier = sub.data?.tier || 'free';
+        const limit = sub.data?.character_limit;
+        const subNote = `Kunci valid — paket ${tier}${limit ? ` (${limit} karakter/bulan)` : ''}.`;
+        // Langkah 2 — voices (permission voices_read).
+        const voices = await call('https://api.elevenlabs.io/v1/voices');
+        if (voices.res.ok) {
+          const count = Array.isArray(voices.data?.voices) ? voices.data.voices.length : 0;
+          return {
+            ok: true,
+            status: voices.res.status,
+            note: count ? `${subNote} ${count} voice tersedia.` : subNote,
+          };
+        }
+        // Key valid, hanya permission voices_read yang belum ada → tetap OK.
+        const vErr = parseElevenlabsError(voices.data);
+        if (vErr.code === 'missing_permissions') {
+          return {
+            ok: true,
+            status: sub.res.status,
+            note: `${subNote} ⚠️ Permission "Voices: Read" belum diaktifkan — tidak masalah untuk `
+              + `membuat suara, tapi daftar voice tidak bisa diambil dari API.`,
+          };
+        }
+        return {ok: false, status: voices.res.status, error: elevenlabsErrorMessage(voices.res.status, voices.data)};
+      }
+
+      // Langkah 1 gagal → cek apakah penyebabnya permission (key sebenarnya valid).
+      const subErr = parseElevenlabsError(sub.data);
+      if (subErr.code === 'missing_permissions') {
+        // Permission `user_read` belum ada — coba voices langsung (mungkin sudah ada).
+        const voices = await call('https://api.elevenlabs.io/v1/voices');
+        if (voices.res.ok) {
+          const count = Array.isArray(voices.data?.voices) ? voices.data.voices.length : 0;
+          return {ok: true, status: voices.res.status, note: `Kunci valid — ${count} voice tersedia.`};
+        }
+        // Tetap gagal → kembalikan pesan actionable (permission / prefix / dll).
+        return {ok: false, status: voices.res.status, error: elevenlabsErrorMessage(voices.res.status, voices.data)};
+      }
+
+      return {ok: false, status: sub.res.status, error: elevenlabsErrorMessage(sub.res.status, sub.data)};
     } catch (error) {
-      if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
-      return { ok: true, status: 0, note: 'Validasi format saja — kunci ElevenLabs teruji saat synthesize pertama.' };
+      if (error.name === 'TimeoutError') return {ok: false, error: 'Probe timeout (20s).' };
+      return {ok: true, status: 0, note: 'Validasi format saja — kunci ElevenLabs teruji saat synthesize pertama.' };
     }
   }
   try {

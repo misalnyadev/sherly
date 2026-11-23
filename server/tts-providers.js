@@ -91,7 +91,7 @@ export const TTS_FALLBACK_PROVIDERS = {
     keyUrl: 'https://elevenlabs.io/app/settings/api-keys',
     signupUrl: 'https://elevenlabs.io/sign-up',
     docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech',
-    hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit audio), API key tanpa kartu kredit. Paket gratis tidak termasuk hak komersial — wajib atribusi "elevenlabs.io" kalau audio dipublikasikan.',
+    hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. ⚠️ WAJIB: setelah membuat key, edit key-nya → nyalakan permission "Text to Speech: Access" + "Voices: Read" + "User: Read" (key baru default-nya semua No Access). Paste API KEY PENUH berawalan "sk_", bukan "API Key ID". Paket gratis tanpa hak komersial — wajib atribusi.',
     languages: 'Bahasa Indonesia (Multilingual v2, 29+ bahasa)',
     freeTier: '10.000 kredit/bulan (~10 menit audio)',
     commercial: false,
@@ -242,14 +242,11 @@ export async function synthesizeElevenLabs({
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const detail = data?.detail;
-    const msg = String(
-      (Array.isArray(detail) && detail[0]?.msg)
-      || (typeof detail === 'string' ? detail : '')
-      || data?.message
-      || `ElevenLabs error (${res.status})`,
-    ).slice(0, 300);
-    if (res.status === 429 || isQuotaError(msg)) throw new TtsQuotaError(msg);
+    // D-281: pesan error yang bisa ditindaklanjuti (baca detail.code).
+    const {elevenlabsErrorMessage} = await import('./elevenlabs-errors.js');
+    const msg = elevenlabsErrorMessage(res.status, data).slice(0, 600);
+    if (res.status === 429 || res.status === 401 && /quota|kredit/i.test(msg)) throw new TtsQuotaError(msg);
+    if (res.status === 402 || /paid_plan_required|kuota habis/i.test(msg)) throw new TtsQuotaError(msg);
     throw new Error(msg);
   }
 
