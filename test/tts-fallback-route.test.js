@@ -8,9 +8,9 @@
  *   3. Audio fallback disimpan ke Bank Suara + header provider dikembalikan.
  *   4. Tanpa key cadangan -> route tetap balas 502 (tidak diam-diam).
  *
- * D-278: urutan fallback = **Azure Speech → ElevenLabs** — keduanya free tier
- * tanpa subscription. Provider yang wajib subscribe (TTSMaker/Soniox/
- * Voicemaker) sudah dihapus total.
+ * D-280: urutan fallback = **TTSForFree → ElevenLabs** — keduanya free tier
+ * tanpa subscription DAN tanpa kartu kredit. Provider yang wajib subscribe
+ * (TTSMaker/Soniox/Voicemaker) + Azure (user tidak bisa mendaftar) dihapus.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,6 +19,7 @@ import path from 'node:path';
 
 const appJs = readFileSync(path.resolve('server/app.js'), 'utf8');
 const providersJs = readFileSync(path.resolve('server/tts-providers.js'), 'utf8');
+const ttsforfreeJs = readFileSync(path.resolve('server/ttsforfree-provider.js'), 'utf8');
 
 // ===== Struktur route =====
 
@@ -50,8 +51,8 @@ test('D-278: fallback mengambil key tiap provider dari vault lalu env', () => {
     'chain harus mengiterasi semua provider cadangan',
   );
   assert.ok(
-    /process\.env\.AZURE_SPEECH_API_KEY/.test(block),
-    'key Azure Speech diambil dari env sebagai cadangan',
+    /process\.env\.TTSFORFREE_API_KEY/.test(block),
+    'key TTSForFree diambil dari env sebagai cadangan',
   );
   assert.ok(
     /process\.env\.ELEVENLABS_API_KEY/.test(block),
@@ -59,25 +60,36 @@ test('D-278: fallback mengambil key tiap provider dari vault lalu env', () => {
   );
   // Urutan: vault dulu, env hanya kalau vault kosong.
   assert.ok(
-    block.indexOf('getUsableKeys') < block.indexOf('process.env.AZURE_SPEECH_API_KEY'),
+    block.indexOf('getUsableKeys') < block.indexOf('process.env.TTSFORFREE_API_KEY'),
     'vault diprioritaskan sebelum env',
   );
   // Tiap provider punya jalur synthesize sendiri.
-  assert.ok(/synthesizeAzure\(/.test(block), 'harus ada jalur synthesizeAzure');
+  assert.ok(/synthesizeTtsforfree\(/.test(block), 'harus ada jalur synthesizeTtsforfree');
   assert.ok(/synthesizeElevenLabs\(/.test(block), 'harus ada jalur synthesizeElevenLabs');
 });
 
-test('D-278: urutan fallback = Azure → ElevenLabs', () => {
-  const block = /export function ttsFallbackChain[\s\S]*?\n}/.exec(providersJs)[0];
+test('D-280: adapter TTSForFree dipakai di server (bukan inline)', () => {
   assert.ok(
-    /return \['azure', 'elevenlabs'\];/.test(block),
-    'rantai fallback harus azure → elevenlabs',
+    /from '\.\/ttsforfree-provider\.js'/.test(appJs),
+    'server harus mengimpor adapter TTSForFree',
+  );
+  assert.ok(
+    /synthesizeTtsforfree,\s*listTtsforfreeVoices/.test(appJs),
+    'adapter TTSForFree harus diimpor',
   );
 });
 
-test('D-278: provider yang wajib subscribe tidak ada di server', () => {
-  // TTSMaker/Soniox/Voicemaker harus hilang total dari server & client.
-  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+test('D-280: urutan fallback = TTSForFree → ElevenLabs', () => {
+  const block = /export function ttsFallbackChain[\s\S]*?\n}/.exec(providersJs)[0];
+  assert.ok(
+    /return \['ttsforfree', 'elevenlabs'\];/.test(block),
+    'rantai fallback harus ttsforfree → elevenlabs',
+  );
+});
+
+test('D-280: provider yang wajib subscribe + azure tidak ada di server', () => {
+  // TTSMaker/Soniox/Voicemaker/Azure harus hilang total dari server & client.
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker', 'azure']) {
     assert.ok(
       !new RegExp(`synthesize${gone}`, 'i').test(appJs),
       `${gone} tidak boleh ada di app.js`,
@@ -88,7 +100,7 @@ test('D-278: provider yang wajib subscribe tidak ada di server', () => {
     );
   }
   // Tidak boleh ada fetch ke host provider yang dibuang.
-  for (const host of ['api.ttsmaker.com', 'tts-rt.soniox.com', 'developer.voicemaker.in']) {
+  for (const host of ['api.ttsmaker.com', 'tts-rt.soniox.com', 'developer.voicemaker.in', 'tts.speech.microsoft.com']) {
     assert.ok(!appJs.includes(host), `${host} tidak boleh dipanggil`);
     assert.ok(!providersJs.includes(host), `${host} tidak boleh dipanggil`);
   }
@@ -104,7 +116,7 @@ test('D-276: fallback simpan audio ke Bank Suara', () => {
     /from\('sherly_tts_clips'\)\.upsert/.test(block),
     'indeks klip harus disimpan di sherly_tts_clips',
   );
-  // Provider disimpan dari hasil chain (bukan hardcode) — supaya Azure/
+  // Provider disimpan dari hasil chain (bukan hardcode) — supaya TTSForFree/
   // ElevenLabs keduanya tercatat benar.
   assert.ok(
     /provider, voice: String\(voice\)/.test(block),
@@ -150,7 +162,7 @@ test('D-277: voiceover server memakai engine cadangan saat kuota habis', () => {
   );
   assert.ok(
     /synthesizeTtsFallbackChain\(req, text\)/.test(block),
-    'voice-over server harus punya jalur cadangan (Azure/ElevenLabs)',
+    'voice-over server harus punya jalur cadangan (TTSForFree/ElevenLabs)',
   );
   // Gemini voice ID tidak boleh sembarang (harus dikenal).
   assert.ok(
@@ -176,27 +188,27 @@ test('D-276: adapter TTS menangani error kuota sebagai TtsQuotaError', () => {
 
 // ===== D-278: metadata provider baru =====
 
-test('D-278: metadata Azure & ElevenLabs punya link resmi + free tier', () => {
+test('D-280: metadata TTSForFree & ElevenLabs punya link resmi + free tier', () => {
   const block = /export const TTS_FALLBACK_PROVIDERS[\s\S]*?\n};/.exec(providersJs)[0];
-  for (const provider of ['azure', 'elevenlabs']) {
+  for (const provider of ['ttsforfree', 'elevenlabs']) {
     assert.ok(
       new RegExp(`\\n  ${provider}: \\{`).test(block),
       `metadata provider ${provider} harus ada`,
     );
   }
-  assert.ok(/keyUrl: 'https:\/\/portal\.azure\.com/.test(block), 'Azure punya link resmi');
+  assert.ok(/keyUrl: 'https:\/\/ttsforfree\.com/.test(block), 'TTSForFree punya link resmi');
   assert.ok(/keyUrl: 'https:\/\/elevenlabs\.io/.test(block), 'ElevenLabs punya link resmi');
-  assert.ok(/500\.000 karakter\/bulan/.test(block), 'harus sebut free tier Azure');
+  assert.ok(/30\.000 karakter\/bulan/.test(block), 'harus sebut free tier TTSForFree');
   assert.ok(/10\.000 kredit\/bulan/.test(block), 'harus sebut free tier ElevenLabs');
 });
 
-test('D-278: TTSMaker tidak lagi jadi fallback utama', () => {
-  // TTSMaker TIDAK boleh muncul sebagai kode fungsional (adapter, metadata,
-  // rantai) — hanya boleh disebut di komentar yang menjelaskan alasannya.
+test('D-280: TTSMaker & Azure tidak lagi jadi fallback utama', () => {
+  // TTSMaker/Azure TIDAK boleh muncul sebagai kode fungsional (adapter,
+  // metadata, rantai) — hanya boleh disebut di komentar yang alasannya.
   const chain = /export function ttsFallbackChain[\s\S]*?\n}/.exec(providersJs)[0];
   assert.ok(
-    /return \['azure', 'elevenlabs'\]/.test(chain),
-    'rantai fallback harus azure → elevenlabs',
+    /return \['ttsforfree', 'elevenlabs'\]/.test(chain),
+    'rantai fallback harus ttsforfree → elevenlabs',
   );
   const withoutComments = providersJs
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -207,13 +219,13 @@ test('D-278: TTSMaker tidak lagi jadi fallback utama', () => {
   );
 });
 
-test('D-278: daftar voice Azure & ElevenLabs tersedia', () => {
-  assert.ok(/export const AZURE_ID_VOICES/.test(providersJs), 'daftar voice Azure harus ada');
+test('D-280: daftar voice TTSForFree & ElevenLabs tersedia', () => {
+  assert.ok(/export const TTSFORFREE_ID_VOICES/.test(ttsforfreeJs), 'daftar voice TTSForFree harus ada');
   assert.ok(/export const ELEVENLABS_VOICES/.test(providersJs), 'daftar voice ElevenLabs harus ada');
-  assert.ok(/export const AZURE_VOICE_IDS/.test(providersJs), 'set ID voice Azure harus ada');
-  // Azure punya voice native Indonesia (Ardi & Gadis).
-  assert.ok(/id-ID-ArdiNeural/.test(providersJs), 'Azure harus punya voice Ardi');
-  assert.ok(/id-ID-GadisNeural/.test(providersJs), 'Azure harus punya voice Gadis');
+  assert.ok(/export const TTSFORFREE_VOICE_IDS/.test(ttsforfreeJs), 'set ID voice TTSForFree harus ada');
+  // TTSForFree punya voice Indonesia (Ardi & Gadis).
+  assert.ok(/Ardi/.test(ttsforfreeJs), 'TTSForFree harus punya voice Ardi');
+  assert.ok(/Gadis/.test(ttsforfreeJs), 'TTSForFree harus punya voice Gadis');
   // ElevenLabs memakai model multilingual (support Indonesian).
   assert.ok(/eleven_multilingual_v2/.test(providersJs), 'ElevenLabs harus pakai model multilingual');
 });

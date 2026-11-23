@@ -17,7 +17,7 @@
 | Kenapa dulu cuma 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
 | TTS untuk audio? | **GPT-SoVITS** (MIT, 5 detik sample) — TAPI **tidak mendukung bahasa Indonesia** |
 | TTS Indonesia yang lebih cocok? | Gemini TTS (sudah dipakai di repo) atau **Qwen3-TTS** (Apache-2.0, 10 bahasa) |
-| **Fallback TTS kalau kredit Gemini habis?** | **Azure Speech** (F0 gratis 500.000 karakter/bulan, voice native `id-ID`; ⚠️ butuh kartu kredit verifikasi + region per-key) → **ElevenLabs** (gratis 10.000 kredit/bulan, tanpa kartu kredit, Multilingual v2). Diterapkan D-278, dikoreksi D-279. Detail di **§4.6** |
+| **Fallback TTS kalau kredit Gemini habis?** | **TTSForFree** (gratis 30.000 karakter/bulan reset bulanan, tanpa kartu kredit, 44 voice `id`) → **ElevenLabs** (gratis 10.000 kredit/bulan, tanpa kartu kredit, Multilingual v2). Azure DIHAPUS (D-280, user tidak bisa daftar). Detail di **§4.6** |
 
 ---
 
@@ -435,15 +435,19 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
 
 #### 4.6.4.2 Hasil evaluasi kandidat (dicek langsung ke sumber resmi)
 
-| Kandidat | Bahasa Indonesia | Key tanpa subscribe? | Free tier | Putusan |
+> **Status final D-280.** Kolom "Putusan" di bawah memakai keputusan **terakhir**
+> (Azure dibuang karena user tidak bisa mendaftar). Riwayat keputusan:
+> D-277 (Soniox) → D-278 (Azure + ElevenLabs) → D-280 (TTSForFree + ElevenLabs).
+
+| Kandidat | Bahasa Indonesia | Key tanpa subscribe? | Free tier | Putusan final |
 |---|---|---|---|---|
 | **EasyVoice** (`easyvoice.ae/geo/id`) | ❌ **TIDAK ADA** — situs resmi: tidak punya voice Bahasa Indonesia dan tidak direncanakan | — | free 2.000–5.000 karakter/hari (UI web) | ❌ dibuang |
 | **Soniox** (`soniox.com`) | ✅ native `id` + `su` | ✅ ya | ❌ free credit signup baru **dihentikan** (Okt 2025) → praktis pay-as-you-go | ❌ **dibuang** |
-| **TTSForFree** (`ttsforfree.com/id/`) | ✅ Ardi & Gadis | — | free 200 karakter/hari | ❌ **dibuang** — tanpa API resmi, provider di belakangnya Gemini/OpenAI/Azure |
+| **TTSForFree** (`ttsforfree.com`) | ✅ **44 voice** (Azure Ardi/Gadis, Google `id-ID-*`, 4 voice Gemini, Chirp3-HD) | ✅ **ya, tanpa kartu kredit** | ✅ **30.000 karakter/bulan** (reset bulanan), maks 20.000 karakter/request, 60 req/5 menit | ✅ **FALLBACK #1** |
 | **Voicemaker** (`developer.voicemaker.in`) | ✅ native `id-ID` + Jawa | ⚠️ developer API pay-as-you-go; free plan web tidak membawa API | free web 100 konversi/minggu (UI saja) | ❌ **dibuang** |
 | **TTSMaker** (`ttsmaker.com`) | ✅ native `id` + Sunda | ❌ **subscription Pro/Studio wajib** — tanpa subscribe tidak ada API key | — | ❌ **dibuang** |
 | **Groq Orpheus TTS** | ❌ **hanya English + Arabic** | ✅ ya | free, maks 200 karakter/request | ❌ dibuang — tidak support Indonesia |
-| **Azure Speech** (`azure.microsoft.com`) | ✅ **native `id-ID`** (`id-ID-ArdiNeural`, `id-ID-GadisNeural`, + Neural HD) | ✅ **ya** (tapi ⚠️ butuh kartu kredit verifikasi akun) | ✅ **500.000 karakter/bulan (F0)**, reset bulanan, tak pernah kedaluwarsa | ✅ **FALLBACK #1** |
+| **Azure Speech** (`azure.microsoft.com`) | ✅ **native `id-ID`** (`id-ID-ArdiNeural`, `id-ID-GadisNeural`, + Neural HD) | ✅ ya, TAPI ⚠️ **butuh kartu kredit verifikasi akun** + **region wajib** (kunci hanya valid di 1 region) | ✅ 500.000 karakter/bulan (F0), reset bulanan | ❌ **dibuang (D-280)** — user tidak bisa mendaftar |
 | **ElevenLabs** (`elevenlabs.io`) | ✅ **Multilingual v2** (29 bahasa termasuk Indonesia) | ✅ **ya, tanpa kartu kredit** | ✅ **10.000 kredit/bulan (~10 menit audio)** | ✅ **FALLBACK #2** |
 | **VideoGrid AI** (`videogridai.com`) | n/a (video, bukan TTS) | — | — | ❌ bukan kandidat (tanpa API publik) |
 
@@ -451,33 +455,56 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
 > `vidogrid.ai` (**VidoGrid AI**). Yang punya REST API + webhook adalah
 > **VidoGrid AI** (`api.vidogrid.ai`, plan $199/bln) — bukan yang diminta user.
 
-#### 4.6.4.3 Detail Azure Speech (fallback utama)
+> ⚠️ **Koreksi D-278 → D-280:** versi riset sebelumnya menulis *"TTSForFree tidak
+> punya API resmi"* dan *"Azure tanpa info pembayaran"*. **Keduanya salah**:
+> TTSForFree **memang punya** API publik resmi ("TTS Forge API"), dan Azure Free
+> **wajib** kartu kredit/debit untuk verifikasi akun.
 
-- **Endpoint**: `POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1`
-  - Header `Ocp-Apim-Subscription-Key` (subscription key resource Speech).
-  - Header `Content-Type: application/ssml+xml` (bukan JSON).
-  - Header `X-Microsoft-OutputFormat` → `audio-24khz-48kbitrate-mono-mp3` (default),
-    `audio-16khz-128kbitrate-mono-mp3`, `ogg-24khz-16bit-mono-opus`, `riff-24khz-16bit-mono-pcm`.
-  - Body: SSML `<speak xml:lang="id-ID"><voice name="id-ID-ArdiNeural">…</voice></speak>`.
-  - **Respons**: body = file audio langsung (mp3/wav/ogg) — tidak ada URL sementara.
-- **Region**: dari resource Azure (mis. `southeastasia`, `jakarta`). Disimpan di
-  env `AZURE_SPEECH_REGION` atau default `southeastasia`.
-- **Daftar voice**: `GET https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list`
-  → array voice; Ambil yang `Locale` diawali `id-ID`.
-- **Voice Indonesia**: `id-ID-ArdiNeural` (pria), `id-ID-GadisNeural` (wanita),
-  `id-ID-Ardi:DragonHDLatestNeural` & `id-ID-Gadis:DragonHDLatestNeural` (Neural HD).
-- **Kontrol**: SSML `<prosody rate="…" pitch="…%">` → ngatur tempo & pitch narasi
-  supaya pas dengan beat.
-- **Free tier F0**: 500.000 karakter/bulan **neural**, reset tiap bulan, **tidak
-  pernah kedaluwarsa**, dan **tidak butuh info pembayaran** di langganan Azure Free.
-  Setelah kuota habis → $15–16/1M karakter (neural). Rate limit free tier 20 req/menit.
+#### 4.6.4.3 Detail TTSForFree (fallback utama, D-280)
+
+**TTS Forge API** — dokumentasi resmi: `ttsforfree.com/en/docs/`.
+
+- **Base URL**: `https://api.ttsforfree.com`
+- **Auth**: header `X-API-Key: <key>`. Key dibuat di `ttsforfree.com/en/profile/`
+  → bagian **API Key** (registrasi lewat **Google Sign-In**, gratis).
+- **Arsitektur**: **asynchronous** — create job → poll status → unduh audio.
+
+| Endpoint | Method | Keterangan |
+|---|---|---|
+| `/api/Common/GetListLanguage` | GET | daftar bahasa |
+| `/api/Common/GetListVoice?lang=id&type=singlevoice` | GET | daftar voice (pakai `lang=id` untuk yang Indonesia) |
+| `/api/Common/GetConfigMaxLength` | GET | batas panjang teks |
+| `/api/TTS/CreateBy` | POST | buat job → `{Id, Status: "PENDING"}` |
+| `/api/TTS/Status/{id}` | GET | poll → `{Id, Status, Data: "<file/url>"}` |
+| `/api/TTS/GetJobTTSDetail?jobId=` | GET | detail job (fallback kalau URL ada di detail, bukan di status) |
+
+**Body `CreateBy`**: `{Texts, Voice, Pitch, ConnectionId, CallbackUrl}`
+(`Voice` = token opaque `v1:...`, bukan nama voice biasa).
+
+**Polling**: poll pertama ~3 detik, lalu interval naik sampai maksimum 8 detik
+(mencegah kena rate limit 60 req/5 menit). Hentikan saat `Status = SUCCESS`
+(atau `StatusId = 200`), atau `ERROR`/`-100` → gagal.
+
+**Voice Bahasa Indonesia (44 total)**, yang masuk free tier:
+- **Azure Neural**: Ardi (pria), Gadis (wanita)
+- **Google**: `id-ID-Standard-A/B/C/D`, `id-ID-Wavenet-A/B/C/D`
+- **Gemini**: Bima (Pembaca Berita), Kak Sari (Pendongeng Anak), dll.
+- ⚠️ Voice berlabel **"Upgrade"** (Chirp3-HD, Gemini premium) → butuh plan berbayar.
+
+**Free tier (dari blog resmi)**:
+- **30.000 karakter/bulan per akun**, reset bulanan.
+- Maks **20.000 karakter per request**.
+- Rate limit **60 request per 5 menit** per IP.
+- Plan berbayar mulai **$2,99** (Basic = 300.000 kredit/30 hari).
+- ⚠️ **Free plan = personal & non-commercial only.** Untuk.redistribusi komersial
+  perlu lisensi TTS Forge terpisah (`admin@ttsforfree.com`).
 
 #### 4.6.4.4 Detail ElevenLabs (fallback kedua)
 
 - **Endpoint**: `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128`
   - Header `xi-api-key`.
   - Body JSON: `{text, model_id: 'eleven_multilingual_v2', voice_settings: {stability, similarity_boost, speed}}`.
-  - **Respons**: body = file mp3 langsung.
+  - **Respons**: body = file mp3 langsung (synchronous — beda dengan TTSForFree).
 - **Daftar voice**: `GET https://api.elevenlabs.io/v1/voices`.
 - **Model**: `eleven_multilingual_v2` → 29 bahasa termasuk **Indonesian**; model
   mendeteksi bahasa dari teks otomatis, jadi voice apa pun bisa berbahasa Indonesia.
@@ -485,18 +512,20 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
   tidak ada rollover; API key bisa dibuat di `elevenlabs.io/app/settings/api-keys`.
 - ⚠️ **Batasan free plan**: **TIDAK ada hak komersial** + wajib atribusi
   ("elevenlabs.io"/"11.ai") kalau audio dipublikasikan. Karena itu ElevenLabs
-  hanya jadi cadangan **terakhir**; Azure (yang punya free tier neural +
-  komersial) jadi cadangan utama.
+  hanya jadi cadangan **terakhir**.
 
-#### 4.6.4.5 Urutan fallback final (D-278)
+#### 4.6.4.5 Urutan fallback final (D-280)
 
 ```
 1. Gemini TTS      → default, gratis selama kuota (14 voice + style hint)
-2. Azure Speech    → fallback #1. 500rb karakter/bulan, native id-ID (⚠️ butuh kartu kredit verifikasi akun + region per-key)
-3. ElevenLabs      → fallback #2. 10rb kredit/bulan, tanpa kartu kredit, multilingual (ID)
+2. TTSForFree      → fallback #1. 30rb karakter/bulan, tanpa kartu kredit,
+                     44 voice Indonesia, API async (create → poll → unduh)
+3. ElevenLabs      → fallback #2. 10rb kredit/bulan, tanpa kartu kredit,
+                     Multilingual v2 (ID)
 ```
 
-Provider yang **wajib subscribe di awal** (TTSMaker, Soniox, Voicemaker) **dihapus
+Provider yang **wajib subscribe di awal** (TTSMaker, Soniox, Voicemaker) **dan**
+Azure Speech (butuh kartu kredit + region; user tidak bisa mendaftar) **dihapus
 total** dari kode, vault, dan constraint DB.
 
 #### 4.6.4.6 Perbandingan biaya praktis (30 detik Motion Graphics)
@@ -504,82 +533,60 @@ total** dari kode, vault, dan constraint DB.
 | Provider | Karakter ± 75 kata (≈ 450 karakter) | Biaya |
 |---|---|---|
 | Gemini TTS | 450 | $0 (kuota free) |
-| Azure Speech (F0) | 450 | $0 (dalam free tier 500rb/bln) |
-| ElevenLabs (Free) | 450 | $0 (dalam free tier 10rb kredit/bln) |
+| TTSForFree | 450 | $0 (dalam free tier 30rb karakter/bulan) |
+| ElevenLabs (Free) | 450 | $0 (dalam free tier 10rb kredit/bulan) |
 
-> 30 detik Motion Graphics ≈ 450 karakter ≈ 45 detik audio. Free tier Azure
-> (500rb karakter/bulan) ≈ **1.100 video 30 detik per bulan**; ElevenLabs
+> 30 detik Motion Graphics ≈ 450 karakter ≈ 45 detik audio. Free tier TTSForFree
+> (30rb karakter/bulan) ≈ **±66 video 30 detik per bulan**; ElevenLabs
 > (10rb kredit/bulan) ≈ **±20 video 30 detik per bulan** sebagai cadangan terakhir.
+>
+> ⚠️ Keduanya **tidak untuk penggunaan komersial** di paket gratis.
 
-### 4.6.5 D-279 — Azure "gagal": akar masalah & perbaikan
+### 4.6.5 D-279 — Riwayat: Azure Speech "gagal" & kenapa akhirnya dibuang (D-280)
+
+> Bagian ini menjelaskan kenapa **Azure dihapus**. Arsitekturkturnya sudah
+> dibuang di D-280, tapi-informed-nya tetap disimpan supaya tidak ada
+> perubahan yang "mengulang kesalahan" yang sama.
 
 #### 4.6.5.1 Gejala
 
-User melaporkan: *"azure kok ga bisa ya daftar susah ini kawan azure gagal"*.
-Di Studio, engine cadangan Azure selalu gagal dipakai.
+Setelah D-278 merged, user melaporkan: *"azure kok ga bisa ya daftar susah ini
+kawan azure gagal"*. Diagnosis menemukan **3 bug nyata** di D-278:
 
-#### 4.6.5.2 Akar masalah (3 bug nyata di D-278)
+| # | Masalah | Dampak |
+|---|---|---|
+| **1** | **Kunci Azure bersifat REGIONAL.** Kode D-278 memaksa `southeastasia` dan **tidak pernah menanyakan region ke user**. | Kunci dari resource `eastus`/`westeurope`/`jakarta`/dll. selalu dapat **HTTP 401 "invalid subscription key or wrong API endpoint"**. |
+| **2** | **Dropdown provider di form key TIDAK punya opsi `azure`/`elevenlabs`.** | User **tidak bisa memilih Azure sama sekali** saat menambah key — akar keluhan "daftar susah". |
+| **3** | **Error 401 mentah** tanpa penjelasan. | User tidak tahu harus memperbaiki region. |
 
-| # | Masalah | Dampak | Perbaikan D-279 |
-|---|---|---|---|
-| **1** | **Kunci Azure bersifat REGIONAL.** Kode D-278 memaksa `southeastasia` dan **tidak pernah menanyakan region**. | User yang resource-nya di `eastus`/`westeurope`/`jakarta`/dll. selalu dapat **HTTP 401 "invalid subscription key or wrong API endpoint"**. | `server/azure-region.js` (baru): `detectAzureRegion()` mencoba region yang diisi user → env → default → **12 region umum**. Field **Region** ditambahkan di form key. Region disimpan per-key (kolom `ai_provider_keys.region`). |
-| **2** | **Dropdown provider di form key TIDAK punya opsi `azure`/`elevenlabs`.** | User **tidak bisa memilih** Azure sama sekali saat menambah key — ini alasan "daftar susah". | `public/index.html`: `<option value="azure">` + `<option value="elevenlabs">` ditambahkan. |
-| **3** | **Error 401 mentah** ("Access denied due to invalid subscription key…") tanpa penjelasan. | User tidak tahu harus memperbaiki region. | `azureErrorMessage()` → pesan Bahasa Indonesia: menyebut status, daftar region yang dicoba, dan **cara memperbaiki** (Azure Portal → Keys and Endpoint → Location/Region). |
-
-#### 4.6.5.3 Koreksi klaim free tier Azure (D-278 → D-279)
+#### 4.6.5.2 Koreksi klaim free tier Azure (D-278 → D-279)
 
 D-278 menulis *"F0 gratis 500.000 karakter/bulan **tanpa info pembayaran**"*. Itu **tidak akurat**.
 Bukti resmi (Azure docs, Lullula/Gladys docs, Reddit r/Azure):
 
 - Azure Free subscription **wajib kartu kredit/debit** untuk verifikasi identitas
   (hold sementara ~$1 yang **dikembalikan**).
-- Akun free **dinonaktifkan setelah 30 hari** kalau tidak pindah ke pay-as-you-go.
-- Setelah 30 hari, kunci **mati** → Gejala: *"It starts about 30 days after you signed up…
-  the account has likely been disabled: move to pay as you go"*.
+- Akun free **dinonaktifkan setelah 30 hari** kalau tidak pindah ke pay-as-you-go
+  → Gejala: *"your key stops working… move to pay as you go"*.
 - F0 sendiri **tidak pernah ditagih** — resource F0 punya **tanpa overage**; bill hanya
   kalau resource-nya diganti ke S0.
+- Kunci **hanya valid di satu region** → butuh field Region + deteksi otomatis.
 
-| Klaim D-278 (SALAH) | Fakta D-279 (BENAR) |
-|---|---|
-| "tanpa info pembayaran" | Butuh kartu kredit/debit untuk verifikasi akun |
-| "free tier, aman selamanya" | Free account nonaktif setelah 30 hari → pindah pay-as-you-go (biaya tetap $0 selama di bawah 500rb karakter) |
-| Region opsional | Region **wajib** — kunci hanya valid di satu region |
+#### 4.6.5.3 Keputusan akhir (D-280)
 
-> ⚠️ **Konsekuensi ke keputusan kandau:** kalau syarat "tanpa kartu kredit" itu
-> **mutlak**, maka **Azure harus dikeluarkan** dan hanya ElevenLabs yang tersisa.
-> Kalau "tanpa kartu kredit" boleh dikompromi demi kuota 500rb karakter + hak
-> komersial + voice native `id-ID`, **Azure tetap dipakai sebagai cadangan utama**.
-> Cleanest fix: **biarkan Azure tetap ada, tapi jangan jadi satu-satunya cadangan** —
-> jawaban yang dipakai user: `Gemini → Azure → ElevenLabs` sudah cukup resilient.
+User: *"azure itu aku gak bisa daftar hapus saja"*.
 
-#### 4.6.5.4 Perilaku baru
+Walaupun D-279 sudah memperbaiki 3 bug di atas (deteksi region otomatis, opsi
+dropdown, pesan error yang jelas), **masalah yang paling mendasar tetap ada**:
+Azure **memang butuh** kartu kredit/debit + akun Azure + region yang benar.
+TTSForFree **tidak butuh** kartu kredit sama sekali → jadi **pengganti yang lebih
+cocok** dengan prinsip kandau ("yang bisa dipakai tanpa subscribe awal").
 
-| Situasi | Perilaku D-279 |
-|---|---|
-| Region diisi user, benar | Langsung dipakai, 1 request. |
-| Region diisi user, **salah** | Otomatis coba region lain sampai ketemu → tetap jalan. |
-| Region **kosong** | Coba 12+ region umum otomatis → probabilitas tinggi ketemu. |
-| Semua region 401 | Error dalam Bahasa Indonesia + daftar region yang dicoba + cara memperbaiki. |
-| 403 / 429 | **Berhenti** (tidak futile coba region lain) → dianggap error kuota → pindah ke ElevenLabs. |
-| Region key tidak ada di DB | Fallback ke `AZURE_SPEECH_REGION` env → default → daftar umum. |
-
-#### 4.6.5.5 Catatan tambahan: TTSForFree (TTS Forge)
-
-User memberi tahu ada API key di `ttsforfree.com`. **Dicek ulang → memang ada API resmi**
-("TTS Forge API") — koreksi atas catatan riset D-278 yang menulis "tanpa API resmi".
-
-- **Auth**: `X-API-Key` header; registrasi lewat Google Sign-In di `/en/profile/`; **gratis**.
-- **Kuota free API**: **30.000 karakter/bulan per akun**, reset bulanan; maks 20.000 karakter/request;
-  rate limit 60 request/5 menit/IP. Plan berbayar mulai $2,99.
-- **Bahasa Indonesia**: ✅ **44 voice** (Azure Ardi/Gadis, Google `id-ID-*` Standard/WaveNet,
-  4 voice Gemini, Chirp3-HD).
-- ⚠️ **Free plan = personal & non-commercial only** — sama seperti ElevenLabs.
-- ⚠️ Voice "Upgrade" (Chirp3-HD, Gemini premium) butuh berbayar.
-- ⚠️ API **async**: create job → poll `Status` → unduh URL (lebih ribet dari Azure sinkron).
-
-**Kesimpulan**: TTSForFree **memenuhi syarat free tier**, tapi kuota 30rb karakter lebih kecil
-dari Azure (500rb) dan tidak menambah hak komersial → **tidak replaces Azure/ElevenLabs**
-dalam rantai sekarang. Disimpan sebagai **kandidat cadangan ke-3** kalau nanti dibutuhkan.
+**Rantai final: `Gemini → TTSForFree → ElevenLabs`** — dua-duanya:
+- gratis bulanan dengan reset,
+- tanpa kartu kredit,
+- tanpa langganan,
+- punya voice Bahasa Indonesia.
 
 ### 4.7 Cara pasang audio ke Motion Graphics
 

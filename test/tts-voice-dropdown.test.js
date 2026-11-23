@@ -2,7 +2,7 @@
  * D-277 / D-278 — Dropdown suara TTS di Studio (jsdom).
  *
  * Menguji `ttsVoiceOptions()` + `ttsProviderNote()` tanpa browser sungguhan:
- *   1. Voice dikelompokkan per provider: Gemini → Azure Speech → ElevenLabs.
+ *   1. Voice dikelompokkan per provider: Gemini → TTSForFree → ElevenLabs.
  *   2. ID voice provider non-Gemini dipakai apa adanya.
  *   3. Status engine cadangan menampilkan semua provider yang siap.
  *   4. Peringatan menyebut nama provider + arah ke Pengaturan.
@@ -30,12 +30,12 @@ const TTS_VOICES_PAYLOAD = {
   voices: [
     {provider: 'gemini', id: 'Kore', label: 'Kore · Tegas & hangat', language: 'Bahasa Indonesia'},
     {provider: 'gemini', id: 'Puck', label: 'Puck · Riang & akrab', language: 'Bahasa Indonesia'},
-    {provider: 'azure', id: 'id-ID-ArdiNeural', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia'},
-    {provider: 'azure', id: 'id-ID-GadisNeural', label: 'Gadis · Indonesia', language: 'Bahasa Indonesia'},
+    {provider: 'ttsforfree', id: 'v1:ardi', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia'},
+    {provider: 'ttsforfree', id: 'v1:gadis', label: 'Gadis · Indonesia', language: 'Bahasa Indonesia'},
     {provider: 'elevenlabs', id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel', language: 'Bahasa Indonesia'},
   ],
-  providers: {gemini: {}, azure: {}, elevenlabs: {}},
-  azure: {configured: true},
+  providers: {gemini: {}, ttsforfree: {}, elevenlabs: {}},
+  ttsforfree: {configured: true},
   elevenlabs: {configured: false},
 };
 
@@ -87,11 +87,11 @@ function extractStudioInternals(source) {
 
 test('D-278: sumber kode Studio mengelompokkan voice per provider cadangan', () => {
   assert.ok(
-    /for \(const provider of \['azure', 'elevenlabs'\]\)/.test(studio),
-    'dropdown harus iterasi provider cadangan dalam urutan Azure → ElevenLabs',
+    /for \(const provider of \['ttsforfree', 'elevenlabs'\]\)/.test(studio),
+    'dropdown harus iterasi provider cadangan dalam urutan TTSForFree → ElevenLabs',
   );
   assert.ok(
-    /const name = provider === 'azure' \? 'Azure Speech' : 'ElevenLabs'/.test(studio),
+    /const name = provider === 'ttsforfree' \? 'TTSForFree' : 'ElevenLabs'/.test(studio),
     'nama provider ditampilkan sesuai label',
   );
   // Provider yang wajib subscribe tidak boleh muncul di client.
@@ -102,7 +102,7 @@ test('D-278: sumber kode Studio mengelompokkan voice per provider cadangan', () 
 
 test('D-278: status engine cadangan menampilkan semua provider yang siap', () => {
   assert.ok(
-    /for \(const provider of \['azure', 'elevenlabs'\]\)/.test(studio),
+    /for \(const provider of \['ttsforfree', 'elevenlabs'\]\)/.test(studio),
     'status harus mengecek semua provider cadangan',
   );
   assert.ok(
@@ -110,7 +110,7 @@ test('D-278: status engine cadangan menampilkan semua provider yang siap', () =>
     'status harus mengumpulkan provider yang siap',
   );
   assert.ok(
-    /Azure Speech/.test(studio) && /ElevenLabs/.test(studio),
+    /TTSForFree/.test(studio) && /ElevenLabs/.test(studio),
     'nama semua provider cadangan harus dikenal UI',
   );
 });
@@ -134,7 +134,7 @@ test('D-278: payload voice dari server dipakai tanpa memfilter provider', () => 
     'client harus menerima semua voice dari server apa adanya',
   );
   assert.ok(
-    /for \(const p of \['azure', 'elevenlabs'\]\)/.test(studio),
+    /for \(const p of \['ttsforfree', 'elevenlabs'\]\)/.test(studio),
     'status per provider harus dibaca dari payload',
   );
 });
@@ -149,25 +149,25 @@ test('D-278: dropdown benar-benar mengelompokkan voice (eksekusi fungsi)', () =>
   const {fnBody} = extractStudioInternals(studio);
   const voices = [
     {provider: 'gemini', id: 'Kore', label: 'Kore · Tegas', language: 'Bahasa Indonesia'},
-    {provider: 'azure', id: 'id-ID-ArdiNeural', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia'},
+    {provider: 'ttsforfree', id: 'v1:ardi', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia'},
     {provider: 'elevenlabs', id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel', language: 'Bahasa Indonesia'},
   ];
-  const providers = {azure: {configured: true}, elevenlabs: {configured: false}};
+  const providers = {ttsforfree: {configured: true}, elevenlabs: {configured: false}};
   const run = new Function('ttsVoices', 'ttsProviders', `
     ${fnBody('ttsVoiceOptions')}
     return ttsVoiceOptions();
   `);
   const options = run(voices, providers);
   const labels = options.map((o) => o.label);
-  // Urutan grup: Gemini → Azure Speech → ElevenLabs.
+  // Urutan grup: Gemini → TTSForFree → ElevenLabs.
   const iGemini = labels.findIndex((l) => l.includes('Gemini (bawaan)'));
-  const iAzure = labels.findIndex((l) => l.includes('Azure Speech'));
+  const iTff = labels.findIndex((l) => l.includes('TTSForFree'));
   const iEleven = labels.findIndex((l) => l.includes('ElevenLabs'));
   assert.ok(iGemini >= 0, 'grup Gemini harus ada');
-  assert.ok(iAzure > iGemini, 'Azure setelah Gemini');
-  assert.ok(iEleven > iAzure, 'ElevenLabs setelah Azure');
+  assert.ok(iTff > iGemini, 'TTSForFree setelah Gemini');
+  assert.ok(iEleven > iTff, 'ElevenLabs setelah TTSForFree');
   // ID voice provider non-Gemini tetap dipakai apa adanya (tidak diubah).
-  assert.ok(options.some((o) => o.value === 'id-ID-ArdiNeural'), 'ID voice Azure harus utuh');
+  assert.ok(options.some((o) => o.value === 'v1:ardi'), 'ID voice TTSForFree harus utuh');
   assert.ok(options.some((o) => o.value === '21m00Tcm4TlvDq8ikWAM'), 'ID voice ElevenLabs harus utuh');
 });
 
@@ -180,14 +180,14 @@ test('D-278: catatan status engine cadangan benar-benar berjalan (eksekusi fungs
   `)(providers, icon);
 
   // Tidak ada provider siap -> peringatan + arah ke Pengaturan.
-  const warn = build({azure: {configured: false}, elevenlabs: {configured: false}});
+  const warn = build({ttsforfree: {configured: false}, elevenlabs: {configured: false}});
   assert.ok(/belum aktif/i.test(warn), 'harus memberi peringatan kalau belum ada engine siap');
   assert.ok(/Pengaturan/.test(warn), 'peringatan harus mengarah ke Pengaturan');
-  assert.ok(/Azure Speech/.test(warn) && /ElevenLabs/.test(warn),
+  assert.ok(/TTSForFree/.test(warn) && /ElevenLabs/.test(warn),
     'peringatan harus menyebut semua nama provider cadangan');
 
   // Ada provider siap -> tampilkan namanya.
-  const ok = build({azure: {configured: true}, elevenlabs: {configured: false}});
-  assert.ok(/Azure Speech/.test(ok), 'status harus menyebut Azure Speech');
+  const ok = build({ttsforfree: {configured: true}, elevenlabs: {configured: false}});
+  assert.ok(/TTSForFree/.test(ok), 'status harus menyebut TTSForFree');
   assert.ok(!/ElevenLabs/.test(ok), 'provider yang belum siap tidak boleh disebut sebagai siap');
 });

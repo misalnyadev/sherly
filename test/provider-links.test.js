@@ -95,30 +95,31 @@ test('D-270: kartu provider tidak melebar di HP (grid minmax(0,1fr))', () => {
 
 // ===== D-277: provider cadangan TTS =====
 
-test('D-278: provider cadangan TTS punya link resmi + capability TTS', () => {
-  for (const p of ['azure', 'elevenlabs']) {
+test('D-280: provider cadangan TTS punya link resmi + capability TTS', () => {
+  for (const p of ['ttsforfree', 'elevenlabs']) {
     const info = PROVIDER_INFO[p];
     assert.ok(info, `provider ${p} harus punya info`);
     assert.ok(/^https:\/\//.test(info.keyUrl), `provider ${p} punya keyUrl https`);
     assert.ok(/^https:\/\//.test(info.docsUrl), `provider ${p} punya docsUrl https`);
   }
-  assert.ok(PROVIDER_INFO.azure.keyUrl.includes('portal.azure.com'));
+  assert.ok(PROVIDER_INFO.ttsforfree.keyUrl.includes('ttsforfree.com'));
   assert.ok(PROVIDER_INFO.elevenlabs.keyUrl.includes('elevenlabs.io'));
 });
 
-test('D-278: provider cadangan TTS terdaftar di PROVIDERS & capability tts', () => {
-  for (const p of ['azure', 'elevenlabs']) {
+test('D-280: provider cadangan TTS terdaftar di PROVIDERS & capability tts', () => {
+  for (const p of ['ttsforfree', 'elevenlabs']) {
     assert.ok(PROVIDERS.includes(p), `provider ${p} harus terdaftar`);
   }
-  assert.ok(clientJs.includes("'azure'"), 'client harus mengenali azure');
+  assert.ok(clientJs.includes("'ttsforfree'"), 'client harus mengenali ttsforfree');
   assert.ok(clientJs.includes("'elevenlabs'"), 'client harus mengenali elevenlabs');
-  assert.ok(clientJs.includes("azure: ['tts']"), 'capability fallback client harus punya azure: tts');
+  assert.ok(clientJs.includes("ttsforfree: ['tts']"), 'capability fallback client harus punya ttsforfree: tts');
   assert.ok(clientJs.includes("elevenlabs: ['tts']"), 'capability fallback client harus punya elevenlabs: tts');
 });
 
-test('D-278: provider yang wajib subscribe tidak lagi terdaftar', () => {
-  // TTSMaker/Soniox/Voicemaker dibuang — fallback TTS harus free tier.
-  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+test('D-280: provider yang wajib subscribe + azure tidak lagi terdaftar', () => {
+  // TTSMaker/Soniox/Voicemaker/Azure dibuang — fallback TTS harus free tier
+  // tanpa subscribe DAN tanpa kartu kredit.
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker', 'azure']) {
     assert.ok(!PROVIDERS.includes(gone), `${gone} tidak boleh terdaftar di PROVIDERS`);
     assert.ok(!clientJs.includes(`'${gone}'`), `${gone} tidak boleh ada di client`);
   }
@@ -128,51 +129,42 @@ test('D-278: provider yang wajib subscribe tidak lagi terdaftar', () => {
   );
 });
 
-test('D-278: hint provider menyebut free tier tanpa subscribe', () => {
+test('D-280: hint provider menyebut free tier tanpa subscribe', () => {
   assert.ok(
-    /gratis|500\.000/i.test(PROVIDER_INFO.azure.hint),
-    'hint Azure harus menyebut free tier F0',
+    /gratis|30\.000/i.test(PROVIDER_INFO.ttsforfree.hint),
+    'hint TTSForFree harus menyebut free tier 30.000 karakter',
   );
   assert.ok(
     /gratis|10\.000/i.test(PROVIDER_INFO.elevenlabs.hint),
     'hint ElevenLabs harus menyebut kuota gratis',
   );
   assert.ok(
-    /tanpa kartu kredit|tanpa info pembayaran/i.test(
-      PROVIDER_INFO.azure.hint + ' ' + PROVIDER_INFO.elevenlabs.hint),
-    'hint harus menyebut tidak perlu kartu kredit / info pembayaran',
+    /tanpa kartu kredit/i.test(
+      PROVIDER_INFO.ttsforfree.hint + ' ' + PROVIDER_INFO.elevenlabs.hint),
+    'hint harus menyebut tidak perlu kartu kredit',
   );
 });
 
 // ---------------------------------------------------------------------------
-// D-279 — Azure harus bisa dipilih di form key + ada field Region
+// D-280 — TTSForFree harus bisa dipilih di form key, Azure dihapus
 // ---------------------------------------------------------------------------
 
-test('D-279: dropdown provider form key memuat azure & elevenlabs', () => {
+test('D-280: dropdown provider form key memuat ttsforfree & elevenlabs', () => {
   const select = html.match(/<select id="keyProvider"[\s\S]*?<\/select>/);
   assert.ok(select, 'select#keyProvider tidak ditemukan');
-  assert.match(select[0], /value="azure"/, 'opsi azure tidak ada di dropdown provider');
+  assert.match(select[0], /value="ttsforfree"/, 'opsi ttsforfree tidak ada di dropdown provider');
   assert.match(select[0], /value="elevenlabs"/, 'opsi elevenlabs tidak ada di dropdown provider');
 });
 
-test('D-279: form key punya field Region Azure (opsional)', () => {
-  assert.match(html, /id="keyRegion"/, 'input#keyRegion tidak ditemukan');
-  assert.match(html, /id="keyRegionField"/, 'wadah #keyRegionField tidak ditemukan');
-  // Region harus opsional (bukan required) — dikosongkan = deteksi otomatis.
-  assert.doesNotMatch(html, /id="keyRegion"[^>]*required/, 'Region harus opsional');
+test('D-280: azure dihapus dari dropdown provider', () => {
+  const select = html.match(/<select id="keyProvider"[\s\S]*?<\/select>/);
+  assert.doesNotMatch(select[0], /value="azure"/, 'opsi azure harus dihapus');
+  assert.doesNotMatch(html, /id="keyRegion"/, 'field Region Azure harus dihapus');
 });
 
-test('D-279: server menerima parameter region untuk azure', () => {
-  assert.match(appJs, /probeProviderKey\(provider, api_key\.trim\(\), null, \{ region \}\)/,
-    'route probe tidak mengirim region');
-  assert.match(appJs, /createKey\(req\.supabase, \{[^}]*region/s,
-    'route create key tidak mengirim region');
-});
-
-test('D-279: hint azure tidak lagi mengklaim tanpa info pembayaran', () => {
-  const azureLine = clientJs.split('\n').find((l) => l.includes('azure: {') && l.includes('hint'));
-  assert.ok(azureLine, 'metadata azure tidak ditemukan');
-  assert.doesNotMatch(azureLine, /tanpa info pembayaran/i,
-    'klaim "tanpa info pembayaran" untuk Azure harus dikoreksi');
-  assert.match(azureLine, /kartu kredit/i, 'hint harus menyebut kebutuhan kartu kredit');
+test('D-280: server tidak menerima parameter region lagi', () => {
+  assert.doesNotMatch(appJs, /probeProviderKey\(provider, api_key\.trim\(\), null, \{ region \}\)/,
+    'route probe tidak boleh mengirim region');
+  assert.doesNotMatch(appJs, /createKey\(req\.supabase, \{[^}]*region/s,
+    'route create key tidak boleh mengirim region');
 });

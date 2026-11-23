@@ -11,15 +11,18 @@ import { supabaseConfigured, createPublicClient, createUserClient } from './supa
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint } from './tts.js';
-// D-276 / D-277 / D-278: cadangan TTS bahasa Indonesia (dipakai kalau kuota
-// Gemini habis). Hanya provider dengan free tier tanpa subscription:
-// Azure Speech (F0, 500rb karakter/bulan) → ElevenLabs (free, 10rb kredit/bulan).
+// D-276 / D-277 / D-278 / D-280: cadangan TTS bahasa Indonesia (dipakai kalau
+// kuota Gemini habis). Hanya provider dengan free tier tanpa subscription
+// DAN tanpa kartu kredit:
+// TTSForFree (30rb karakter/bulan, 44 voice ID) → ElevenLabs (10rb kredit/bulan).
 import {
   isQuotaError, TTS_FALLBACK_PROVIDERS,
-  synthesizeAzure, listAzureVoices, AZURE_ID_VOICES,
   synthesizeElevenLabs, ELEVENLABS_VOICES,
   ttsFallbackChain,
 } from './tts-providers.js';
+import {
+  synthesizeTtsforfree, listTtsforfreeVoices, TTSFORFREE_ID_VOICES,
+} from './ttsforfree-provider.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
 import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
@@ -965,7 +968,7 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
  *
  * Memakai Gemini TTS dulu (default). Kalau kuota Gemini habis, otomatis
  * jatuh ke engine cadangan yang support bahasa Indonesia:
- * **Azure Speech → ElevenLabs** (lihat `ttsFallbackChain()`).
+ * **TTSForFree → ElevenLabs** (lihat `ttsFallbackChain()`).
  * Hasilnya diunggah ke Storage Supabase supaya Remotion bisa mereferensikan
  * URL-nya saat render.
  *
@@ -1042,9 +1045,10 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
 }
 
 /**
- * D-277 / D-278 — Coba synthesize TTS lewat rantai cadangan
- * (**Azure Speech → ElevenLabs**). Semua provider punya free tier tanpa
- * subscription; tiap provider wajib punya API key sendiri dari user.
+ * D-277 / D-278 / D-280 — Coba synthesize TTS lewat rantai cadangan
+ * (**TTSForFree → ElevenLabs**). Semua provider punya free tier tanpa
+ * subscription dan tanpa kartu kredit; tiap provider wajib punya API key
+ * sendiri dari user.
  *
  * @param {object} req
  * @param {string} text
@@ -1055,23 +1059,21 @@ async function synthesizeTtsFallbackChain(req, text) {
     const keys = [];
     if (vaultConfigured()) {
       const usable = await getUsableKeys(req.supabase, provider).catch(() => []);
-      // D-279: region Azure disimpan per-key (kunci Azure bersifat regional).
-      for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId, region: vk.region || ''});
+      for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
     }
-    const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+    const envKey = provider === 'ttsforfree' ? process.env.TTSFORFREE_API_KEY
       : process.env.ELEVENLABS_API_KEY;
-    if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null, region: process.env.AZURE_SPEECH_REGION || ''});
+    if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null});
     if (!keys.length) continue;
 
     for (const k of keys) {
       try {
         let out;
-        if (provider === 'azure') {
-          out = await synthesizeAzure({
+        if (provider === 'ttsforfree') {
+          out = await synthesizeTtsforfree({
             apiKey: k.apiKey,
             text,
-            voice: process.env.AZURE_TTS_VOICE || 'id-ID-ArdiNeural',
-            region: k.region || process.env.AZURE_SPEECH_REGION || '',
+            voice: process.env.TTSFORFREE_TTS_VOICE || 'v1:ardi',
           });
         } else {
           out = await synthesizeElevenLabs({
@@ -1785,16 +1787,15 @@ const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message ||
  * D-276 / D-277 / D-278 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
  *
  * Rantai cadangan (semua WAJIB punya API key sendiri dari user):
- *   1. **Azure Speech** → native `id-ID` (Indonesia), REST SSML, free tier F0
- *      500.000 karakter/bulan, reset bulanan, hak komersial termasuk. →
- *      fallback utama. ⚠️ BUTUH kartu kredit/debit untuk verifikasi akun Azure
- *      + region WAJIB diisi (kunci Azure bersifat regional).
- *   2. **ElevenLabs**   → model `eleven_multilingual_v2` (29 bahasa termasuk
+ *   1. **TTSForFree** → TTS Forge API, 30.000 karakter/bulan (reset bulanan),
+ *      API key tanpa kartu kredit, 44 voice Bahasa Indonesia. API asynchronous
+ *      (create job → poll status → unduh audio). → fallback utama.
+ *   2. **ElevenLabs** → model `eleven_multilingual_v2` (29 bahasa termasuk
  *      Indonesia), free tier 10.000 kredit/bulan tanpa kartu kredit. ⚠️ free
  *      plan tanpa hak komersial + wajib atribusi → fallback terakhir.
  *
- * Kunci diambil dari vault (provider `azure`/`elevenlabs`) atau env
- * (`AZURE_SPEECH_API_KEY` / `ELEVENLABS_API_KEY`).
+ * Kunci diambil dari vault (provider `ttsforfree`/`elevenlabs`) atau env
+ * (`TTSFORFREE_API_KEY` / `ELEVENLABS_API_KEY`).
  *
  * Return: fungsi yang mengirim respons audio ke `res`, atau null kalau tidak
  * ada cadangan yang bisa dipakai.
@@ -2227,8 +2228,8 @@ app.post('/api/public/posts/:id/view', async (req, res) => {
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
-// D-276 / D-277 / D-278: daftar voice TTS. Gemini = default; cadangan bahasa
-// Indonesia: Azure Speech (free F0) → ElevenLabs (free, tanpa kartu kredit).
+// D-276 / D-277 / D-278 / D-280: daftar voice TTS. Gemini = default; cadangan
+// bahasa Indonesia: TTSForFree (30rb karakter/bulan) → ElevenLabs (10rb kredit).
 // UI pakai ini buat menampilkan pilihan suara + status engine mana yang siap.
 app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
   try {
@@ -2239,8 +2240,8 @@ app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
         label: v.label,
         language: 'Bahasa Indonesia',
       })),
-      ...AZURE_ID_VOICES.map((v) => ({
-        provider: 'azure',
+      ...TTSFORFREE_ID_VOICES.map((v) => ({
+        provider: 'ttsforfree',
         id: v.id,
         label: v.label,
         language: 'Bahasa Indonesia',
@@ -2254,14 +2255,14 @@ app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
     ];
 
     // Status key cadangan per provider supaya UI tahu engine mana yang siap.
-    const status = {azure: {configured: false}, elevenlabs: {configured: false}};
+    const status = {ttsforfree: {configured: false}, elevenlabs: {configured: false}};
     for (const provider of ttsFallbackChain()) {
       let usable = [];
       if (vaultConfigured()) {
         usable = await getUsableKeys(req.supabase, provider).catch(() => []);
       }
       if (!usable.length) {
-        const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+        const envKey = provider === 'ttsforfree' ? process.env.TTSFORFREE_API_KEY
           : process.env.ELEVENLABS_API_KEY;
         if (envKey) status[provider].configured = true;
         continue;
@@ -2489,11 +2490,11 @@ app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   }
 }));
 app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
-  const { provider, key_name, api_key, priority, region } = req.body || {};
+  const { provider, key_name, api_key, priority } = req.body || {};
   if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
   const { data: userData, error: userError } = await req.supabase.auth.getUser(req.accessToken);
   if (userError || !userData?.user) throw Object.assign(new Error('Sesi login tidak valid. Silakan login kembali.'), { status: 401 });
-  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority, region, user_id: userData.user.id });
+  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority, user_id: userData.user.id });
   return { key, probe };
 }));
 app.put('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => ({ key: await updateKey(req.supabase, req.params.id, req.body || {}) })));
@@ -2505,11 +2506,10 @@ app.post('/api/ai-keys/:id/rotate', requireUser, requireAdmin, requireVault, wra
 }));
 app.post('/api/ai-keys/:id/test', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => ({ probe: await testKey(req.supabase, req.params.id) })));
 app.post('/api/ai-keys/probe', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
-  const { provider, api_key, region } = req.body || {};
+  const { provider, api_key } = req.body || {};
   if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider tidak dikenal.'), { status: 400 });
   if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
-  // D-279: region Azure Speech dikirim dari form (opsional — kosong = deteksi otomatis).
-  return { probe: await probeProviderKey(provider, api_key.trim(), null, { region }) };
+  return { probe: await probeProviderKey(provider, api_key.trim()) };
 }));
 app.delete('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => { await deleteKey(req.supabase, req.params.id); return { ok: true }; }));
 

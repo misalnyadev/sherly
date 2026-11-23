@@ -5,8 +5,8 @@
 //   1. Template "Rangkaian Beat" bisa dipilih di panel Pengaturan.
 //   2. Field "Isi Beat" (textarea) + "Teks Tombol CTA" + "Naskah Voice-over"
 //      + dropdown "Suara" tampil di bar isian Motion Graphics.
-//   3. Dropdown suara berisi voice Gemini + Azure Speech + ElevenLabs.
-//   4. Status engine cadangan TTS (Azure Speech utama) ditampilkan.
+//   3. Dropdown suara berisi voice Gemini + TTSForFree + ElevenLabs.
+//   4. Status engine cadangan TTS (TTSForFree utama) ditampilkan.
 //   5. Tidak ada overflow horizontal di PC maupun HP.
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
@@ -87,13 +87,13 @@ const TTS_VOICES = {
   voices: [
     { provider: 'gemini', id: 'Kore', label: 'Kore (wanita)', language: 'Bahasa Indonesia' },
     { provider: 'gemini', id: 'Puck', label: 'Puck (pria)', language: 'Bahasa Indonesia' },
-    { provider: 'azure', id: 'id-ID-ArdiNeural', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia' },
-    { provider: 'azure', id: 'id-ID-GadisNeural', label: 'Gadis · Indonesia', language: 'Bahasa Indonesia' },
+    { provider: 'ttsforfree', id: 'v1:ardi', label: 'Ardi · Indonesia', language: 'Bahasa Indonesia' },
+    { provider: 'ttsforfree', id: 'v1:gadis', label: 'Gadis · Indonesia', language: 'Bahasa Indonesia' },
     { provider: 'elevenlabs', id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel', language: 'Bahasa Indonesia' },
   ],
-  providers: ['gemini', 'azure', 'elevenlabs'],
-  // D-278: cadangan TTS = provider free tier (tanpa subscription).
-  azure: { configured: true },
+  providers: ['gemini', 'ttsforfree', 'elevenlabs'],
+  // D-280: cadangan TTS = provider free tier (tanpa subscription & kartu kredit).
+  ttsforfree: { configured: true },
   elevenlabs: { configured: false },
 };
 
@@ -238,11 +238,11 @@ ok(pc.hasVoiceover, 'kolom "Naskah Voice-over" tampil');
 ok(pc.hasSelect, 'dropdown "Suara" tampil');
 ok(
   pc.options.some((o) => o.includes('Ardi')),
-  'dropdown suara berisi voice Azure Speech (Ardi)',
+  'dropdown suara berisi voice TTSForFree (Ardi)',
 );
 ok(
   pc.options.some((o) => o.includes('Gadis')),
-  'dropdown suara berisi voice Azure Speech (Gadis)',
+  'dropdown suara berisi voice TTSForFree (Gadis)',
 );
 ok(
   pc.options.some((o) => o.includes('Rachel')),
@@ -253,8 +253,8 @@ ok(
   'dropdown suara berisi voice Gemini',
 );
 ok(
-  /Azure Speech/.test(pc.note),
-  'status engine cadangan Azure Speech tampil (catatan: "' + pc.note + '")',
+  /TTSForFree/.test(pc.note),
+  'status engine cadangan TTSForFree tampil (catatan: "' + pc.note + '")',
 );
 
 const pcOverflow = await readOverflow();

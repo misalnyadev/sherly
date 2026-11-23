@@ -78,7 +78,7 @@ page.on('request', (req) => {
     return req.respond({
       status: 200,
       contentType: 'audio/wav',
-      headers: {'X-TTS-Provider': 'azure', 'X-TTS-Source': 'fallback'},
+      headers: {'X-TTS-Provider': 'ttsforfree', 'X-TTS-Source': 'fallback'},
       body: Buffer.from(WAV_B64, 'base64'),
     });
   }
@@ -148,7 +148,7 @@ const withAudio = await page.evaluate(async (beats) => {
   return {b64: btoa(s), hasAudio: out.hasAudio, ttsProvider: out.ttsProvider, bytes: out.blob.size};
 }, BEATS);
 ok(withAudio.hasAudio === true, 'dengan naskah voice-over -> track audio TERPASANG');
-ok(withAudio.ttsProvider === 'azure', `provider terbaca dari header (${withAudio.ttsProvider})`);
+ok(withAudio.ttsProvider === 'ttsforfree', `provider terbaca dari header (${withAudio.ttsProvider})`);
 // Ukuran file TIDAK dipakai sebagai penanda audio (encoding video beda-beda
 // tiap run) — penanda yang sahih: MP4 punya sample entry audio (lihat bawah).
 

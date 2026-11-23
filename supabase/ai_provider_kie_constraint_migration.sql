@@ -12,12 +12,12 @@
 -- 1) Tabel kunci provider (vault admin + kunci pribadi)
 alter table public.ai_provider_keys drop constraint if exists ai_provider_keys_provider_check;
 alter table public.ai_provider_keys add constraint ai_provider_keys_provider_check
-  check (provider in ('groq','gemini','openrouter','kie','custom','azure','elevenlabs'));  -- D-278: +azure +elevenlabs
+  check (provider in ('groq','gemini','openrouter','kie','custom','ttsforfree','elevenlabs'));  -- D-280: +ttsforfree +elevenlabs
 
 -- 2) Tabel pengaturan model per provider (tombol "Simpan" di kartu provider)
 alter table public.ai_provider_settings drop constraint if exists ai_provider_settings_provider_check;
 alter table public.ai_provider_settings add constraint ai_provider_settings_provider_check
-  check (provider in ('groq','gemini','openrouter','kie','custom','azure','elevenlabs'));  -- D-278: +azure +elevenlabs
+  check (provider in ('groq','gemini','openrouter','kie','custom','ttsforfree','elevenlabs'));  -- D-280: +ttsforfree +elevenlabs
 
 -- 3) Tabel percakapan
 alter table public.ai_conversations drop constraint if exists ai_conversations_provider_check;

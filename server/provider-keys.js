@@ -2,7 +2,7 @@
 // RLS scopes every row to the owning admin; ciphertext never leaves this module toward HTTP responses.
 import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
-export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'azure', 'elevenlabs'];
+export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsforfree', 'elevenlabs'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
 // D-270: tautan resmi untuk mendapatkan API key tiap provider (dibuka di tab baru).
 // Satu sumber kebenaran supaya label, link, dan catatan gratisnya sinkron.
@@ -42,14 +42,14 @@ export const PROVIDER_INFO = {
     docsUrl: '',
     hint: 'Provider sendiri yang kompatibel OpenAI — masukkan base URL + key di form Tambah Provider.',
   },
-  // D-278: Azure Speech = cadangan TTS bahasa Indonesia dengan free tier
-  // F0 (500.000 karakter/bulan, TANPA info pembayaran, reset tiap bulan).
-  azure: {
-    label: 'Azure Speech',
-    keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech',
-    signupUrl: 'https://portal.azure.com/#create/Microsoft.SpeechServices',
-    docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support',
-    hint: 'Cadangan TTS bahasa Indonesia. Buat resource Speech dengan paket F0 gratis (500.000 karakter/bulan). BUTUH kartu kredit/debit untuk verifikasi akun Azure + isi Region (dari Keys and Endpoint). Voice native Indonesia.',
+  // D-280: TTSForFree = cadangan TTS bahasa Indonesia dengan free tier
+  // 30.000 karakter/bulan (reset bulanan, tanpa kartu kredit).
+  ttsforfree: {
+    label: 'TTSForFree',
+    keyUrl: 'https://ttsforfree.com/en/profile/',
+    signupUrl: 'https://ttsforfree.com/en/login/',
+    docsUrl: 'https://ttsforfree.com/en/docs/',
+    hint: 'Cadangan utama TTS bahasa Indonesia. Gratis 30.000 karakter/bulan (reset bulanan), API key tanpa kartu kredit (daftar lewat Google). 44 voice Indonesia. Paket gratis hanya untuk penggunaan pribadi — bukan komersial.',
   },
   // D-278: ElevenLabs = cadangan terakhir, free tier 10.000 kredit/bulan
   // (~10 menit audio), API key tanpa kartu kredit.
@@ -87,7 +87,7 @@ export const PROVIDER_CAPABILITIES = {
   openrouter: ['chat', 'vision'],
   kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'],
   // D-278: cadangan TTS bahasa Indonesia dengan free tier tanpa subscription.
-  azure: ['tts'],
+  ttsforfree: ['tts'],
   elevenlabs: ['tts'],
 };
 const PROBE_LABEL = {
@@ -95,7 +95,7 @@ const PROBE_LABEL = {
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
   kie: 'Kie AI',
-  azure: 'Azure Speech',
+  ttsforfree: 'TTSForFree',
   elevenlabs: 'ElevenLabs',
 };
 
@@ -126,7 +126,6 @@ export function toMeta(row) {
     key_name: row.key_name,
     base_url: row.base_url || null,
     model: row.model || null,
-    region: row.region || null,
     last4: row.last4,
     priority: row.priority,
     is_active: row.is_active,
@@ -190,12 +189,12 @@ export async function listKeyGroups(supabase) {
   return groupKeyRows(await listKeyRows(supabase));
 }
 
-export async function createKey(supabase, { provider, key_name, api_key, priority, user_id, region }) {
-  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, azure, atau elevenlabs.'), { status: 400 });
+export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
+  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, ttsforfree, atau elevenlabs.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
-  const probe = await probeProviderKey(provider, api_key, null, { region }).catch(e => ({ ok: false, error: e.message }));
+  const probe = await probeProviderKey(provider, api_key).catch(e => ({ ok: false, error: e.message }));
   if (!probe.ok) {
     throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
   }
@@ -215,9 +214,6 @@ export async function createKey(supabase, { provider, key_name, api_key, priorit
     last_failure_at: null,
     last_error: null,
   };
-  // D-279: region Azure Speech disimpan per-key (kunci Azure bersifat regional).
-  const azRegion = String(region || '').trim().toLowerCase();
-  if (provider === 'azure' && azRegion) row.region = azRegion;
   const { data, error } = await supabase.from('ai_provider_keys').insert(row).select().single();
   if (error) {
     if (/duplicate|unique/i.test(error.message)) {
@@ -289,7 +285,7 @@ export async function getUsableKeys(supabase, provider) {
   if (!vaultConfigured()) return [];
   let { data, error } = await supabase
     .from('ai_provider_keys')
-    .select('id,key_name,ciphertext,iv,auth_tag,priority,base_url,model,region')
+    .select('id,key_name,ciphertext,iv,auth_tag,priority,base_url,model')
     .eq('provider', provider)
     .eq('is_active', true)
     .order('priority', { ascending: true })
@@ -308,7 +304,7 @@ export async function getUsableKeys(supabase, provider) {
   const usable = [];
   for (const row of data || []) {
     try {
-      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row), baseUrl: row.base_url || null, customModel: row.model || null, region: row.region || null });
+      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row), baseUrl: row.base_url || null, customModel: row.model || null });
     } catch (decryptError) {
       await recordFailure(supabase, row.id, decryptError.message);
     }
@@ -411,8 +407,8 @@ export async function fetchProviderModels(provider, apiKey, baseUrl) {
   // D-203: model Kie (gambar & video) memakai katalog internal server/image-models.js
   // & server/video-models.js — daftar model tidak diambil live dari API Kie.
   if (provider === 'kie') throw new Error('Daftar model Kie dikelola lewat katalog Studio (pilihan model di komposer).');
-  // D-278: Azure Speech & ElevenLabs berbasis voice, bukan model bebas-pilih.
-  if (provider === 'azure') throw new Error('Azure Speech memakai pilihan voice, bukan model. Daftar voice Indonesia diambil dari API voices/list.');
+  // D-280: TTSForFree & ElevenLabs berbasis voice, bukan model bebas-pilih.
+  if (provider === 'ttsforfree') throw new Error('TTSForFree memakai pilihan voice, bukan model. Daftar voice Indonesia diambil dari API GetListVoice.');
   if (provider === 'elevenlabs') throw new Error('ElevenLabs memakai pilihan voice, bukan model. Daftar voice diambil dari API v1/voices.');
   if (provider === 'gemini') {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey }, signal: controller });
@@ -448,7 +444,7 @@ export async function pickReplacementModel(provider, apiKey, failedModel) {
 
 /** Connection test that needs NO specific model: lists models with the key (≈zero tokens).
  *  A key that is valid passes even if a particular model (e.g. gemini-2.5-flash) is retired. */
-export async function probeProviderKey(provider, apiKey, baseUrl, opts = {}) {
+export async function probeProviderKey(provider, apiKey, baseUrl) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 8) return { ok: false, error: 'API key tidak valid (kosong/terlalu pendek).' };
   const controller = AbortSignal.timeout(20000);
   const key = apiKey.trim();
@@ -472,28 +468,35 @@ export async function probeProviderKey(provider, apiKey, baseUrl, opts = {}) {
       return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
     }
   }
-  if (provider === 'azure') {
-    // D-279: kunci Azure Speech bersifat REGIONAL. Coba region yang diisi user,
-    // lalu beberapa region umum, supaya kunci tetap ketemu walau region lupa diisi.
+  if (provider === 'ttsforfree') {
+    // D-280: TTSForFree (TTS Forge API) — endpoint resmi GetListVoice (lang=id).
     try {
-      const {detectAzureRegion, azureErrorMessage} = await import('./azure-region.js');
-      const preferred = String(opts.region || '').trim();
-      const found = await detectAzureRegion(key, preferred, controller);
-      if (found.ok) {
-        const id = found.voices.filter((v) => String(v?.Locale || '').startsWith('id-ID')).length;
+      const res = await fetch('https://api.ttsforfree.com/api/Common/GetListVoice?lang=id&type=singlevoice', {
+        headers: { 'X-API-Key': key, Accept: 'application/json' },
+        signal: controller,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const raw = Array.isArray(payload) ? payload
+          : (Array.isArray(payload?.Data) ? payload.Data
+            : (Array.isArray(payload?.Voices) ? payload.Voices : []));
+        const count = raw.length;
         return {
           ok: true,
-          status: found.status,
-          region: found.region,
-          note: id
-            ? `Kunci valid — region ${found.region}, ${id} voice Indonesia tersedia.`
-            : `Kunci valid — region ${found.region}.`,
+          status: res.status,
+          note: count
+            ? `Kunci valid — ${count} voice Indonesia tersedia.`
+            : 'Kunci valid (daftar voice Indonesia kosong — coba lagi nanti).',
         };
       }
-      return { ok: false, status: found.status, error: azureErrorMessage(found.status, found.message, found.tried) };
+      const msg = String(payload?.Message || payload?.message || `ttsforfree error (${res.status})`).slice(0, 300);
+      if (res.status === 429 || res.status === 403) {
+        return { ok: false, status: res.status, error: `Kuota TTSForFree habis atau akses ditolak. ${msg}` };
+      }
+      return { ok: false, status: res.status, error: msg };
     } catch (error) {
       if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
-      return { ok: true, status: 0, note: 'Validasi format saja — kunci Azure Speech teruji saat synthesize pertama.' };
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci TTSForFree teruji saat synthesize pertama.' };
     }
   }
   if (provider === 'elevenlabs') {

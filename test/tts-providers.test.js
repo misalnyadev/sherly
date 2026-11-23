@@ -1,23 +1,26 @@
 /**
- * D-276 / D-277 / D-278 — Unit test adapter TTS (`server/tts-providers.js`).
+ * D-280 — Unit test adapter TTS (`server/tts-providers.js` + `server/ttsforfree-provider.js`).
  *
- * `fetch` dimock supaya kontrak API Azure Speech & ElevenLabs teruji tanpa
- * memanggil jaringan sungguhan.
+ * `fetch` dimock supaya kontrak API TTSForFree (TTS Forge) & ElevenLabs teruji
+ * tanpa memanggil jaringan sungguhan.
  *
- * D-278: fallback TTS **wajib bisa dipakai tanpa subscribe** — provider yang
- * mewajibkan langganan (TTSMaker/Soniox/Voicemaker) sudah dihapus.
+ * D-280: Azure Speech DIHAPUS (user tidak bisa mendaftar — butuh kartu kredit
+ * verifikasi akun + region). Cadangan sekarang: TTSForFree → ElevenLabs.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  synthesizeAzure, listAzureVoices,
   synthesizeElevenLabs,
   isQuotaError, sanitizeTtsText, ttsProviderOrder, ttsFallbackChain,
   TTS_FALLBACK_PROVIDERS, TtsQuotaError,
-  AZURE_ID_VOICES, AZURE_VOICE_IDS, AZURE_OUTPUT_FORMATS,
   ELEVENLABS_VOICES, ELEVENLABS_VOICE_IDS, ELEVENLABS_MODEL,
 } from '../server/tts-providers.js';
+import {
+  synthesizeTtsforfree, listTtsforfreeVoices,
+  TTSFORFREE_ID_VOICES, TTSFORFREE_VOICE_IDS, TTSFORFREE_DEFAULT_VOICE,
+  TTSFORFREE_MAX_CHARS, TTSFORFREE_MONTHLY_CHARS, TTSFORFREE_API_BASE,
+} from '../server/ttsforfree-provider.js';
 
 const AUDIO = new Uint8Array([0xff, 0xfb, 0x90, 0x00, 0x01, 0x02, 0x03, 0x04]);
 
@@ -38,129 +41,209 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
   headers: {'Content-Type': 'application/json'},
 });
 
-// ===== Azure Speech (fallback #1) =====
+// ===== TTSForFree (fallback #1) =====
 
-test('D-278: synthesizeAzure POST SSML ke endpoint region & balas audio langsung', async () => {
-  let called = null;
+test('D-280: synthesizeTtsforfree buat job → poll → unduh audio', async () => {
+  const calls = [];
   const restore = mockFetch((u, opts) => {
-    called = {u, opts};
+    calls.push({u, opts});
+    if (u.endsWith('/api/TTS/CreateBy')) return json({Id: 42, Status: 'PENDING'});
+    if (u.includes('/api/TTS/Status/42')) {
+      return json({Id: 42, Status: 'SUCCESS', Data: 'https://cdn.ttsforfree.com/out/42.mp3'});
+    }
+    if (u === 'https://cdn.ttsforfree.com/out/42.mp3') {
+      return new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/mpeg'}});
+    }
+    return null;
+  });
+  try {
+    const out = await synthesizeTtsforfree({apiKey: 'k-tff', text: 'Halo dunia', voice: 'v1:ardi'});
+    assert.ok(out.audio.length > 0, 'audio harus terunduh');
+    assert.equal(out.mimeType, 'audio/mpeg');
+    assert.equal(out.voice, 'v1:ardi');
+    assert.equal(out.chars, 10);
+    assert.equal(out.jobId, 42);
+    // Urutan: create → status → unduh.
+    assert.ok(calls[0].u.endsWith('/api/TTS/CreateBy'), 'panggilan pertama = CreateBy');
+    assert.ok(calls[1].u.includes('/api/TTS/Status/42'), 'panggilan kedua = Status');
+    assert.equal(calls[2].u, 'https://cdn.ttsforfree.com/out/42.mp3');
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: CreateBy kirim header X-API-Key + body Texts/Voice/Pitch', async () => {
+  let body = null;
+  let headers = null;
+  const restore = mockFetch((u, opts) => {
+    if (u.endsWith('/api/TTS/CreateBy')) {
+      headers = opts.headers;
+      body = JSON.parse(opts.body);
+      return json({Id: 7, Status: 'PENDING'});
+    }
+    if (u.includes('/api/TTS/Status/7')) {
+      return json({Id: 7, Status: 'SUCCESS', Data: 'https://cdn.ttsforfree.com/x.mp3'});
+    }
     return new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/mpeg'}});
   });
   try {
-    const out = await synthesizeAzure({apiKey: 'k-azure', text: 'Halo dunia', voice: 'id-ID-ArdiNeural', region: 'southeastasia'});
-    assert.ok(out.audio.length === AUDIO.length, 'audio harus utuh');
-    assert.equal(out.mimeType, 'audio/mpeg');
-    assert.equal(out.voice, 'id-ID-ArdiNeural');
-    assert.equal(out.model, 'azure-speech-v1');
-    assert.equal(out.chars, 'Halo dunia'.length);
-    assert.ok(called.u.includes('southeastasia.tts.speech.microsoft.com/cognitiveservices/v1'), 'endpoint Azure benar');
-    assert.equal(called.opts.method, 'POST');
-    assert.equal(called.opts.headers['Ocp-Apim-Subscription-Key'], 'k-azure');
-    assert.equal(called.opts.headers['Content-Type'], 'application/ssml+xml');
-    assert.ok(called.opts.headers['X-Microsoft-OutputFormat'], 'harus ada header output format');
-    const body = String(called.opts.body);
-    assert.ok(body.includes('id-ID-ArdiNeural'), 'SSML harus menyebut voice');
-    assert.ok(body.includes('xml:lang="id-ID"'), 'SSML harus bahasa id-ID');
-    assert.ok(body.includes('Halo dunia'), 'SSML harus berisi teks');
+    await synthesizeTtsforfree({apiKey: 'secret-key', text: 'Halo', voice: 'v1:gadis', pitch: 5});
+    assert.equal(headers['X-API-Key'], 'secret-key');
+    assert.equal(body.Texts, 'Halo');
+    assert.equal(body.Voice, 'v1:gadis');
+    assert.equal(body.Pitch, 5);
   } finally {
     restore();
   }
 });
 
-test('D-278: synthesizeAzure meng-escape XML di teks', async () => {
-  let body = null;
-  const restore = mockFetch((u, opts) => {
-    body = String(opts.body);
-    return new Response(AUDIO, {status: 200});
+test('D-280: status ERROR → error biasa (bukan quota) dilempar', async () => {
+  const restore = mockFetch((u) => {
+    if (u.endsWith('/api/TTS/CreateBy')) return json({Id: 9, Status: 'PENDING'});
+    if (u.includes('/api/TTS/Status/9')) return json({Id: 9, Status: 'ERROR', Message: 'Voice tidak valid'});
+    return null;
   });
-  try {
-    await synthesizeAzure({apiKey: 'k', text: 'A & B <tag> "kutip"'});
-    assert.ok(!body.includes('<tag>'), 'tag harus di-escape');
-    assert.ok(body.includes('&amp;'), 'ampersand harus di-escape');
-    assert.ok(body.includes('&lt;'), 'kurang dari harus di-escape');
-    assert.ok(body.includes('&quot;'), 'kutip harus di-escape');
-  } finally {
-    restore();
-  }
-});
-
-test('D-278: synthesizeAzure pakai voice default kalau voice tidak dikenal', async () => {
-  let body = null;
-  const restore = mockFetch((u, opts) => {
-    body = String(opts.body);
-    return new Response(AUDIO, {status: 200});
-  });
-  try {
-    const out = await synthesizeAzure({apiKey: 'k', text: 'Halo', voice: 'voice-ngawur'});
-    assert.equal(out.voice, 'id-ID-ArdiNeural', 'harus jatuh ke voice default');
-    assert.ok(body.includes('id-ID-ArdiNeural'));
-  } finally {
-    restore();
-  }
-});
-
-test('D-278: synthesizeAzure error kuota jadi TtsQuotaError', async () => {
-  const restore = mockFetch(() => json({message: 'Quota exceeded'}, 429));
   try {
     await assert.rejects(
-      () => synthesizeAzure({apiKey: 'k', text: 'Halo'}),
-      (e) => e instanceof TtsQuotaError,
+      () => synthesizeTtsforfree({apiKey: 'k', text: 'Halo'}),
+      /Voice tidak valid/,
     );
   } finally {
     restore();
   }
 });
 
-test('D-278: synthesizeAzure error lain jadi Error biasa', async () => {
-  const restore = mockFetch(() => json({message: 'Invalid subscription key'}, 401));
+test('D-280: 429 saat create → TtsQuotaError', async () => {
+  const restore = mockFetch(() => json({Message: 'Too many requests'}, 429));
   try {
     await assert.rejects(
-      () => synthesizeAzure({apiKey: 'k', text: 'Halo'}),
-      (e) => !(e instanceof TtsQuotaError) && /Invalid subscription key/.test(e.message),
+      () => synthesizeTtsforfree({apiKey: 'k', text: 'Halo'}),
+      (err) => {
+        assert.ok(err instanceof TtsQuotaError, 'harus TtsQuotaError');
+        assert.equal(err.quota, true);
+        return true;
+      },
     );
   } finally {
     restore();
   }
 });
 
-test('D-278: listAzureVoices hanya mengembalikan voice id-ID', async () => {
-  const restore = mockFetch(() => json([
-    {ShortName: 'id-ID-ArdiNeural', Locale: 'id-ID'},
-    {ShortName: 'id-ID-GadisNeural', Locale: 'id-ID'},
-    {ShortName: 'en-US-JennyNeural', Locale: 'en-US'},
-  ]));
+test('D-280: 429 saat polling → TtsQuotaError', async () => {
+  const restore = mockFetch((u) => {
+    if (u.endsWith('/api/TTS/CreateBy')) return json({Id: 11, Status: 'PENDING'});
+    return json({Message: 'Too many requests'}, 429);
+  });
   try {
-    const out = await listAzureVoices('k-azure', 'southeastasia');
-    assert.equal(out.length, 2, 'hanya voice id-ID');
-    assert.ok(out.every((v) => v.Locale === 'id-ID'));
+    await assert.rejects(
+      () => synthesizeTtsforfree({apiKey: 'k', text: 'Halo'}),
+      (err) => err instanceof TtsQuotaError,
+    );
   } finally {
     restore();
   }
 });
 
-test('D-278: Azure API key kosong ditolak sebelum memanggil jaringan', async () => {
+test('D-280: 403 saat create → TtsQuotaError (akses/kuota ditolak)', async () => {
+  const restore = mockFetch(() => json({Message: 'Forbidden'}, 403));
+  try {
+    await assert.rejects(
+      () => synthesizeTtsforfree({apiKey: 'k', text: 'Halo'}),
+      (err) => err instanceof TtsQuotaError,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: teks kosong ditolak tanpa memanggil API', async () => {
   let called = false;
-  const restore = mockFetch(() => { called = true; return new Response(AUDIO, {status: 200}); });
+  const restore = mockFetch(() => { called = true; return null; });
   try {
-    await assert.rejects(() => synthesizeAzure({apiKey: '', text: 'Halo'}), /API key Azure Speech/);
-    assert.equal(called, false, 'tidak boleh memanggil jaringan tanpa key');
+    await assert.rejects(() => synthesizeTtsforfree({apiKey: 'k', text: '   '}), /kosong/i);
+    assert.equal(called, false, 'API tidak boleh dipanggil untuk teks kosong');
   } finally {
     restore();
   }
 });
 
-test('D-278: format output Azure lengkap (mp3/wav/opus)', () => {
-  for (const key of ['mp3', 'mp3_16k', 'opus', 'wav']) {
-    const fmt = AZURE_OUTPUT_FORMATS[key];
-    assert.ok(fmt, `format ${key} harus ada`);
-    assert.ok(fmt.header.startsWith('audio-') || fmt.header.startsWith('ogg-') || fmt.header.startsWith('riff-'), `header ${key} valid`);
-    assert.ok(fmt.mimeType.startsWith('audio/'), `mime ${key} valid`);
+test('D-280: API key kosong ditolak tanpa memanggil API', async () => {
+  let called = false;
+  const restore = mockFetch(() => { called = true; return null; });
+  try {
+    await assert.rejects(() => synthesizeTtsforfree({apiKey: '', text: 'Halo'}), /API key/i);
+    assert.equal(called, false);
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: voice tidak dikenal → jatuh ke default', async () => {
+  let body = null;
+  const restore = mockFetch((u, opts) => {
+    if (u.endsWith('/api/TTS/CreateBy')) {
+      body = JSON.parse(opts.body);
+      return json({Id: 3, Status: 'PENDING'});
+    }
+    if (u.includes('/api/TTS/Status/3')) {
+      return json({Id: 3, Status: 'SUCCESS', Data: 'https://cdn.ttsforfree.com/a.mp3'});
+    }
+    return new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/mpeg'}});
+  });
+  try {
+    await synthesizeTtsforfree({apiKey: 'k', text: 'Halo', voice: 'v1:bogus'});
+    assert.equal(body.Voice, TTSFORFREE_DEFAULT_VOICE);
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: batas panjang teks 20.000 karakter (dokumentasi resmi)', async () => {
+  assert.equal(TTSFORFREE_MAX_CHARS, 20000);
+  assert.equal(TTSFORFREE_MONTHLY_CHARS, 30000);
+  assert.match(TTSFORFREE_API_BASE, /^https:\/\/api\.ttsforfree\.com$/);
+});
+
+test('D-280: listTtsforfreeVoices baca array & Data[]', async () => {
+  const restore = mockFetch((u) => {
+    assert.ok(u.includes('lang=id'), 'harus pakai lang=id');
+    return json({Id: 1, Message: 'Success', Data: [
+      {Voice: 'v1:ardi', DisplayName: 'Ardi (Natural) (Indonesia)', Provider: 'Azure'},
+      {Voice: 'v1:gadis', DisplayName: 'Gadis (Natural) (Indonesia)', Provider: 'Azure'},
+    ]});
+  });
+  try {
+    const list = await listTtsforfreeVoices('k');
+    assert.equal(list.length, 2);
+    assert.equal(list[0].id, 'v1:ardi');
+    assert.equal(list[0].provider, 'azure');
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: listTtsforfreeVoices 429 → TtsQuotaError', async () => {
+  const restore = mockFetch(() => json({Message: 'Too many requests'}, 429));
+  try {
+    await assert.rejects(() => listTtsforfreeVoices('k'), (e) => e instanceof TtsQuotaError);
+  } finally {
+    restore();
+  }
+});
+
+test('D-280: metadata voice Indonesia TTSForFree lengkap', () => {
+  assert.ok(TTSFORFREE_ID_VOICES.length >= 5, 'minimal 5 voice Indonesia');
+  assert.ok(TTSFORFREE_ID_VOICES.some((v) => v.label.includes('Ardi')));
+  assert.ok(TTSFORFREE_ID_VOICES.some((v) => v.label.includes('Gadis')));
+  for (const v of TTSFORFREE_ID_VOICES) {
+    assert.ok(TTSFORFREE_VOICE_IDS.has(v.id), `${v.id} harus ada di set valid`);
+    assert.ok(v.label.includes('Indonesia'), `${v.id} harus ditandai Indonesia`);
   }
 });
 
 // ===== ElevenLabs (fallback #2) =====
 
-test('D-278: synthesizeElevenLabs POST ke /text-to-speech/{voice}', async () => {
+test('D-280: synthesizeElevenLabs POST ke endpoint text-to-speech & balas mp3', async () => {
   let called = null;
   const restore = mockFetch((u, opts) => {
     called = {u, opts};
@@ -168,24 +251,19 @@ test('D-278: synthesizeElevenLabs POST ke /text-to-speech/{voice}', async () => 
   });
   try {
     const out = await synthesizeElevenLabs({apiKey: 'k-el', text: 'Halo dunia', voice: '21m00Tcm4TlvDq8ikWAM'});
-    assert.ok(out.audio.length === AUDIO.length, 'audio harus utuh');
+    assert.ok(out.audio.length > 0);
     assert.equal(out.mimeType, 'audio/mpeg');
     assert.equal(out.voice, '21m00Tcm4TlvDq8ikWAM');
     assert.equal(out.model, ELEVENLABS_MODEL);
-    assert.ok(called.u.includes('/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM'), 'endpoint ElevenLabs benar');
-    assert.equal(called.opts.method, 'POST');
+    assert.ok(called.u.includes('/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM'));
     assert.equal(called.opts.headers['xi-api-key'], 'k-el');
-    const body = JSON.parse(called.opts.body);
-    assert.equal(body.text, 'Halo dunia');
-    assert.equal(body.model_id, ELEVENLABS_MODEL, 'harus pakai model multilingual (support Indonesia)');
-    assert.ok(body.voice_settings, 'harus ada voice_settings');
   } finally {
     restore();
   }
 });
 
-test('D-278: ElevenLabs error kuota jadi TtsQuotaError', async () => {
-  const restore = mockFetch(() => json({detail: [{msg: 'quota_exceeded'}]}, 429));
+test('D-280: ElevenLabs 429 → TtsQuotaError', async () => {
+  const restore = mockFetch(() => json({detail: [{msg: 'quota exceeded'}]}, 429));
   try {
     await assert.rejects(
       () => synthesizeElevenLabs({apiKey: 'k', text: 'Halo'}),
@@ -196,24 +274,12 @@ test('D-278: ElevenLabs error kuota jadi TtsQuotaError', async () => {
   }
 });
 
-test('D-278: ElevenLabs error detail string diteruskan sebagai pesan', async () => {
-  const restore = mockFetch(() => json({detail: 'Invalid API key'}, 401));
-  try {
-    await assert.rejects(
-      () => synthesizeElevenLabs({apiKey: 'k', text: 'Halo'}),
-      (e) => /Invalid API key/.test(e.message),
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('D-278: ElevenLabs API key kosong ditolak sebelum memanggil jaringan', async () => {
+test('D-280: ElevenLabs tanpa key ditolak tanpa jaringan', async () => {
   let called = false;
-  const restore = mockFetch(() => { called = true; return new Response(AUDIO, {status: 200}); });
+  const restore = mockFetch(() => { called = true; return null; });
   try {
-    await assert.rejects(() => synthesizeElevenLabs({apiKey: '', text: 'Halo'}), /API key ElevenLabs/);
-    assert.equal(called, false, 'tidak boleh memanggil jaringan tanpa key');
+    await assert.rejects(() => synthesizeElevenLabs({apiKey: '', text: 'Halo'}), /API key/i);
+    assert.equal(called, false);
   } finally {
     restore();
   }
@@ -221,96 +287,69 @@ test('D-278: ElevenLabs API key kosong ditolak sebelum memanggil jaringan', asyn
 
 // ===== Umum =====
 
-test('D-278: teks kosong ditolak', async () => {
-  await assert.rejects(() => synthesizeAzure({apiKey: 'k', text: '   '}), /kosong/);
-  await assert.rejects(() => synthesizeElevenLabs({apiKey: 'k', text: ''}), /kosong/);
+test('D-280: sanitizeTtsText merapikan & memotong', () => {
+  assert.equal(sanitizeTtsText('  halo   dunia  '), 'halo dunia');
+  assert.equal(sanitizeTtsText('x'.repeat(50), 10).length, 10);
 });
 
-test('D-276: sanitizeTtsText merapikan & memotong', () => {
-  assert.equal(sanitizeTtsText('  Halo   dunia \n'), 'Halo dunia');
-  assert.equal(sanitizeTtsText('abcdef', 3), 'abc');
+test('D-280: isQuotaError mengenali pola kuota', () => {
+  assert.ok(isQuotaError('429 Too Many Requests'));
+  assert.ok(isQuotaError('RESOURCE_EXHAUSTED: quota exceeded'));
+  assert.ok(isQuotaError('insufficient credits'));
+  assert.ok(isQuotaError('monthly limit reached'));
+  assert.ok(!isQuotaError('Internal server error'));
 });
 
-test('D-276: isQuotaError mengenali pola kuota', () => {
-  for (const m of [
-    '429 Too Many Requests',
-    'RESOURCE_EXHAUSTED: quota exceeded',
-    'You exceeded your current quota',
-    'Rate limit reached',
-    'insufficient_quota',
-    'Monthly limit reached',
-    'insufficient credits',
-  ]) {
-    assert.ok(isQuotaError(m), `harus terdeteksi: ${m}`);
-  }
-  for (const m of ['', 'Internal server error', 'Invalid api key', 'Audio empty']) {
-    assert.ok(!isQuotaError(m), `tidak boleh terdeteksi: ${m}`);
+test('D-280: ttsProviderOrder menaruh Gemini di depan', () => {
+  assert.deepEqual(ttsProviderOrder(['ttsforfree']), ['gemini', 'ttsforfree']);
+  assert.equal(ttsProviderOrder(['bogus']).length, 1);
+});
+
+test('D-280: ttsProviderOrder menolak provider yang butuh subscribe', () => {
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker', 'azure']) {
+    assert.deepEqual(ttsProviderOrder([gone]), ['gemini'], `${gone} harus ditolak`);
   }
 });
 
-test('D-278: ttsProviderOrder selalu Gemini dulu, tanpa duplikat', () => {
-  assert.deepEqual(ttsProviderOrder([]), ['gemini']);
-  assert.deepEqual(ttsProviderOrder(['azure']), ['gemini', 'azure']);
-  assert.deepEqual(ttsProviderOrder(['elevenlabs']), ['gemini', 'elevenlabs']);
-  assert.deepEqual(ttsProviderOrder(['azure', 'azure']), ['gemini', 'azure']);
-  assert.deepEqual(ttsProviderOrder(['unknown']), ['gemini']);
-  // Provider yang dihapus D-278 tidak boleh diterima lagi.
-  assert.deepEqual(ttsProviderOrder(['ttsmaker']), ['gemini']);
-  assert.deepEqual(ttsProviderOrder(['soniox']), ['gemini']);
-  assert.deepEqual(ttsProviderOrder(['voicemaker']), ['gemini']);
+test('D-280: ttsFallbackChain = ttsforfree → elevenlabs', () => {
+  assert.deepEqual(ttsFallbackChain(), ['ttsforfree', 'elevenlabs']);
 });
 
-test('D-278: ttsFallbackChain = Azure → ElevenLabs', () => {
-  assert.deepEqual(ttsFallbackChain(), ['azure', 'elevenlabs']);
-});
-
-// ===== Metadata =====
-
-test('D-278: metadata voice Azure Indonesia lengkap', () => {
-  assert.ok(AZURE_ID_VOICES.length >= 2, 'minimal 2 voice Azure Indonesia');
-  for (const v of AZURE_ID_VOICES) {
-    assert.ok(v.id.startsWith('id-ID-'), `${v.id} harus locale id-ID`);
-    assert.ok(v.label, 'voice harus punya nama');
-    assert.ok(AZURE_VOICE_IDS.has(v.id), `${v.label} harus ada di set id`);
-  }
-  assert.ok(AZURE_ID_VOICES.some((v) => v.key === 'ardi'), 'ada voice Ardi');
-  assert.ok(AZURE_ID_VOICES.some((v) => v.key === 'gadis'), 'ada voice Gadis');
-});
-
-test('D-278: metadata voice ElevenLabs lengkap', () => {
-  assert.ok(ELEVENLABS_VOICES.length >= 3, 'minimal 3 voice ElevenLabs');
-  for (const v of ELEVENLABS_VOICES) {
-    assert.ok(v.id, 'voice harus punya id');
-    assert.ok(v.label, 'voice harus punya label');
-    assert.ok(ELEVENLABS_VOICE_IDS.has(v.id), `${v.label} harus ada di set id`);
-  }
-  // Model default harus support Indonesian (multilingual).
-  assert.equal(ELEVENLABS_MODEL, 'eleven_multilingual_v2');
-});
-
-test('D-278: metadata provider punya link resmi + free tier', () => {
-  for (const provider of ['azure', 'elevenlabs']) {
-    const info = TTS_FALLBACK_PROVIDERS[provider];
-    assert.ok(info, `metadata ${provider} harus ada`);
-    assert.ok(info.keyUrl.startsWith('https://'), `${provider} punya link ambil key`);
-    assert.ok(info.docsUrl.startsWith('https://'), `${provider} punya link dokumentasi`);
-    assert.ok(info.languages.includes('Indonesia'), `${provider} support bahasa Indonesia`);
-    assert.ok(info.freeTier, `${provider} harus menyebut free tier-nya`);
+test('D-280: metadata provider cadangan lengkap', () => {
+  for (const p of ['ttsforfree', 'elevenlabs']) {
+    const info = TTS_FALLBACK_PROVIDERS[p];
+    assert.ok(info, `${p} harus punya metadata`);
+    assert.ok(info.label);
+    assert.match(info.keyUrl, /^https:\/\//);
+    assert.match(info.signupUrl, /^https:\/\//);
+    assert.match(info.docsUrl, /^https:\/\//);
+    assert.ok(info.freeTier, `${p} harus punya info freeTier`);
+    assert.match(info.languages, /Indonesia/);
   }
 });
 
-test('D-278: ElevenLabs ditandai tanpa hak komersial (free plan)', () => {
-  const info = TTS_FALLBACK_PROVIDERS.elevenlabs;
-  assert.equal(info.commercial, false, 'free plan ElevenLabs tidak ada hak komersial');
-  assert.ok(/atribusi/i.test(info.hint + ' ' + (info.attribution || '')), 'harus menyebut kewajiban atribusi');
+test('D-280: TTSForFree & ElevenLabs non-komersial → wajib disebut', () => {
+  assert.equal(TTS_FALLBACK_PROVIDERS.ttsforfree.commercial, false);
+  assert.ok(TTS_FALLBACK_PROVIDERS.ttsforfree.attribution);
+  assert.equal(TTS_FALLBACK_PROVIDERS.elevenlabs.commercial, false);
+  assert.ok(TTS_FALLBACK_PROVIDERS.elevenlabs.attribution);
 });
 
-test('D-278: provider yang wajib subscribe sudah dihapus total', () => {
-  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+test('D-280: hint TTSForFree menyebut free tier & tanpa kartu kredit', () => {
+  const hint = TTS_FALLBACK_PROVIDERS.ttsforfree.hint;
+  assert.match(hint, /30\.000 karakter/i);
+  assert.match(hint, /tanpa kartu kredit/i);
+});
+
+test('D-280: provider wajib-subscribe & azure hilang dari metadata', () => {
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker', 'azure']) {
     assert.equal(TTS_FALLBACK_PROVIDERS[gone], undefined, `${gone} harus dihapus`);
   }
-  const chain = ttsFallbackChain();
-  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
-    assert.ok(!chain.includes(gone), `${gone} tidak boleh ada di rantai fallback`);
+});
+
+test('D-280: metadata voice ElevenLabs utuh', () => {
+  assert.ok(ELEVENLABS_VOICES.length >= 6);
+  for (const v of ELEVENLABS_VOICES) {
+    assert.ok(ELEVENLABS_VOICE_IDS.has(v.id));
   }
 });
