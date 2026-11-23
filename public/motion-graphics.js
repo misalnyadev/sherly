@@ -20,6 +20,31 @@
 // CATATAN PALET: warna di file ini WAJIB dari palet resmi Sherly
 // (lihat tools/check-palette.js) — gelap + pink + putih saja.
 
+// D-276: model beat dipakai client-side. WAJIB sinkron dengan
+// motion-graphics/src/beats.ts (versi server-side).
+import {
+  beatsFromText,
+  beatAtFrame,
+} from './motion-graphics-beats.js';
+
+/** Gaya visual per peran beat (sinkron dengan BeatSequence.tsx). */
+const MG_BEAT_ROLE_STYLE = {
+  hook: {headlineScale: 1.18, plum: true, rule: true, badge: false, ctaButton: false},
+  body: {headlineScale: 1, plum: false, rule: true, badge: true, ctaButton: false},
+  payoff: {headlineScale: 1.08, plum: true, rule: true, badge: true, ctaButton: false},
+  cta: {headlineScale: 1, plum: true, rule: false, badge: true, ctaButton: true},
+  outro: {headlineScale: 0.9, plum: false, rule: false, badge: false, ctaButton: false},
+};
+
+/** Label badge peran beat (sinkron dengan BeatSequence.tsx). */
+const MG_BEAT_ROLE_BADGE = {
+  hook: 'HOOK',
+  body: '',
+  payoff: 'HASIL',
+  cta: 'SEKARANG',
+  outro: 'TERIMA KASIH',
+};
+
 const MG_PALETTE = {
   bg: '#070b14',
   bgElevated: '#0c1422',
@@ -49,17 +74,132 @@ const MG_FPS = 30;
 export const MG_UPLOAD_MAX_BYTES = 4 * 1024 * 1024; // 4 MB (sisakan ruang untuk multipart)
 
 /**
+ * D-275: durasi maksimum Motion Graphics = 30 detik.
+ *
+ * ANGKA-ANGKA INI WAJIB SINKRON dengan server/motion-graphics.js.
+ * Batas sebenarnya bukan upload — jalur client lewat signed-upload (D-263)
+ * untuk file >= 4 MB. Yang membatasi adalah KUALITAS: di 45+ detik bitrate
+ * menyentuh lantai 800 kbps dan video jadi pecil. 30 detik masih ~950 kbps.
+ */
+export const MG_MAX_DURATION = 30;
+
+/** Durasi yang boleh dipilih (detik). */
+export const MG_DURATIONS = [5, 6, 8, 10, 12, 15, 20, 25, 30];
+
+/**
  * Bitrate (bit/detik) supaya hasil muat di bawah batas upload.
+ *
+ * D-275: untuk durasi pendek (<= 12 detik) tetap sizing ke 4 MB supaya file
+ * kecil & upload cepat. Untuk durasi panjang, file LEBIH besar diizinkan
+ * (signed-upload, tanpa batas body) — jadi bitrate dinaikkan ke ~1,8-2,5 Mbps
+ * supaya tidak pecil, bukan diturunkan.
+ *
  * @param {number} durationInSeconds
  * @returns {number}
  */
 export function bitrateForDuration(durationInSeconds) {
   const dur = Math.max(1, Number(durationInSeconds) || 1);
-  // Sisakan ~15% untuk overhead multipart + muxing.
+  if (dur > 12) {
+    // Durasi panjang: file boleh lebih besar (signed-upload), tapi jangan
+    // berlebihan supaya render & upload tetap cepat.
+    // 15s -> 2,5 Mbps | 20s -> 2,0 | 25s -> 1,8 | 30s -> 1,6
+    const bits = Math.floor((3_200_000 * 12) / dur);
+    return Math.min(Math.max(bits, 1_400_000), 2_500_000);
+  }
+  // Durasi pendek: sisakan ~15% untuk overhead multipart + muxing.
   const targetBytes = MG_UPLOAD_MAX_BYTES * 0.85;
   const bits = Math.floor((targetBytes * 8) / dur);
   // Batas bawah & atas supaya tidak terlalu pecil nor overly besar.
   return Math.min(Math.max(bits, 800_000), 6_000_000);
+}
+
+/**
+ * D-276 — Ambil audio voice-over TTS dari server.
+ *
+ * Server otomatis memakai provider cadangan (TTSMaker, bahasa Indonesia)
+ * kalau kuota Gemini habis —客户端 cukup menerima audio yang benar.
+ *
+ * @param {string} text
+ * @param {{voice?: string, style?: string}} opts
+ * @returns {Promise<{buffer: ArrayBuffer, mimeType: string, provider: string}|null>}
+ */
+export async function fetchTtsAudio(text, opts = {}) {
+  const clean = String(text || '').trim();
+  if (!clean) return null;
+  const res = await fetch('/api/ai/tts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+    body: JSON.stringify({
+      text: clean,
+      voice: opts.voice || undefined,
+      style: opts.style || undefined,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(err.error || 'Gagal membuat voice-over.'), {status: res.status});
+  }
+  const buffer = await res.arrayBuffer();
+  if (!buffer || buffer.byteLength === 0) return null;
+  return {
+    buffer,
+    mimeType: res.headers.get('Content-Type') || 'audio/wav',
+    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'ttsmaker' : 'gemini'),
+  };
+}
+
+/**
+ * D-276 — Ubah ArrayBuffer audio (WAV/MP3) jadi AudioBuffer siap tempel.
+ * Memakai OfflineAudioContext supaya bisa di-decode tanpa <audio> element.
+ *
+ * @param {ArrayBuffer} buffer
+ * @param {number} sampleRate
+ * @returns {Promise<AudioBuffer|null>}
+ */
+export async function decodeAudioBuffer(buffer, sampleRate = 44100) {
+  try {
+    const Ctx = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+    if (!Ctx) return null;
+    const ctx = new Ctx(1, 1024, sampleRate);
+    const decoded = await ctx.decodeAudioData(buffer.slice(0));
+    return decoded || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * D-276 — Decode audio (WAV/MP3) jadi AudioBuffer.
+ *
+ * Jalur 1: Web Audio (OfflineAudioContext.decodeAudioData) — paling luas
+ * didukung, otomatis resample ke sample rate context.
+ * Jalur 2: mediabunny (mp3/webm input) — cadangan kalau Web Audio tidak
+ * bisa decode format tertentu (mis. MP3 di browser lama).
+ *
+ * @param {ArrayBuffer} buffer
+ * @param {number} sampleRate
+ * @returns {Promise<AudioBuffer|null>}
+ */
+export async function decodeTtsAudio(buffer, sampleRate = 44100) {
+  const viaWebAudio = await decodeAudioBuffer(buffer, sampleRate);
+  if (viaWebAudio) return viaWebAudio;
+  try {
+    const mediabunny = await import('./vendor/mediabunny.min.mjs');
+    if (typeof mediabunny.Input !== 'function') return null;
+    const input = new mediabunny.Input({
+      formats: mediabunny.ALL_FORMATS,
+      source: new mediabunny.BlobSource(new Blob([buffer])),
+    });
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) return null;
+    const sink = new mediabunny.AudioBufferSink(track);
+    return await sink.getAudioBuffer();
+  } catch {
+    return null;
+  }
 }
 
 /** Template Motion Graphics (harus sama dengan server/motion-graphics.js). */
@@ -70,7 +210,7 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Judul + subjudul + logo Sherly, cocok buat pembuka konten.',
     icon: 'sparkles',
     defaultDuration: 6,
-    durations: [5, 6, 8],
+    durations: [5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'title', label: 'Judul', placeholder: 'Contoh: Kreasi Tanpa Batas', required: true},
@@ -83,7 +223,7 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Tempel video lalu kasih subtitle per baris.',
     icon: 'captions',
     defaultDuration: 8,
-    durations: [6, 8, 10],
+    durations: [6, 8, 10, 12, 15, 20, 25, 30],
     aspects: ['9:16', '16:9'],
     fields: [
       {key: 'src', label: 'URL video', placeholder: 'https://… (kosong = latarnya teks saja)'},
@@ -96,12 +236,48 @@ export const MG_CLIENT_TEMPLATES = [
     hint: 'Satu angka besar + label, buat kutipan atau ringkasan data.',
     icon: 'bar-chart',
     defaultDuration: 5,
-    durations: [4, 5, 6],
+    durations: [4, 5, 6, 8, 10, 12, 15],
     aspects: ['9:16', '16:9', '1:1'],
     fields: [
       {key: 'value', label: 'Nilai', placeholder: 'Contoh: 3.2x', required: true},
       {key: 'label', label: 'Label', placeholder: 'Contoh: lebih cepat produksi', required: true},
       {key: 'note', label: 'Catatan', placeholder: 'Contoh: Data internal, Q3 2026'},
+    ],
+  },
+  {
+    id: 'beat-sequence',
+    label: 'Rangkaian Beat',
+    // D-276: video 10-30 detik berisi beberapa blok teks (HOOK -> BODY ->
+    // PAYOFF -> CTA). Tiap beat punya durasi & gaya sendiri, jadi videonya
+    // punya irama — bukan satu teks diam.
+    hint: 'Video multi-bloc: hook, isi, lalu CTA. Format: "=== Hook ===" lalu teksnya.',
+    icon: 'layers',
+    defaultDuration: 15,
+    durations: [10, 12, 15, 20, 25, 30],
+    aspects: ['9:16', '16:9', '1:1'],
+    fields: [
+      {
+        key: 'beatsText',
+        label: 'Isi Beat',
+        type: 'textarea',
+        rows: 7,
+        required: true,
+        placeholder: '=== Hook ===\n3,2x lebih cepat produksi\n\n=== Poin 1 ===\nTemplate siap pakai\n\n=== CTA ===\nCoba sekarang\n@sherlystudio',
+      },
+      {key: 'ctaLabel', label: 'Teks Tombol CTA', placeholder: 'Contoh: Simpan Videonya'},
+      {
+        key: 'voiceoverText',
+        label: 'Naskah Voice-over (opsional)',
+        type: 'textarea',
+        rows: 3,
+        placeholder: 'Kosongkan kalau tidak mau suara. Kalau diisi, videonya dapat narasi TTS bahasa Indonesia.',
+      },
+      {
+        key: 'voice',
+        label: 'Suara (opsional)',
+        type: 'select',
+        placeholder: 'Pakai bawaan sistem',
+      },
     ],
   },
 ];
@@ -321,12 +497,29 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
   const total = Math.max(1, totalSeconds);
   const fadeOut = interpolate(t, [total - 0.6, total], [1, 0]);
 
-  // Spring: judul masuk ~0.35 dtk, subjudul ~1.15 dtk.
-  const titleIn = spring(t - 0.35, {damping: 200, mass: 0.7});
-  const subIn = spring(t - 1.15, {damping: 200, mass: 0.9});
+  // D-275: intro bisa dipilih sampai 15 detik. Animasi lama selesai di
+  // ~1,5 detik, jadi video 10+ detik akan jadi "layar diam" yang membosankan.
+  // Perbaikan: intro tetap tampil sebagai BERTAHAN (hold), dan gerakannya
+  // "bernapas" pelan supaya layar tidak benar-benar statis.
+  //   - Timeline intro dipadatkan ke max 2,4 detik.
+  //   - Setelah masuk, konten "napas" pelan (scale + opacity denyut kecil).
+  const INTRO_MAX = 2.4;
+  const introLen = Math.min(total, INTRO_MAX);
+  // Skala waktu: kalau durasi > INTRO_MAX, animasi tetap pakai langkah
+  // waktu asli (tidak dipercepat) tapi tidak boleh melebihi introLen.
+  const animT = Math.min(t, introLen);
+  const isHolding = t > introLen;
 
-  // Denyut cahaya (loop).
+  // Spring: judul masuk ~0.35 dtk, subjudul ~1.15 dtk.
+  const titleIn = spring(animT - 0.35, {damping: 200, mass: 0.7});
+  const subIn = spring(animT - 1.15, {damping: 200, mass: 0.9});
+
+  // Denyut cahaya (loop) + "napas" pelan saat menahan.
   const pulse = 0.72 + 0.28 * ((Math.sin(t * Math.PI * 0.9) + 1) / 2);
+  const breath = isHolding
+    ? Math.sin(((t - introLen) / Math.max(0.6, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.012;
 
   ctx.save();
   ctx.globalAlpha = fadeOut;
@@ -334,6 +527,11 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
 
   const cx = w / 2;
   const cy = h / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(breathScale, breathScale);
+  ctx.translate(-cx, -cy);
 
   // Logo hati.
   const heartSize = Math.round(w * 0.085);
@@ -390,6 +588,7 @@ function drawBrandedIntro(ctx, w, h, t, props, totalSeconds) {
     drawLines(ctx, subLines, cx, subY, type.subhead * 1.35);
   }
 
+  ctx.restore();
   ctx.restore();
 }
 
@@ -480,10 +679,22 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
 
   const total = Math.max(1, totalSeconds);
   const fadeOut = interpolate(t, [total - 0.5, total], [1, 0]);
-  const valueIn = spring(t - 0.3, {damping: 200, mass: 0.8});
-  const labelIn = spring(t - 0.85, {damping: 200, mass: 1});
-  const noteIn = spring(t - 1.35, {damping: 200, mass: 1.1});
+  // D-275: kartu statistik bisa sampai 15 detik. Animasi masuk selesai di
+  // ~1,6 detik, jadi durasi panjang perlu "tahan" + napas pelan supaya
+  // layarnya tidak diam total.
+  const INTRO_MAX = 2.4;
+  const introLen = Math.min(total, INTRO_MAX);
+  const animT = Math.min(t, introLen);
+  const isHolding = t > introLen;
+  const valueIn = spring(animT - 0.3, {damping: 200, mass: 0.8});
+  const labelIn = spring(animT - 0.85, {damping: 200, mass: 1});
+  const noteIn = spring(animT - 1.35, {damping: 200, mass: 1.1});
   const cardScale = lerp(0.94, 1, clamp(valueIn, 0, 1));
+  // Napas pelan saat menahan.
+  const breath = isHolding
+    ? Math.sin(((t - introLen) / Math.max(0.6, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.014;
 
   ctx.save();
   ctx.globalAlpha = fadeOut;
@@ -494,7 +705,7 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(cardScale, cardScale);
+  ctx.scale(cardScale * breathScale, cardScale * breathScale);
   ctx.translate(-cx, -cy);
   ctx.globalAlpha = fadeOut * clamp(valueIn, 0, 1);
 
@@ -556,11 +767,154 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
   ctx.restore();
 }
 
+/**
+ * D-276 — Komposisi "Rangkaian Beat".
+ *
+ * Video 10–30 detik berisi beberapa blok teks (HOOK → BODY → PAYOFF → CTA).
+ * Tiap beat punya durasi & gaya sendiri, jadi videonya punya irama.
+ *
+ * WAJIB SINKRON dengan motion-graphics/src/compositions/BeatSequence.tsx.
+ */
+function drawBeatSequence(ctx, w, h, t, props, totalSeconds) {
+  const type = typeScale(w);
+  const pad = safePadding(w);
+  const brand = String(props.brand || 'SherlyStudio');
+  const accent = String(props.accent || MG_PALETTE.pink);
+  const ctaLabel = String(props.ctaLabel || '').trim();
+
+  const total = Math.max(1, totalSeconds);
+  const frame = Math.round(t * MG_FPS);
+  const beats = beatsFromText(String(props.beatsText || ''), total, MG_FPS);
+  const active = beatAtFrame(beats, frame);
+  if (!active) return;
+
+  const style = MG_BEAT_ROLE_STYLE[active.role] || MG_BEAT_ROLE_STYLE.body;
+  const local = frame - active.startFrame;
+  const beatFrames = Math.max(1, active.endFrame - active.startFrame);
+
+  const enter = spring(local / MG_FPS, {damping: 200, mass: 0.7});
+  const exit = interpolate(local / beatFrames, [0.88, 1], [1, 0]);
+  const fadeOut = interpolate(t, [total - 0.4, total], [1, 0]);
+  const visible = enter * exit * fadeOut;
+
+  ctx.save();
+  ctx.globalAlpha = fadeOut;
+  if (style.plum) drawBackground(ctx, w, h);
+  else {
+    drawBackground(ctx, w, h);
+    ctx.fillStyle = MG_PALETTE.bgSoft;
+    ctx.globalAlpha = fadeOut * 0.55;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = fadeOut;
+  }
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const rise = (1 - clamp(enter, 0, 1)) * 34;
+
+  ctx.save();
+  ctx.globalAlpha = visible;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.translate(0, rise);
+
+  // Badge peran beat (hook tidak pakai badge — harus langsung to the point).
+  if (style.badge && MG_BEAT_ROLE_BADGE[active.role]) {
+    ctx.font = `700 ${type.caption}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.letterSpacing = '4px';
+    ctx.fillStyle = accent;
+    const badgeText = MG_BEAT_ROLE_BADGE[active.role];
+    const bw = ctx.measureText(badgeText).width + Math.round(w * 0.044);
+    const bh = Math.round(type.caption * 2);
+    const by = cy - h * 0.2;
+    ctx.beginPath();
+    ctx.roundRect(cx - bw / 2, by, bw, bh, bh / 2);
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = visible * 0.55;
+    ctx.lineWidth = Math.max(1, Math.round(w * 0.001));
+    ctx.stroke();
+    ctx.globalAlpha = visible;
+    ctx.fillText(badgeText, cx, by + bh * 0.68);
+    ctx.letterSpacing = '0px';
+  }
+
+  // Headline beat.
+  const head = active.lines[0] || '';
+  const sub = active.lines.slice(1);
+  const headSize = Math.round(type.headline * style.headlineScale);
+  ctx.font = `800 ${headSize}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.fillStyle = MG_PALETTE.white;
+  const headLines = wrapText(ctx, head, w - pad * 2);
+  const headLineHeight = headSize * 1.1;
+  let headY = cy - h * 0.12 - (headLines.length * headLineHeight) / 2;
+  headY = drawLines(ctx, headLines, cx, headY, headLineHeight);
+
+  // Garis aksen.
+  if (style.rule) {
+    const lineW = Math.round(w * 0.09);
+    const lineH = Math.max(4, Math.round(w * 0.005));
+    const lineY = headY + type.headline * 0.42;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(cx - lineW / 2, lineY, lineW, lineH, lineH / 2);
+    ctx.fill();
+  }
+
+  // Subjudul (baris tambahan).
+  if (sub.length) {
+    ctx.font = `500 ${type.subhead}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = MG_PALETTE.textDim;
+    const subY = headY + type.headline * 0.42 + type.subhead * 1.5;
+    drawLines(ctx, sub, cx, subY, type.subhead * 1.4);
+  }
+
+  // Tombol CTA.
+  if (style.ctaButton) {
+    // D-276: kalau label tidak diisi, pakai teks handle ("@sherlystudio")
+    // kalau ada — bukan mengulang headline (yang bakalan tampil dobel).
+    const handle = sub.find((l) => l.trim().startsWith('@'))?.trim() || '';
+    const btnText = ctaLabel || handle || 'Coba Sekarang';
+    ctx.font = `800 ${type.subhead}px Inter, system-ui, -apple-system, sans-serif`;
+    const bw = ctx.measureText(btnText).width + Math.round(w * 0.1);
+    const bh = Math.round(type.subhead * 1.8);
+    const bx = cx - bw / 2;
+    const by = headY + type.headline * 0.42 + type.subhead * 3.1;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, bh / 2);
+    ctx.fill();
+    ctx.fillStyle = MG_PALETTE.bg;
+    ctx.fillText(btnText, cx, by + bh * 0.68);
+  }
+
+  ctx.restore();
+
+  // Brand kecil di bawah.
+  ctx.font = `500 ${type.caption}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.letterSpacing = '4px';
+  ctx.fillStyle = MG_PALETTE.textGhost;
+  ctx.globalAlpha = fadeOut * 0.75;
+  ctx.textAlign = 'center';
+  ctx.fillText(brand.toUpperCase(), cx, h - pad * 0.5);
+  ctx.letterSpacing = '0px';
+
+  // Progress bar beat — indikator irama.
+  const barH = Math.max(3, Math.round(h * 0.0035));
+  ctx.globalAlpha = fadeOut;
+  ctx.fillStyle = MG_PALETTE.line;
+  ctx.fillRect(0, h - barH, w, barH);
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, h - barH, Math.round(w * clamp(local / beatFrames, 0, 1)), barH);
+
+  ctx.restore();
+}
+
 /** Dispatcher komposisi. */
 const MG_COMPOSITIONS = {
   'branded-intro': drawBrandedIntro,
   'captioned-clip': drawCaptionedClip,
   'stat-card': drawStatCard,
+  'beat-sequence': drawBeatSequence,
 };
 
 /**
@@ -671,15 +1025,83 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     keyFrameInterval: 2,
   });
   output.addVideoTrack(source, {frameRate: MG_FPS});
+
+  // D-276 — Voice-over TTS (opsional). Kalau ada, audio-nya ditempel sebagai
+  // track terpisah lalu di-mux ke MP4 yang sama.
+  let audioBuffer = null;
+  let ttsProvider = null;
+  const voiceText = String(props.voiceoverText || '').trim();
+  if (voiceText) {
+    opts.onProgress?.({progress: 2, phase: 'voiceover'});
+    try {
+      const tts = await fetchTtsAudio(voiceText, {
+        voice: props.voice,
+        style: props.voiceStyle,
+        headers: opts.headers || {},
+      });
+      if (tts) {
+        audioBuffer = await decodeTtsAudio(tts.buffer);
+        ttsProvider = tts.provider;
+        if (!audioBuffer) {
+          // Audio tidak bisa di-decode -> video tetap jadi tanpa suara.
+          opts.onWarning?.('Audio voice-over tidak bisa di-decode di browser ini.');
+          opts.onProgress?.({progress: 3, phase: 'voiceover'});
+        }
+      }
+    } catch (error) {
+      // Voice-over gagal -> video tetap dirender (tanpa suara), jangan gagal
+      // seluruh render.
+      opts.onProgress?.({progress: 3, phase: 'voiceover'});
+      opts.onWarning?.('Voice-over gagal dibuat: ' + (error?.message || 'tidak diketahui'));
+    }
+  }
+
+  let audioSourceToFeed = null;
+  if (audioBuffer && typeof mediabunny.AudioBufferSource === 'function') {
+    // D-276: track audio — codec WAJIB diisi (tanpa itu mediabunny melempar
+    // "Invalid audio codec undefined"). AAC = standar MP4, tapi tidak semua
+    // browser bisa encode konfigurasi itu -> cek dulu lewat
+    // getFirstEncodableAudioCodec, lalu jatuh ke MP3.
+    // Urutan codec: AAC (standar MP4, paling universal) -> MP3 -> Opus
+    // -> PCM. Tidak semua browser bisa encode AAC/MP3 (mis. Chromium
+    // headless di sandbox ini cuma punya Opus + PCM), jadi WAJIB dicek dulu.
+    let audioCodec = 'aac';
+    try {
+      if (typeof mediabunny.getFirstEncodableAudioCodec === 'function') {
+        const found = await mediabunny.getFirstEncodableAudioCodec(['aac', 'mp3', 'opus', 'pcm-s16']);
+        if (found) audioCodec = found;
+      }
+    } catch { /* biarkan default aac */ }
+    if (audioCodec === 'pcm-s16') {
+      // PCM tidak lossy -> file lebih besar, tapi selalu bisa di-encode.
+      opts.onWarning?.('Codec audio fallback PCM (tidak terkompresi).');
+    }
+    try {
+      const audioSource = new mediabunny.AudioBufferSource({
+        codec: audioCodec,
+        bitrate: mediabunny.QUALITY_HIGH ?? 128e3,
+      });
+      output.addAudioTrack(audioSource);
+      audioSourceToFeed = audioSource;
+    } catch (error) {
+      // Codec tidak didukung -> video tetap jadi tanpa suara.
+      opts.onWarning?.('Codec audio tidak didukung: ' + (error?.message || 'tidak diketahui'));
+    }
+  }
+
   // Output harus started sebelum sample bisa masuk.
   await output.start();
 
   for (let frame = 0; frame < totalFrames; frame++) {
     const t = frame / MG_FPS;
     // Frame video ikut disinkronkan ke waktu render.
+    // D-275: kalau video sumber lebih pendek dari durasi pilihan, video
+    // diulang (loop) supaya layar tidak beku di frame terakhir.
     if (videoEl) {
       try {
-        videoEl.currentTime = Math.min(t, videoEl.duration || t);
+        const vDur = Number(videoEl.duration) || 0;
+        const seek = vDur > 0 ? (t % vDur) : t;
+        videoEl.currentTime = Math.min(seek, vDur > 0 ? vDur : t);
       } catch { /* seeking belum siap */ }
     }
     draw(ctx, size.width, size.height, t, props, durationInSeconds, videoEl);
@@ -693,6 +1115,16 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
       // Yield supaya UI tetap responsif.
       await new Promise((r) => setTimeout(r, 0));
     }
+  }
+
+  // D-276: kirim voice-over ke track audio (AudioBufferSource.add), lalu tutup.
+  if (audioSourceToFeed && audioBuffer) {
+    try {
+      await audioSourceToFeed.add(audioBuffer);
+    } catch (error) {
+      opts.onWarning?.('Gagal menyisipkan audio: ' + (error?.message || 'tidak diketahui'));
+    }
+    try { await audioSourceToFeed.close(); } catch { /* abaikan */ }
   }
 
   opts.onProgress?.({progress: 90, phase: 'encoding'});
@@ -714,7 +1146,13 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     opts.onProgress?.({progress: 98, phase: 'compressing'});
     finalBlob = await reencodeSmaller(canvas, size, durationInSeconds, videoCodec, finalBlob.size);
   }
-  if (finalBlob.size > MG_UPLOAD_MAX_BYTES) {
+  // D-275: durasi panjang menghasilkan file > 4 MB. Jalur client-side
+  // mengirim file >= 4 MB lewat signed-upload (uploadBlobDirect) yang tidak
+  // punya batas body, jadi batas keras di sini hanya relevan untuk jalur
+  // multipart server (limit ~4,5 MB Vercel).
+  // Batas client: 24 MB — cukup untuk 30 detik di bitrate 1,4 Mbps (~5 MB).
+  const HARD_MAX_BYTES = 24 * 1024 * 1024;
+  if (finalBlob.size > HARD_MAX_BYTES) {
     throw Object.assign(
       new Error('Video terlalu besar untuk dikirim (' + (finalBlob.size / 1024 / 1024).toFixed(1) + ' MB). Pilih durasi lebih pendek.'),
       {status: 413},
@@ -728,17 +1166,27 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     height: size.height,
     durationMs: Math.round(durationInSeconds * 1000),
     bytes: finalBlob.size,
+    // D-276: info voice-over (provider mana yang dipakai).
+    hasAudio: Boolean(audioBuffer),
+    ttsProvider: ttsProvider || null,
   };
 }
 
 /**
  * D-252: render ulang dengan bitrate lebih rendah sampai muat.
+ *
+ * D-275: target ukuran mengikuti jalur upload yang akan dipakai:
+ *  - durasi pendek (<= 12 detik) -> 4 MB (multipart server, Vercel ~4,5 MB)
+ *  - durasi panjang (> 12 detik)  -> 24 MB (signed-upload, tanpa batas body)
  * @returns {Promise<Blob>}
  */
 async function reencodeSmaller(canvas, size, durationInSeconds, codec, previousSize) {
   const mediabunny = await import('./vendor/mediabunny.min.mjs');
   const {Output, Mp4OutputFormat, BufferTarget, CanvasSource} = mediabunny;
   const totalFrames = Math.max(1, Math.round(durationInSeconds * MG_FPS));
+  const targetBytes = durationInSeconds > 12
+    ? 24 * 1024 * 1024
+    : MG_UPLOAD_MAX_BYTES;
 
   // Bitrate turun bertahap: 60% -> 40% -> 25% dari nilai semula.
   const base = bitrateForDuration(durationInSeconds);
@@ -760,7 +1208,7 @@ async function reencodeSmaller(canvas, size, durationInSeconds, codec, previousS
     }
     await output.finalize();
     const blob = new Blob([output.target.buffer], {type: 'video/mp4'});
-    if (blob.size <= MG_UPLOAD_MAX_BYTES) return blob;
+    if (blob.size <= targetBytes) return blob;
     if (blob.size >= previousSize) break;
   }
   return new Blob([], {type: 'video/mp4'});

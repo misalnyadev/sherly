@@ -46,18 +46,25 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   const total = Math.max(1, Math.round(durationInSeconds * fps));
 
+  // D-275: kartu statistik bisa sampai 15 detik. Animasi masuk selesai di
+  // ~1,7 detik, jadi durasi panjang perlu "tahan" + napas pelan.
+  const INTRO_MAX_FRAMES = Math.round(2.4 * fps);
+  const introLen = Math.min(total, INTRO_MAX_FRAMES);
+  const animFrame = Math.min(frame, introLen);
+  const isHolding = frame > introLen;
+
   const valueIn = spring({
-    frame: frame - Math.round(0.3 * fps),
+    frame: animFrame - Math.round(0.3 * fps),
     fps,
     config: {damping: 200, mass: 0.8},
   });
   const labelIn = spring({
-    frame: frame - Math.round(0.85 * fps),
+    frame: animFrame - Math.round(0.85 * fps),
     fps,
     config: {damping: 200, mass: 1},
   });
   const noteIn = spring({
-    frame: frame - Math.round(1.35 * fps),
+    frame: animFrame - Math.round(1.35 * fps),
     fps,
     config: {damping: 200, mass: 1.1},
   });
@@ -66,6 +73,12 @@ export const StatCard: React.FC<StatCardProps> = ({
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
+
+  // Napas pelan saat menahan.
+  const breath = isHolding
+    ? Math.sin(((frame - introLen) / Math.max(1, total - introLen)) * Math.PI)
+    : 0;
+  const breathScale = 1 + breath * 0.014;
 
   // Angka "naik" sedikit untuk memberi rasa progres.
   const valueLift = interpolate(valueIn, [0, 1], [46, 0]);
@@ -98,7 +111,7 @@ export const StatCard: React.FC<StatCardProps> = ({
             border: `1px solid ${theme.line}`,
             borderRadius: Math.round(width * 0.022),
             padding: `${Math.round(width * 0.05)}px ${Math.round(width * 0.045)}px`,
-            transform: `scale(${cardScale})`,
+            transform: `scale(${cardScale * breathScale})`,
             opacity: valueIn,
             boxShadow: `0 30px 90px rgba(4,7,15,0.6), 0 0 60px ${accent}1f`,
             display: 'flex',

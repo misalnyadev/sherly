@@ -22,9 +22,10 @@ const MG_SRC = path.resolve('motion-graphics/src');
 
 // ===== Server: template & normalisasi =====
 
-test('D-249: ada 3 template Motion Graphics (intro, caption, stat card)', () => {
+test('D-249: ada 4 template Motion Graphics (intro, caption, stat card, beat sequence)', () => {
   const ids = MG_TEMPLATES.map((t) => t.id);
-  assert.deepEqual(ids, ['branded-intro', 'captioned-clip', 'stat-card']);
+  // D-276: template ke-4 = "Rangkaian Beat" (video multi-bloc + CTA).
+  assert.deepEqual(ids, ['branded-intro', 'captioned-clip', 'stat-card', 'beat-sequence']);
 });
 
 test('D-249: setiap template punya label, durasi, rasio, dan field', () => {

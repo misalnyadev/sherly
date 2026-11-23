@@ -10,7 +10,12 @@ import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPr
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
-import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
+import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint } from './tts.js';
+// D-276: cadangan TTS yang support bahasa Indonesia (dipakai kalau kuota Gemini habis).
+import {
+  synthesizeTtsmaker, isQuotaError, TTSMAKER_ID_VOICES, TTSMAKER_EMOTIONS,
+  TTS_FALLBACK_PROVIDERS, getTtsmakerTokenStatus,
+} from './tts-providers.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
 import { sanitizePostInput, parseImageDataUrl, publicFeedRow, isValidPostId } from './published-posts.js';
@@ -918,7 +923,7 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
     const task = await createVideoTask(req.supabase, req.user.id, {
       provider: MOTION_GRAPHICS_PROVIDER,
       model: spec.compositionId,
-      prompt: String(spec.inputProps.title || spec.inputProps.value || spec.inputProps.captionsText || '').slice(0, 2000),
+      prompt: String(spec.inputProps.title || spec.inputProps.value || spec.inputProps.captionsText || spec.inputProps.beatsText || '').slice(0, 2000),
       meta: {
         kind: 'motion-graphics',
         template: spec.template.id,
@@ -929,6 +934,20 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
         height: spec.height,
       },
     });
+    // D-276: voice-over TTS — synthesize dulu (biar error ketahuan di awal),
+    // lalu tempel ke props sebagai URL audio untuk Remotion <Audio>.
+    if (spec.inputProps.voiceoverText) {
+      try {
+        const tts = await synthesizeVoiceoverForMotion(req, spec.inputProps);
+        if (tts) {
+          spec.inputProps.audioSrc = tts.url;
+          spec.inputProps.ttsProvider = tts.provider;
+        }
+      } catch (error) {
+        // Voice-over gagal -> render tetap jalan (tanpa suara).
+        spec.inputProps.ttsError = String(error?.message || 'Gagal membuat voice-over.').slice(0, 200);
+      }
+    }
     // Render berjalan di background supaya request HTTP tidak menunggu lama.
     runMotionGraphicsRender(req, task, spec).catch(() => {});
     res.json({ ok: true, task });
@@ -936,6 +955,104 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal membuat render Motion Graphics.' });
   }
 });
+
+/**
+ * D-276 — Buat voice-over TTS untuk Motion Graphics.
+ *
+ * Memakai Gemini TTS dulu (default). Kalau kuota Gemini habis, otomatis
+ * jatuh ke engine cadangan yang support bahasa Indonesia (TTSMaker).
+ * Hasilnya diunggah ke Storage Supabase supaya Remotion bisa mereferensikan
+ * URL-nya saat render.
+ *
+ * @returns {Promise<{url: string, provider: string}|null>}
+ */
+async function synthesizeVoiceoverForMotion(req, inputProps) {
+  const text = String(inputProps.voiceoverText || '').trim();
+  if (!text) return null;
+  const userId = req.user.id;
+
+  // 1) Gemini (default).
+  const attempts = [];
+  if (vaultConfigured()) {
+    const usable = await getUsableKeys(req.supabase, 'gemini').catch(() => []);
+    for (const vk of usable) attempts.push({apiKey: vk.apiKey, keyId: vk.keyId});
+  }
+  if (!attempts.length && process.env.GEMINI_API_KEY) {
+    attempts.push({apiKey: process.env.GEMINI_API_KEY, keyId: null});
+  }
+
+  let audio = null;
+  let mimeType = 'audio/wav';
+  let provider = 'gemini';
+  // Voice Gemini hanya valid kalau ID-nya dikenal; kalau user mengisi ID
+  // voice TTSMaker (angka), pakai default Gemini.
+  const rawVoice = String(inputProps.voice || '').trim();
+  const geminiVoice = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice : DEFAULT_VOICE;
+  for (const attempt of attempts) {
+    try {
+      const out = await synthesizeSpeech({
+        apiKey: attempt.apiKey,
+        text,
+        voiceName: geminiVoice,
+        style: String(inputProps.voiceStyle || '') || undefined,
+      });
+      audio = out.wav;
+      provider = 'gemini';
+      if (attempt.keyId) await recordSuccess(req.supabase, attempt.keyId).catch(() => {});
+      break;
+    } catch (error) {
+      const msg = String(error?.message || 'Unknown error').slice(0, 500);
+      if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
+      if (!isQuotaError(msg)) throw error;
+      // Kuota habis -> engine cadangan (bahasa Indonesia).
+      const fallback = await synthesizeTtsmaker({
+        apiKey: (await ttsmakerKey(req)) || '',
+        text,
+        voiceId: Number(inputProps.voice) || Number(process.env.TTSMAKER_TTS_VOICE) || 729,
+      }).catch(() => null);
+      if (fallback) {
+        audio = fallback.audio;
+        mimeType = fallback.mimeType;
+        provider = 'ttsmaker';
+      }
+      break;
+    }
+  }
+
+  // 2) Kalau Gemini tidak tersedia sama sekali -> engine cadangan.
+  if (!audio) {
+    const key = await ttsmakerKey(req);
+    if (key) {
+      const fallback = await synthesizeTtsmaker({
+        apiKey: key,
+        text,
+        voiceId: Number(inputProps.voice) || Number(process.env.TTSMAKER_TTS_VOICE) || 729,
+      });
+      audio = fallback.audio;
+      mimeType = fallback.mimeType;
+      provider = 'ttsmaker';
+    }
+  }
+  if (!audio) return null;
+
+  // Unggah ke Storage Supabase -> URL yang bisa dipakai Remotion.
+  const ext = mimeType.split('/')[1] || 'wav';
+  const path = `${userId}/motion-graphics-vo-${Date.now()}.${ext}`;
+  const { error: upError } = await req.supabase.storage.from('tts-clips').upload(path, audio, {contentType: mimeType, upsert: true});
+  if (upError) return null;
+  const { data: signed } = await req.supabase.storage.from('tts-clips').createSignedUrl(path, 3600);
+  if (!signed?.signedUrl) return null;
+  return {url: signed.signedUrl, provider};
+}
+
+/** Ambil key TTSMaker dari vault (fallback env). */
+async function ttsmakerKey(req) {
+  if (vaultConfigured()) {
+    const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
+    if (usable.length) return usable[0].apiKey;
+  }
+  return process.env.TTSMAKER_API_KEY || null;
+}
 
 // D-251: hasil render Motion Graphics yang dirender di browser (Canvas 2D +
 // WebCodecs) dikirim balik ke server sebagai MP4 lalu disimpan sebagai aset.
@@ -1626,6 +1743,72 @@ function sanitizeProfile(body) {
 const isMissingTable = (error) => /user_profiles/i.test(error?.message || '') && /schema cache|does not exist|relation/i.test(error?.message || '');
 const isMissingTtsTable = (error) => /sherly_tts_clips/i.test(error?.message || '') && /schema cache|does not exist|relation/i.test(error?.message || '');
 const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message || '') && /not found|does not exist|schema/i.test(error?.message || '');
+
+/**
+ * D-276 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
+ *
+ * Engine cadangan: TTSMaker (voice native Indonesia + Sunda).
+ * Kunci diambil dari vault (provider `ttsmaker`) atau env `TTSMAKER_API_KEY`.
+ *
+ * Return: fungsi yang mengirim respons audio ke `res`, atau null kalau tidak
+ * ada cadangan yang bisa dipakai.
+ */
+async function synthesizeTtsFallback(req, {clean, userId, cacheReady, reason}) {
+  // Kumpulkan key TTSMaker (vault -> env).
+  const keys = [];
+  if (vaultConfigured()) {
+    const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
+    for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
+  }
+  if (!keys.length && process.env.TTSMAKER_API_KEY) {
+    keys.push({apiKey: process.env.TTSMAKER_API_KEY, keyId: null});
+  }
+  if (!keys.length) return null;
+
+  for (const k of keys) {
+    try {
+      const {audio, mimeType, voice, model, chars} = await synthesizeTtsmaker({
+        apiKey: k.apiKey,
+        text: clean,
+        voiceId: Number(process.env.TTSMAKER_TTS_VOICE) || 729,
+      });
+      const clipHash = ttsClipHash({provider: 'ttsmaker', model, voice, style: '', text: clean});
+      // Simpan ke Bank Suara (best-effort).
+      if (cacheReady) {
+        try {
+          const ext = mimeType.split('/')[1] || 'mp3';
+          const storagePath = `${userId}/${clipHash}.${ext}`;
+          const {error: upError} = await req.supabase.storage.from('tts-clips').upload(storagePath, audio, {contentType: mimeType, upsert: true});
+          if (!upError) {
+            await req.supabase.from('sherly_tts_clips').upsert({
+              user_id: userId, clip_hash: clipHash, storage_path: storagePath,
+              provider: 'ttsmaker', voice: String(voice), model, style: '',
+              text: clean, mime_type: mimeType, bytes: audio.length,
+            }, {onConflict: 'user_id,clip_hash'});
+          }
+        } catch { /* bank belum dimigrasi — abaikan */ }
+      }
+      if (k.keyId) await recordSuccess(req.supabase, k.keyId).catch(() => {});
+      return (res) => {
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-TTS-Source', 'fallback');
+        res.setHeader('X-TTS-Provider', 'ttsmaker');
+        res.setHeader('X-TTS-Model', model);
+        res.setHeader('X-TTS-Voice', String(voice));
+        res.setHeader('X-TTS-Chars', String(chars));
+        res.setHeader('X-TTS-Fallback-Reason', encodeURIComponent(String(reason || '').slice(0, 120)));
+        res.setHeader('X-TTS-Hash', clipHash);
+        return res.send(audio);
+      };
+    } catch (error) {
+      const msg = String(error?.message || 'Unknown error').slice(0, 500);
+      if (k.keyId) await recordFailure(req.supabase, k.keyId, msg).catch(() => {});
+    }
+  }
+  return null;
+}
+
 /** Bersihkan teks agar enak dibacakan (tanpa markdown/token internal). */
 function speakableText(input) {
   return String(input || '')
@@ -2020,6 +2203,60 @@ app.post('/api/public/posts/:id/view', async (req, res) => {
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
+// D-276: daftar voice TTS. Gemini = default; TTSMaker = cadangan bahasa
+// Indonesia (native + Sunda). UI pakai ini buat menampilkan pilihan suara.
+app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const voices = [
+      ...GEMINI_TTS_VOICES.map((v) => ({
+        provider: 'gemini',
+        id: v.id,
+        label: v.label,
+        language: 'Bahasa Indonesia',
+      })),
+      ...TTSMAKER_ID_VOICES.map((v) => ({
+        provider: 'ttsmaker',
+        id: v.id,
+        label: v.label,
+        language: v.key.includes('sunda') ? 'Bahasa Sunda' : 'Bahasa Indonesia',
+        limit: v.limit,
+        unlimited: Boolean(v.unlimited),
+        emotion: Boolean(v.emotion),
+      })),
+    ];
+    // Status key cadangan (kalau ada) supaya UI tahuENGINE mana yang siap.
+    let ttsmaker = {configured: false, quota: null, error: null};
+    if (vaultConfigured()) {
+      const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
+      if (usable.length) {
+        ttsmaker.configured = true;
+        try {
+          const status = await getTtsmakerTokenStatus(usable[0].apiKey);
+          const st = status?.data || status?.account_status || status;
+          ttsmaker.quota = {
+            quota: Number(st?.quota_characters ?? 0),
+            used: Number(st?.characters_used ?? 0),
+            left: Number(st?.available_quota ?? 0),
+          };
+        } catch (e) {
+          ttsmaker.error = String(e?.message || '').slice(0, 200);
+        }
+      }
+    } else if (process.env.TTSMAKER_API_KEY) {
+      ttsmaker.configured = true;
+    }
+    res.json({
+      ok: true,
+      voices,
+      providers: TTS_FALLBACK_PROVIDERS,
+      emotions: TTSMAKER_EMOTIONS,
+      ttsmaker,
+    });
+  } catch (error) {
+    res.status(500).json({ok: false, error: error.message || 'Gagal memuat daftar voice.'});
+  }
+});
+
 app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
   try {
     const { text, voice: reqVoice, style: reqStyle } = req.body || {};
@@ -2100,9 +2337,18 @@ app.post('/api/ai/tts', requireUser, requireAdmin, async (req, res) => {
           lastError = error;
           const msg = String(error?.message || 'Unknown error').slice(0, 500);
           if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
+          // D-276: error kuota (429 / RESOURCE_EXAUSTED) -> jangan gagal,
+          // coba provider cadangan yang support bahasa Indonesia.
+          if (isQuotaError(msg)) {
+            const fallback = await synthesizeTtsFallback(req, { clean, userId, cacheReady, reason: 'kuota Gemini habis' });
+            if (fallback) return fallback(res);
+          }
         }
       }
     }
+    // Semua key Gemini gagal (bukan karena kuota) -> tetap coba cadangan.
+    const fallback = await synthesizeTtsFallback(req, { clean, userId, cacheReady, reason: 'Gemini TTS gagal merespons' });
+    if (fallback) return fallback(res);
     return res.status(502).json({ error: 'Gemini TTS gagal merespons: ' + String(lastError?.message || 'error tidak diketahui').slice(0, 300) });
   } catch (error) { res.status(502).json({ error: error.message || 'TTS request failed.' }); }
 });
