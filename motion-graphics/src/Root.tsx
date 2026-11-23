@@ -22,6 +22,7 @@ import {ASPECTS} from './theme';
 import {BrandedIntro, type BrandedIntroProps} from './compositions/BrandedIntro';
 import {CaptionedClip, type CaptionedClipProps} from './compositions/CaptionedClip';
 import {StatCard, type StatCardProps} from './compositions/StatCard';
+import {BeatSequence, type BeatSequenceProps} from './compositions/BeatSequence';
 
 const FPS = 30;
 const V = ASPECTS['9:16'];
@@ -62,6 +63,7 @@ const makeCalculateMetadata =
 const calculateMetadata = makeCalculateMetadata<BrandedIntroProps>(6);
 const calculateMetadata8 = makeCalculateMetadata<CaptionedClipProps>(8);
 const calculateMetadata5 = makeCalculateMetadata<StatCardProps>(5);
+const calculateMetadata15 = makeCalculateMetadata<BeatSequenceProps>(15);
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -211,6 +213,64 @@ export const RemotionRoot: React.FC = () => {
             durationInSeconds: 5,
             accent: '#f044a8',
           } satisfies StatCardProps
+        }
+      />
+
+      <Composition
+        id="BeatSequenceVertical"
+        component={BeatSequence}
+        durationInFrames={15 * FPS}
+        fps={FPS}
+        width={V.width}
+        height={V.height}
+        calculateMetadata={calculateMetadata15}
+        defaultProps={
+          {
+            beatsText: '',
+            brand: 'SherlyStudio',
+            durationInSeconds: 15,
+            accent: '#f044a8',
+            audioSrc: '',
+            volume: 1,
+          } satisfies BeatSequenceProps
+        }
+      />
+      <Composition
+        id="BeatSequenceWide"
+        component={BeatSequence}
+        durationInFrames={15 * FPS}
+        fps={FPS}
+        width={H.width}
+        height={H.height}
+        calculateMetadata={calculateMetadata15}
+        defaultProps={
+          {
+            beatsText: '',
+            brand: 'SherlyStudio',
+            durationInSeconds: 15,
+            accent: '#f044a8',
+            audioSrc: '',
+            volume: 1,
+          } satisfies BeatSequenceProps
+        }
+      />
+      <Composition
+        id="BeatSequenceSquare"
+        component={BeatSequence}
+        durationInFrames={15 * FPS}
+        fps={FPS}
+        width={S.width}
+        height={S.height}
+        calculateMetadata={calculateMetadata15}
+        defaultProps={
+          {
+            beatsText: '',
+            brand: 'SherlyStudio',
+            durationInSeconds: 15,
+            accent: '#f044a8',
+            audioSrc: '',
+            volume: 1,
+          } satisfies BeatSequenceProps
         }
       />
     </>

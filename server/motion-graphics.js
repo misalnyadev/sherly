@@ -99,6 +99,42 @@ export const MG_TEMPLATES = [
       {key: 'note', label: 'Catatan', placeholder: 'Contoh: Data internal, Q3 2026'},
     ],
   },
+  {
+    id: 'beat-sequence',
+    label: 'Rangkaian Beat',
+    // D-276: video 10-30 detik berisi beberapa blok teks (HOOK -> BODY ->
+    // PAYOFF -> CTA). Tiap beat punya durasi & gaya sendiri, jadi videonya
+    // punya irama — bukan satu teks diam.
+    hint: 'Video multi-bloc: hook, isi, lalu CTA. Format: "=== Hook ===" lalu teksnya.',
+    icon: 'layers',
+    defaultDuration: 15,
+    durations: [10, 12, 15, 20, 25, 30],
+    aspects: ['9:16', '16:9', '1:1'],
+    fields: [
+      {
+        key: 'beatsText',
+        label: 'Isi Beat',
+        type: 'textarea',
+        rows: 7,
+        required: true,
+        placeholder: '=== Hook ===\n3,2x lebih cepat produksi\n\n=== Poin 1 ===\nTemplate siap pakai\n\n=== CTA ===\nCoba sekarang\n@sherlystudio',
+      },
+      {key: 'ctaLabel', label: 'Teks Tombol CTA', placeholder: 'Contoh: Simpan Videonya'},
+      {
+        key: 'voiceoverText',
+        label: 'Naskah Voice-over (opsional)',
+        type: 'textarea',
+        rows: 3,
+        placeholder: 'Kosongkan kalau tidak mau suara. Kalau diisi, videonya dapat narasi TTS bahasa Indonesia.',
+      },
+      {
+        key: 'voice',
+        label: 'Suara (opsional)',
+        type: 'select',
+        placeholder: 'Pakai bawaan sistem',
+      },
+    ],
+  },
 ];
 
 /** Rasio -> [lebar, tinggi] piksel (harus sama dengan motion-graphics/src/theme.ts). */
@@ -118,7 +154,11 @@ function compositionId(templateId, aspect) {
     if (aspect === '1:1') return 'BrandedIntroSquare';
     return 'BrandedIntro';
   }
-  const base = templateId === 'captioned-clip' ? 'CaptionedClip' : 'StatCard';
+  const base = templateId === 'captioned-clip'
+    ? 'CaptionedClip'
+    : templateId === 'beat-sequence'
+      ? 'BeatSequence'
+      : 'StatCard';
   if (aspect === '16:9') return `${base}Wide`;
   if (aspect === '1:1') return `${base}Square`;
   return `${base}Vertical`;

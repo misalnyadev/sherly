@@ -274,6 +274,10 @@
   let videoTimer = null;
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
+  // D-276: daftar suara TTS (Gemini + cadangan TTSMaker bahasa Indonesia).
+  let ttsVoices = [];
+  let ttsProviders = {ttsmaker: {configured: false, quota: null}};
+  let ttsVoicesLoaded = false;
   let motionAvailable = false;   // renderer siap di server?
   let motionStatus = 'idle';     // idle | ready | installing | missing | failed
   let motionReason = '';         // alasan kalau gagal
@@ -1590,6 +1594,8 @@
       motionStatus = 'missing';
       motionReason = 'Server tidak bisa dihubungi.';
     }
+    // D-276: daftar suara TTS (Indonesia + Sunda) untuk kolomSuara.
+    loadTtsVoices();
     renderMotionBar();
     updatePillLabels();
     // D-251: renderer utama ada di browser, jadi TIDAK perlu menunggu
@@ -1607,6 +1613,72 @@
       motionSetupTries = 0;
     }
   }
+  /**
+   * D-276: muat daftar suara TTS.
+   *
+   * Server mengembalikan suara Gemini (default) + suara cadangan TTSMaker
+   * (native Indonesia & Sunda). Kalau kuota Gemini habis, server otomatis
+   * memakai suara cadangan — jadi user tidak perlu memilih.
+   */
+  async function loadTtsVoices() {
+    try {
+      const r = await fetch('/api/ai/tts/voices', { headers: await authHeaders() });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (Array.isArray(d?.voices)) ttsVoices = d.voices;
+      if (d?.ttsmaker) ttsProviders.ttsmaker = d.ttsmaker;
+      ttsVoicesLoaded = true;
+      renderMotionBar();
+    } catch { /* diamkan — kolom suara tetap kosong */ }
+  }
+
+  /**
+   * D-276: opsi suara TTS untuk dropdown.
+   * Dikelompokkan per provider: Gemini (default) lalu TTSMaker (cadangan
+   * bahasa Indonesia + Sunda).
+   */
+  function ttsVoiceOptions() {
+    const gemini = ttsVoices.filter((v) => v.provider === 'gemini');
+    const ttsmaker = ttsVoices.filter((v) => v.provider === 'ttsmaker');
+    const out = [];
+    if (gemini.length) {
+      out.push({value: '', label: '— Gemini (bawaan) —'});
+      for (const v of gemini) out.push({value: v.id, label: 'Gemini · ' + v.label});
+    }
+    if (ttsmaker.length) {
+      out.push({value: '', label: '— TTSMaker (bahasa Indonesia) —'});
+      for (const v of ttsmaker) {
+        const tag = v.language === 'Bahasa Sunda' ? 'Sunda' : 'Indonesia';
+        out.push({value: String(v.id), label: 'TTSMaker · ' + v.label + ' (' + tag + ')'});
+      }
+    }
+    return out;
+  }
+
+  /**
+   * D-276: catatan status engine TTS.
+   * Kalau engine cadangan belum dikonfigurasi, user diberi tahu Supaya
+   * suara tetap jalan saat kuota Gemini habis.
+   */
+  function ttsProviderNote() {
+    const cfg = ttsProviders?.ttsmaker;
+    if (!cfg?.configured) {
+      return '<small class="st-motion-tts-note st-motion-tts-note-warn">'
+        + icon('bell')
+        + ' <span>Engine cadangan TTSMaker belum aktif. Tambah key-nya di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
+        + '</small>';
+    }
+    const q = cfg.quota;
+    if (q && q.left) {
+      return '<small class="st-motion-tts-note">' + icon('audio-lines')
+        + ' <span>Cadangan TTSMaker siap — sisa <b>' + Number(q.left).toLocaleString('id-ID') + '</b> karakter.</span>'
+        + '</small>';
+    }
+    return '<small class="st-motion-tts-note">' + icon('audio-lines')
+      + ' <span>Cadangan TTSMaker siap dipakai kalau kuota Gemini habis.</span>'
+      + '</small>';
+  }
+
   /** Baris pilihan template + field isinya (mode Motion Graphics). */
   function renderMotionBar() {
     const bar = $('stMotionBar'); if (!bar) return;
@@ -1631,11 +1703,31 @@
     const fields = (tpl.fields || []).map((f) => {
       const value = state.motionProps[f.key] || '';
       const multi = f.type === 'textarea';
+      // D-276: template boleh menentukan jumlah baris (mis. naskah beat butuh
+      // ruang lebih dari kolom biasa).
+      const rows = Math.min(14, Math.max(2, Number(f.rows) || 2));
+      let control;
+      if (f.type === 'select') {
+        // D-276: pilihan suara TTS (daftar dari /api/ai/tts/voices).
+        // Opsi comes from the template; the voice field gets the live voice
+        // list from the server injected here.
+        let options = f.options || [];
+        if (f.key === 'voice') options = ttsVoiceOptions();
+        const opts = options.map((o) =>
+          '<option value="' + esc(o.value) + '"' + (String(o.value) === String(value) ? ' selected' : '') + '>' + esc(o.label) + '</option>'
+        ).join('');
+        control = '<select id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '">'
+          + (f.emptyLabel !== false ? '<option value="">' + esc(f.placeholder || 'Pakai bawaan') + '</option>' : '')
+          + opts
+          + '</select>';
+      } else if (multi) {
+        control = '<textarea id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" rows="' + rows + '" maxlength="4000" placeholder="' + esc(f.placeholder || '') + '">' + esc(value) + '</textarea>';
+      } else {
+        control = '<input id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" type="text" maxlength="4000" value="' + esc(value) + '" placeholder="' + esc(f.placeholder || '') + '">';
+      }
       return '<label class="st-motion-field" for="stMotionField-' + esc(f.key) + '">'
         + '<span>' + esc(f.label) + (f.required ? ' *' : '') + '</span>'
-        + (multi
-          ? '<textarea id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" rows="2" maxlength="4000" placeholder="' + esc(f.placeholder || '') + '">' + esc(value) + '</textarea>'
-          : '<input id="stMotionField-' + esc(f.key) + '" data-motion-field="' + esc(f.key) + '" type="text" maxlength="4000" value="' + esc(value) + '" placeholder="' + esc(f.placeholder || '') + '">')
+        + control
         + '</label>';
     }).join('');
     const rendererNote = motionClientSupported === false
@@ -1644,7 +1736,8 @@
     bar.innerHTML = '<div class="st-motion-head">' + icon('film') + '<b>' + esc(tpl.label) + '</b>'
       + '<small>' + esc(tpl.hint || '') + '</small></div>'
       + rendererNote
-      + '<div class="st-motion-fields">' + fields + '</div>';
+      + '<div class="st-motion-fields">' + fields + '</div>'
+      + ((tpl.fields || []).some((f) => f.key === 'voice') ? ttsProviderNote() : '');
     bar.querySelectorAll('[data-motion-field]').forEach((input) => {
       input.addEventListener('input', () => {
         state.motionProps[input.dataset.motionField] = input.value;

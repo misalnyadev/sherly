@@ -17,6 +17,7 @@
 | Kenapa dulu cuma 10 detik? | Template memang dirancang pendek; `bitrateForDuration()` sizing ke 4 MB konservatif walau jalur client pakai signed-upload |
 | TTS untuk audio? | **GPT-SoVITS** (MIT, 5 detik sample) — TAPI **tidak mendukung bahasa Indonesia** |
 | TTS Indonesia yang lebih cocok? | Gemini TTS (sudah dipakai di repo) atau **Qwen3-TTS** (Apache-2.0, 10 bahasa) |
+| **Fallback TTS kalau kredit Gemini habis?** | **TTSMaker** (`api.ttsmaker.com/v2`, voice native Indonesia + Sundanese, `audio_speed` + jeda per paragraf + emosi) → **Voicemaker** (`developer.voicemaker.in`) → Azure/ElevenLabs. Detail di **§4.6** |
 
 ---
 
@@ -300,7 +301,125 @@ Kalau kirim `text_lang="id"`, teksnya **diblank-kan tanpa error** → output dia
 
 **Jangan pakai Qwen3-TTS kalau butuh bahasa Indonesia** — 10 bahasanya tidak termasuk ID (perlu konfirmasi).
 
-### 4.6 Cara pasang audio ke Motion Graphics
+### 4.6 D-276 — Riset TTS hosted yang support bahasa Indonesia (fallback saat kredit Gemini habis)
+
+Kebutuhan user: *"untuk audio kita pake yang support bahasa indonesia saja, cari lagi untuk tts yang bisa kita gunakan untuk pilihan jika kredit gemini habis"*.
+
+Dua kandidat yang disebut user dicek langsung: **TTSMaker** (`ttsmaker.com/id`) dan **Voicemaker** (`voicemaker.in/text-to-speech/indonesian`).
+
+#### 4.6.1 TTSMaker — ✅ API resmi, `language=id` didukung (REKOMENDASI UTAMA)
+
+Halaman `ttsmaker.com/id` memuat voice **native Indonesia** (bukan aksen Inggris):
+
+| voice_id | Nama | Karakter | Batas/konversi |
+|---|---|---|---|
+| 111008 | ardi 🇮🇩 | Indonesia male | 3.000 karakter |
+| 729 | citra 🇮🇩 | Indonesia female | **tak terbatas** |
+| 1729 | citra v2 multi-emotion 🇮🇩 | Indonesia female | 2.000 karakter + **9 emosi** (serius/sedih/menjijikkan/cemburu/senang/takut/lembut/marah) |
+| 112001 | ayu 🇮🇩 | Indonesia female | 100 karakter |
+| 112002 | stefan 🇮🇩 | Indonesia male | 300 karakter |
+| 112003 | indah 🇮🇩 | Indonesia female | 200 karakter |
+| 111019 | gadis 🇮🇩 | Indonesia female | 3.000 karakter |
+| 270 | dewi 🇮🇩 | Indonesia female | **tak terbatas** |
+| 700001 | sarah 🇮🇩 | **Sundanese** female | 1.000 karakter |
+| 700002 | william 🇮🇩 | **Sundanese** male | 1.000 karakter |
+
+⭐ **Ada voice Sundanese** (`700001`/`700002`) — bonus unik buat konten Jawa.
+
+**API V2 resmi** (`api.ttsmaker.com/v2`), 3 endpoint:
+
+```
+GET  /v2/get-voice-list?api_key=...&language=id
+POST /v2/create-tts-order        (Content-Type: application/json)
+GET  /v2/get-token-status?api_key=...
+```
+
+Body `create-tts-order` (semua fieldoptional kecuali 3 pertama):
+
+```json
+{
+  "api_key": "...",
+  "text": "Halo, ini contoh.",
+  "voice_id": 1729,
+  "audio_format": "mp3",
+  "audio_speed": 1.0,
+  "audio_volume": 1.0,
+  "audio_pitch": 1.0,
+  "audio_high_quality": 0,
+  "text_paragraph_pause_time": 0,
+  "emotion_style_key": "",
+  "emotion_intensity": 1.0
+}
+```
+
+Response sukses (`error_code: 0`):
+
+```json
+{
+  "error_code": 0,
+  "msg": "TTS Task Executed Successfully",
+  "tts_task_characters_count": 52,
+  "audio_download_url": "https://s5-8.ttsmaker-vip-file.com/file/....mp3",
+  "audio_download_backup_url": "https://ttsmaker-file2.com/s5/file/....mp3",
+  "audio_file_format": "mp3",
+  "audio_file_expiration_timestamp": 1723646681,
+  "account_status": {
+    "quota_characters": 1000000,
+    "characters_used": 40937,
+    "available_quota": 959063,
+    "subscription_period": "month"
+  }
+}
+```
+
+Fitur yang berguna untuk Motion Graphics:
+- `audio_format`: mp3 / **wav** / ogg / aac / opus → mp3 cukup (Mediabunny sudah support).
+- `audio_speed` 0.5–2.0 → **mengatur tempo narasi supaya pas dengan beat**.
+- `text_paragraph_pause_time` (0–10.000 ms) → **jeda antar baris = jeda antar beat**. Ini persis yang dibutuhkan sistem beat.
+- `[[break=1000]]` → jeda eksplisit di dalam teks (maks 10 dtk, 200 tag/API).
+- `emotion_style_key` + `emotion_intensity` → intonasi per beat (voice 1729 punya 9 emosi).
+- `audio_high_quality: 1` → file ~2× lebih besar (1024 kbps vs 512 kbps).
+- **URL audio sementara berlaku 2 jam** (docs menyebut 24 jam) → server harus **langsung download** audio lalu simpan ke Supabase Storage, jangan menyimpan URL-nya.
+
+⚠️ **Batas penting:** API **wajib subscription Pro/Studio** — akun Lite/FREE tidak bisa pakai API. Gratis web = 20.000 karakter/minggu + **captcha** (jadi tidak bisa dipakai dari server). QPS = **1/detik** (HTTP 429 kalau lebih).
+
+#### 4.6.2 Voicemaker — ✅ API resmi, `Indonesian` didukung (alternatif)
+
+Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
+
+- **Bahasa**: Indonesian & **Javanese** termasuk daftar 130+ bahasa.
+- **Model & biaya (multiplier per karakter)**: `ProPlus Expressive` 4× (70+ bahasa, storytelling/performance), `ProPlus High-Res` 4× (30+ bahasa, produksi studio), `ProPlus Turbo` 2× (30+ bahasa, latensi ~250–300 ms), `Pro2` 2× (30+ bahasa), `Pro1` 1× (90+ bahasa), **Default AI1–AI6** 1× (130+ bahasa).
+- **Format**: MP3 / **WAV** / OGG / PCM (sampai 48 kHz).
+- Endpoint: `Generate TTS` (POST), `List Voices` (POST), `Generate TTS with VoxFX` (POST), `Voice Cloning` (CRUD), Speech-to-Speech, Speech-to-Text.
+- Prix: pay-as-you-go, token dari `developer.voicemaker.in`.
+- ⚠️ Bedanya dengan TTSMaker: **tidak ada voice native Indonesia** yang sebanyak TTSMaker — daftar voice Indonesia-nya lebih kecil, dan model multilingual-nyahandle aksen, bukan pelafalan lokal se-natural TTSMaker.
+
+#### 4.6.3 Perbandingan lengkap untuk fallback
+
+| Kriteria | Gemini TTS (sekarang) | **TTSMaker** | **Voicemaker** | Azure Neural | ElevenLabs |
+|---|---|---|---|---|---|
+| Bahasa Indonesia | ✅ | ✅ **native + Sundanese** | ✅ (+Javanese) | ✅ | ✅ (multilingual v2) |
+| API resmi + key | ✅ (vault) | ✅ (`api.ttsmaker.com/v2`) | ✅ (`developer.voicemaker.in`) | ✅ | ✅ |
+| **Tanpa GPU / self-host** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Harga | ~$0 (kuota free) | **$12,99/bln** Pro (1 jt karakter = ±23 jam audio) | pay-as-you-go | $15–16/1M karakter, **500 rb free/bulan** | $6–22/bln, 10–20 rb karakter free/bulan |
+| Lisensi komersial | proprietary ToS | ✅ websitori: **100% hak komersial** | ✅ | ✅ | ✅ (paket berbayar) |
+| Kontrol tempo | ❌ | ✅ `audio_speed` 0,5–2,0 | ✅ `master_speed` | ✅ SSML | ✅ |
+| Jeda per paragraf | ❌ | ✅ `text_paragraph_pause_time` | ✅ SSML | ✅ SSML | ❌ |
+| Emosi | ✅ (style hint, 14 voice) | ✅ 9 emosi (voice 1729) | ✅ VoxFX | ❌ | ✅ |
+| Output langsung ke server | ✅ inline base64 | ⚠️ URL sementara (2 jam) | ⚠️ URL | ✅ | ✅ |
+| Batas速率 | kuota Gemini | **1 QPS** | lebih longgar | 20–30 rps | ada |
+| Cache hash di repo | ✅ `ttsClipHash` | ✅ (hash + provider) | ✅ | — | — |
+
+**Rekomendasi D-276 (fallback berjenjang):**
+
+1. **Gemini TTS** (default, sudah ada) — kualitas terbaik, gratis selama kuota. Kalau error **429 / RESOURCE_EXHAUSTED / quota**, jangan langsung gagal.
+2. **TTSMaker** (fallback #1) — alasan utama: voice **native Indonesia** (bukan aksen Inggris), ada voice **Sundanese**, `audio_speed` + `text_paragraph_pause_time` **pas untuk sistem beat**, `emotion_style_key` untuk intonasi per beat, dan **100% hak komersial**. Butuh subscription Pro (~$13/bulan).
+3. **Voicemaker** (fallback #2) — kalau punya token; punya Javanese + VoxFX + voice cloning, dan endpoint-nya lebih cepat (Turbo ~250 ms).
+
+> ⚠️ **Kenapa bukan GPT-SoVITS / Qwen3-TTS sebagai fallback hosted?** Keduanya butuh GPU (VPS sendiri) dan/atau tidak support ID. See §4.3.
+> ⚠️ **Kenapa bukan Azure/ElevenLabs?** Keduanya support ID dan API-nya stabil, tapi **tidak ada voice native Indonesia** yang sekelas TTSMaker — hasilnya aksen Inggris, persis masalah yang bikin GPT-SoVITS gagal. Cocok jadi fallback level-3 kalau TTSMaker/Voicemaker kosong, bukan level-1.
+
+### 4.7 Cara pasang audio ke Motion Graphics
 
 **Sudah siap!** `public/vendor/mediabunny.min.mjs` sudah expose:
 - `AudioBufferSource`
@@ -338,7 +457,7 @@ export const FadeInAudio = () => {
 
 Prop yang berguna: `volume` (number **atau** fungsi frame → number), `playbackRate`, `trimBefore`/`trimAfter` (frame), `loop`. Format didukung: mp3 (paling recommended), wav, aac/m4a, ogg, flac. Multiple `<Audio>` bisa ditumpuk → musik + voiceover + SFX mix otomatis.
 
-### 4.7 Catatan penting: audio & durasi
+### 4.8 Catatan penting: audio & durasi
 
 Menambah audio track berarti MP4 jadi lebih besar → **harus naikkan batas `bitrateForDuration()`** dan pastikan signed-upload dipakai (sudah otomatis di ≥ 4 MB).
 
@@ -384,3 +503,13 @@ TTS naratif harus **mengikuti durasi**: 1 detik ≈ 2,5 kata (Indonesia). Jadi u
 [11] https://www.remotionvideo.com/blog/video-scripting-template
 [12] https://mediabunny.dev/guide/converting-media-files
 [13] https://www.remotion.dev/docs/audio
+[14] https://ttsmaker.com/developer-api-docs
+[15] https://pro.ttsmaker.com/api-platform/api-docs-v2
+[16] https://api.ttsmaker.com/v2/docs
+[17] https://ttsmaker.com/id
+[18] https://pro.ttsmaker.com/pricing
+[19] https://developer.voicemaker.in/apidocs/
+[20] https://developer.voicemaker.in/apidocs/introduction
+[21] https://voicemaker.in/faq
+[22] https://elevenlabs.io/docs/overview/capabilities/text-to-speech
+[23] https://azure.microsoft.com/en-us/pricing/details/speech/

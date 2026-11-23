@@ -20,6 +20,31 @@
 // CATATAN PALET: warna di file ini WAJIB dari palet resmi Sherly
 // (lihat tools/check-palette.js) — gelap + pink + putih saja.
 
+// D-276: model beat dipakai client-side. WAJIB sinkron dengan
+// motion-graphics/src/beats.ts (versi server-side).
+import {
+  beatsFromText,
+  beatAtFrame,
+} from './motion-graphics-beats.js';
+
+/** Gaya visual per peran beat (sinkron dengan BeatSequence.tsx). */
+const MG_BEAT_ROLE_STYLE = {
+  hook: {headlineScale: 1.18, plum: true, rule: true, badge: false, ctaButton: false},
+  body: {headlineScale: 1, plum: false, rule: true, badge: true, ctaButton: false},
+  payoff: {headlineScale: 1.08, plum: true, rule: true, badge: true, ctaButton: false},
+  cta: {headlineScale: 1, plum: true, rule: false, badge: true, ctaButton: true},
+  outro: {headlineScale: 0.9, plum: false, rule: false, badge: false, ctaButton: false},
+};
+
+/** Label badge peran beat (sinkron dengan BeatSequence.tsx). */
+const MG_BEAT_ROLE_BADGE = {
+  hook: 'HOOK',
+  body: '',
+  payoff: 'HASIL',
+  cta: 'SEKARANG',
+  outro: 'TERIMA KASIH',
+};
+
 const MG_PALETTE = {
   bg: '#070b14',
   bgElevated: '#0c1422',
@@ -88,6 +113,64 @@ export function bitrateForDuration(durationInSeconds) {
   return Math.min(Math.max(bits, 800_000), 6_000_000);
 }
 
+/**
+ * D-276 — Ambil audio voice-over TTS dari server.
+ *
+ * Server otomatis memakai provider cadangan (TTSMaker, bahasa Indonesia)
+ * kalau kuota Gemini habis —客户端 cukup menerima audio yang benar.
+ *
+ * @param {string} text
+ * @param {{voice?: string, style?: string}} opts
+ * @returns {Promise<{buffer: ArrayBuffer, mimeType: string, provider: string}|null>}
+ */
+export async function fetchTtsAudio(text, opts = {}) {
+  const clean = String(text || '').trim();
+  if (!clean) return null;
+  const res = await fetch('/api/ai/tts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+    body: JSON.stringify({
+      text: clean,
+      voice: opts.voice || undefined,
+      style: opts.style || undefined,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(err.error || 'Gagal membuat voice-over.'), {status: res.status});
+  }
+  const buffer = await res.arrayBuffer();
+  if (!buffer || buffer.byteLength === 0) return null;
+  return {
+    buffer,
+    mimeType: res.headers.get('Content-Type') || 'audio/wav',
+    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'ttsmaker' : 'gemini'),
+  };
+}
+
+/**
+ * D-276 — Ubah ArrayBuffer audio (WAV/MP3) jadi AudioBuffer siap tempel.
+ * Memakai OfflineAudioContext supaya bisa di-decode tanpa <audio> element.
+ *
+ * @param {ArrayBuffer} buffer
+ * @param {number} sampleRate
+ * @returns {Promise<AudioBuffer|null>}
+ */
+export async function decodeAudioBuffer(buffer, sampleRate = 44100) {
+  try {
+    const Ctx = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+    if (!Ctx) return null;
+    const ctx = new Ctx(1, 1024, sampleRate);
+    const decoded = await ctx.decodeAudioData(buffer.slice(0));
+    return decoded || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Template Motion Graphics (harus sama dengan server/motion-graphics.js). */
 export const MG_CLIENT_TEMPLATES = [
   {
@@ -128,6 +211,42 @@ export const MG_CLIENT_TEMPLATES = [
       {key: 'value', label: 'Nilai', placeholder: 'Contoh: 3.2x', required: true},
       {key: 'label', label: 'Label', placeholder: 'Contoh: lebih cepat produksi', required: true},
       {key: 'note', label: 'Catatan', placeholder: 'Contoh: Data internal, Q3 2026'},
+    ],
+  },
+  {
+    id: 'beat-sequence',
+    label: 'Rangkaian Beat',
+    // D-276: video 10-30 detik berisi beberapa blok teks (HOOK -> BODY ->
+    // PAYOFF -> CTA). Tiap beat punya durasi & gaya sendiri, jadi videonya
+    // punya irama — bukan satu teks diam.
+    hint: 'Video multi-bloc: hook, isi, lalu CTA. Format: "=== Hook ===" lalu teksnya.',
+    icon: 'layers',
+    defaultDuration: 15,
+    durations: [10, 12, 15, 20, 25, 30],
+    aspects: ['9:16', '16:9', '1:1'],
+    fields: [
+      {
+        key: 'beatsText',
+        label: 'Isi Beat',
+        type: 'textarea',
+        rows: 7,
+        required: true,
+        placeholder: '=== Hook ===\n3,2x lebih cepat produksi\n\n=== Poin 1 ===\nTemplate siap pakai\n\n=== CTA ===\nCoba sekarang\n@sherlystudio',
+      },
+      {key: 'ctaLabel', label: 'Teks Tombol CTA', placeholder: 'Contoh: Simpan Videonya'},
+      {
+        key: 'voiceoverText',
+        label: 'Naskah Voice-over (opsional)',
+        type: 'textarea',
+        rows: 3,
+        placeholder: 'Kosongkan kalau tidak mau suara. Kalau diisi, videonya dapat narasi TTS bahasa Indonesia.',
+      },
+      {
+        key: 'voice',
+        label: 'Suara (opsional)',
+        type: 'select',
+        placeholder: 'Pakai bawaan sistem',
+      },
     ],
   },
 ];
@@ -617,11 +736,154 @@ function drawStatCard(ctx, w, h, t, props, totalSeconds) {
   ctx.restore();
 }
 
+/**
+ * D-276 — Komposisi "Rangkaian Beat".
+ *
+ * Video 10–30 detik berisi beberapa blok teks (HOOK → BODY → PAYOFF → CTA).
+ * Tiap beat punya durasi & gaya sendiri, jadi videonya punya irama.
+ *
+ * WAJIB SINKRON dengan motion-graphics/src/compositions/BeatSequence.tsx.
+ */
+function drawBeatSequence(ctx, w, h, t, props, totalSeconds) {
+  const type = typeScale(w);
+  const pad = safePadding(w);
+  const brand = String(props.brand || 'SherlyStudio');
+  const accent = String(props.accent || MG_PALETTE.pink);
+  const ctaLabel = String(props.ctaLabel || '').trim();
+
+  const total = Math.max(1, totalSeconds);
+  const frame = Math.round(t * MG_FPS);
+  const beats = beatsFromText(String(props.beatsText || ''), total, MG_FPS);
+  const active = beatAtFrame(beats, frame);
+  if (!active) return;
+
+  const style = MG_BEAT_ROLE_STYLE[active.role] || MG_BEAT_ROLE_STYLE.body;
+  const local = frame - active.startFrame;
+  const beatFrames = Math.max(1, active.endFrame - active.startFrame);
+
+  const enter = spring(local / MG_FPS, {damping: 200, mass: 0.7});
+  const exit = interpolate(local / beatFrames, [0.88, 1], [1, 0]);
+  const fadeOut = interpolate(t, [total - 0.4, total], [1, 0]);
+  const visible = enter * exit * fadeOut;
+
+  ctx.save();
+  ctx.globalAlpha = fadeOut;
+  if (style.plum) drawBackground(ctx, w, h);
+  else {
+    drawBackground(ctx, w, h);
+    ctx.fillStyle = MG_PALETTE.bgSoft;
+    ctx.globalAlpha = fadeOut * 0.55;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = fadeOut;
+  }
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const rise = (1 - clamp(enter, 0, 1)) * 34;
+
+  ctx.save();
+  ctx.globalAlpha = visible;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.translate(0, rise);
+
+  // Badge peran beat (hook tidak pakai badge — harus langsung to the point).
+  if (style.badge && MG_BEAT_ROLE_BADGE[active.role]) {
+    ctx.font = `700 ${type.caption}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.letterSpacing = '4px';
+    ctx.fillStyle = accent;
+    const badgeText = MG_BEAT_ROLE_BADGE[active.role];
+    const bw = ctx.measureText(badgeText).width + Math.round(w * 0.044);
+    const bh = Math.round(type.caption * 2);
+    const by = cy - h * 0.2;
+    ctx.beginPath();
+    ctx.roundRect(cx - bw / 2, by, bw, bh, bh / 2);
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = visible * 0.55;
+    ctx.lineWidth = Math.max(1, Math.round(w * 0.001));
+    ctx.stroke();
+    ctx.globalAlpha = visible;
+    ctx.fillText(badgeText, cx, by + bh * 0.68);
+    ctx.letterSpacing = '0px';
+  }
+
+  // Headline beat.
+  const head = active.lines[0] || '';
+  const sub = active.lines.slice(1);
+  const headSize = Math.round(type.headline * style.headlineScale);
+  ctx.font = `800 ${headSize}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.fillStyle = MG_PALETTE.white;
+  const headLines = wrapText(ctx, head, w - pad * 2);
+  const headLineHeight = headSize * 1.1;
+  let headY = cy - h * 0.12 - (headLines.length * headLineHeight) / 2;
+  headY = drawLines(ctx, headLines, cx, headY, headLineHeight);
+
+  // Garis aksen.
+  if (style.rule) {
+    const lineW = Math.round(w * 0.09);
+    const lineH = Math.max(4, Math.round(w * 0.005));
+    const lineY = headY + type.headline * 0.42;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(cx - lineW / 2, lineY, lineW, lineH, lineH / 2);
+    ctx.fill();
+  }
+
+  // Subjudul (baris tambahan).
+  if (sub.length) {
+    ctx.font = `500 ${type.subhead}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = MG_PALETTE.textDim;
+    const subY = headY + type.headline * 0.42 + type.subhead * 1.5;
+    drawLines(ctx, sub, cx, subY, type.subhead * 1.4);
+  }
+
+  // Tombol CTA.
+  if (style.ctaButton) {
+    // D-276: kalau label tidak diisi, pakai teks handle ("@sherlystudio")
+    // kalau ada — bukan mengulang headline (yang bakalan tampil dobel).
+    const handle = sub.find((l) => l.trim().startsWith('@'))?.trim() || '';
+    const btnText = ctaLabel || handle || 'Coba Sekarang';
+    ctx.font = `800 ${type.subhead}px Inter, system-ui, -apple-system, sans-serif`;
+    const bw = ctx.measureText(btnText).width + Math.round(w * 0.1);
+    const bh = Math.round(type.subhead * 1.8);
+    const bx = cx - bw / 2;
+    const by = headY + type.headline * 0.42 + type.subhead * 3.1;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, bh / 2);
+    ctx.fill();
+    ctx.fillStyle = MG_PALETTE.bg;
+    ctx.fillText(btnText, cx, by + bh * 0.68);
+  }
+
+  ctx.restore();
+
+  // Brand kecil di bawah.
+  ctx.font = `500 ${type.caption}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.letterSpacing = '4px';
+  ctx.fillStyle = MG_PALETTE.textGhost;
+  ctx.globalAlpha = fadeOut * 0.75;
+  ctx.textAlign = 'center';
+  ctx.fillText(brand.toUpperCase(), cx, h - pad * 0.5);
+  ctx.letterSpacing = '0px';
+
+  // Progress bar beat — indikator irama.
+  const barH = Math.max(3, Math.round(h * 0.0035));
+  ctx.globalAlpha = fadeOut;
+  ctx.fillStyle = MG_PALETTE.line;
+  ctx.fillRect(0, h - barH, w, barH);
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, h - barH, Math.round(w * clamp(local / beatFrames, 0, 1)), barH);
+
+  ctx.restore();
+}
+
 /** Dispatcher komposisi. */
 const MG_COMPOSITIONS = {
   'branded-intro': drawBrandedIntro,
   'captioned-clip': drawCaptionedClip,
   'stat-card': drawStatCard,
+  'beat-sequence': drawBeatSequence,
 };
 
 /**
@@ -732,6 +994,42 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     keyFrameInterval: 2,
   });
   output.addVideoTrack(source, {frameRate: MG_FPS});
+
+  // D-276 — Voice-over TTS (opsional). Kalau ada, audio-nya ditempel sebagai
+  // track terpisah lalu di-mux ke MP4 yang sama.
+  let audioBuffer = null;
+  let ttsProvider = null;
+  const voiceText = String(props.voiceoverText || '').trim();
+  if (voiceText) {
+    opts.onProgress?.({progress: 2, phase: 'voiceover'});
+    try {
+      const tts = await fetchTtsAudio(voiceText, {
+        voice: props.voice,
+        style: props.voiceStyle,
+        headers: opts.headers || {},
+      });
+      if (tts) {
+        audioBuffer = await decodeAudioBuffer(tts.buffer);
+        ttsProvider = tts.provider;
+        if (!audioBuffer) opts.onProgress?.({progress: 3, phase: 'voiceover'});
+      }
+    } catch (error) {
+      // Voice-over gagal -> video tetap dirender (tanpa suara), jangan gagal
+      // seluruh render.
+      opts.onProgress?.({progress: 3, phase: 'voiceover'});
+      opts.onWarning?.('Voice-over gagal dibuat: ' + (error?.message || 'tidak diketahui'));
+    }
+  }
+
+  if (audioBuffer && typeof mediabunny.AudioBufferSource === 'function') {
+    const audioSource = new mediabunny.AudioBufferSource({
+      buffer: audioBuffer,
+      // Awal sedikit Mundur supaya suara masuk pas di frame pertama.
+      timestamp: 0,
+    });
+    output.addAudioTrack(audioSource);
+  }
+
   // Output harus started sebelum sample bisa masuk.
   await output.start();
 
@@ -799,6 +1097,9 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     height: size.height,
     durationMs: Math.round(durationInSeconds * 1000),
     bytes: finalBlob.size,
+    // D-276: info voice-over (provider mana yang dipakai).
+    hasAudio: Boolean(audioBuffer),
+    ttsProvider: ttsProvider || null,
   };
 }
 

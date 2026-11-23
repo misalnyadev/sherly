@@ -87,16 +87,17 @@ describe('D-251 utilitas client-side', () => {
 });
 
 describe('D-251 katalog template client-side', () => {
-  test('tiga template tersedia dengan field wajib', () => {
+  test('empat template tersedia dengan field wajib', () => {
     const ids = MG_CLIENT_TEMPLATES.map((t) => t.id);
-    assert.deepEqual(ids, ['branded-intro', 'captioned-clip', 'stat-card']);
+    // D-276: template ke-4 = "Rangkaian Beat".
+    assert.deepEqual(ids, ['branded-intro', 'captioned-clip', 'stat-card', 'beat-sequence']);
     for (const t of MG_CLIENT_TEMPLATES) {
       assert.ok(Array.isArray(t.fields) && t.fields.length, t.id + ' harus punya field');
       assert.ok(t.aspects.includes('9:16'), t.id + ' harus mendukung 9:16');
       assert.ok(t.durations.length, t.id + ' harus punya durasi');
     }
-    // Intro & kartu statistik butuh isi; klip subtitle boleh kosong.
-    for (const id of ['branded-intro', 'stat-card']) {
+    // Intro, kartu statistik & rangkaian beat butuh isi; klip subtitle boleh kosong.
+    for (const id of ['branded-intro', 'stat-card', 'beat-sequence']) {
       const t = MG_CLIENT_TEMPLATES.find((x) => x.id === id);
       assert.ok(t.fields.some((f) => f.required), id + ' harus punya minimal satu field wajib');
     }
