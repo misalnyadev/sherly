@@ -376,6 +376,57 @@
     return String(v ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
   }
+  /**
+   * D-284: BUANG token @mention dari naskah sebelum dikirim ke TTS.
+   *
+   * ⚠️ BUG YANG DIPERBAIKI: di mode "Karakter Bicara", composer berisi
+   * naskah YANG DICHAKADAKAN + token @mention gambar. Script mentah
+   * ("selamat datang di sherly studio @aset-gambarreferensi") langsung
+   * dikirim ke Gemini TTS -> karakter jadi MEMBACAKAN "@aset-gambarreferensi"
+   * dengan suara robotik, sehingga hasil video rusak.
+   *
+   * Token mention (aset & karakter) dibuang; sisanya jadi naskah bersih.
+   */
+  function cleanScriptForTts(raw) {
+    return String(raw || '')
+      // Buang token @slug (aset-xxx atau nama karakter).
+      .replace(/@[a-z0-9][a-z0-9_-]{0,59}/gi, ' ')
+      // Rapikan spasi & tanda bacadoUBLE.
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;!?])/g, '$1')
+      .trim();
+  }
+  /**
+   * D-284: token @mention yang TIDAK kenalan (mis. "@gambar referensi" yang
+   * diketik manual — token aset WAJIB berawalan "aset-").
+   * User sering mengetik nama bebas, padahal daemon hanya mengenali slug
+   * yang asli (mis. "@aset-gambarreferensi"). Token tak dikenal diam-diam
+   * diabaikan -> gambar TIDAK ikut terkirim -> Kie pakai potret karakter
+   * sebagai cadangan, padahal user mengira sudah memakai gambar yang dia pilih.
+   */
+  function unknownMentionTokens(raw) {
+    const text = String(raw || '');
+    if (!text.includes('@')) return [];
+    const known = new Set([
+      ...characters.map((c) => slugify(c.name)),
+      ...assets.filter((a) => a && a.url).map((a) => assetTokenSlug(a)),
+    ]);
+    const out = [];
+    const re = /@([a-z0-9][a-z0-9_-]{0,59})/gi;
+    let m;
+    while ((m = re.exec(text))) {
+      const tok = String(m[1] || '').toLowerCase();
+      if (!tok || known.has(tok)) continue;
+      // Cocokkan prefix terpanjang (D-220: user masih mengetik di belakang token).
+      let ok = false;
+      for (const k of known) {
+        if (tok.startsWith(k) || k.startsWith(tok)) { ok = true; break; }
+      }
+      if (ok) continue;
+      out.push('@' + m[1]);
+    }
+    return out;
+  }
   /** Daftar karakter yang disebut di prompt (unik, urut kemunculan, maks 3). */
   function mentionedCharacters() {
     const ta = $('stPrompt'); const text = ta?.value || '';
@@ -3462,6 +3513,26 @@
         + (overLimit ? ' — terlalu panjang, pendekkan naskah' : '')
         + '\n' + provLabel + ' · ' + modelLabel.replace(' Fast A2V', '') + ' · ' + src;
       meta.classList.toggle('st-lipsync-meta-warn', est > max);
+      // D-284: PETUNJUNG LANGKAH. User sering bingung: "naskah di mana? gambar
+      // dari mana?".
+      const tip = $('stLipsyncTip');
+      if (tip) {
+        const hasChar = !!state.lipsyncCharacterId;
+        const hasImg = sceneRefs.length > 0;
+        const unknown = unknownMentionTokens(($('stPrompt') || {}).value);
+        let html = [
+          (hasChar ? '<b class="ok">1. Karakter</b>' : '<b class="todo">1. Pilih karakter</b>'),
+          (hasImg ? '<b class="ok">2. Gambar</b>' : '<b class="todo">2. Mention gambar (ketik @)</b>'),
+          (est ? '<b class="ok">3. Naskah</b>' : '<b class="todo">3. Tulis naskah</b>'),
+        ].join(' · ');
+        // D-284: token @ tak dikenal -> beri tahu (gambarnya TIDAK terkirim).
+        if (unknown.length) {
+          html += '<br><b class="todo">Token tak dikenal: ' + esc(unknown.join(', '))
+            + ' — pilih dari daftar saat ketik @ (token aset diawali "aset-")</b>';
+        }
+        tip.innerHTML = html;
+        tip.classList.toggle('st-lipsync-tip-warn', !hasChar || !hasImg || unknown.length > 0);
+      }
     }
   }
   function buildLipsyncCharPop() {
@@ -3485,7 +3556,16 @@
     }));
   }
   async function generateLipsync() {
-    const ta = $('stPrompt'); const script = (ta?.value || '').trim();
+    const ta = $('stPrompt');
+    // D-284: token @mention (aset/karakter) DIBUANG dari naskah — kalau tidak,
+    // TTS akan membacakan "@aset-gambarreferensi" dengan suara robotik.
+    const rawScript = (ta?.value || '').trim();
+    const script = cleanScriptForTts(rawScript);
+    if (!script) {
+      window.toast?.('Tulis naskah yang mau dibacakan karakter.');
+      ta?.focus();
+      return;
+    }
     if (!state.lipsyncCharacterId) {
       window.toast?.('Pilih karakter yang mau bicara dulu ya.');
       $('stLipsyncCharBtn')?.focus();
@@ -3522,6 +3602,14 @@
       window.toast?.('Mention gambar karakter (lokasi tertentu) dulu ya, atau upload potret karakter.');
       ta?.focus();
       return;
+    }
+    // D-284: token @ tak dikenal (mis. "@gambar referensi" diketik manual)
+    // -> gambar TIDAK ikut terkirim. Ingatkan user, tapi jangan blokir
+    // (mungkin memang sengaja menulis naskah biasa).
+    const unknown = unknownMentionTokens(rawScript);
+    if (unknown.length) {
+      window.toast?.('Token tak dikenal: ' + unknown.join(', ')
+        + ' — ketik @ lalu pilih dari daftar (token aset diawali "aset-").');
     }
     const btn = $('stLipsyncBtn');
     btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Menyiapkan…';
@@ -3690,6 +3778,8 @@
       + '</button>'
       + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
       + '<div class="st-lipsync-meta"><span id="stLipsyncMeta">Maks 15 detik</span></div>'
+      // D-284: panduan 3 langkah (karakter -> gambar -> naskah).
+      + '<div class="st-lipsync-tip" id="stLipsyncTip"></div>'
       + '</div>'
       // D-249: mode Motion Graphics — baris template + isi yang akan dirender.
       + '<div class="st-motion-bar st-hidden" id="stMotionBar"></div>'

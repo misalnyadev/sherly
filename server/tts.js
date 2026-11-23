@@ -94,7 +94,7 @@ export function pcmToWav(pcm, sampleRate = 24000) {
  *
  * Sekarang durasi dibaca PERSIS dari header WAV (sampleRate + dataSize),
  * jadi gatekeeper sesuai dengan kenyataan. Kalau bukan WAV / header rusak,
- * jatuh ke heuristik保守 yang dulu.
+ * jatuh ke heuristik konservatif yang dulu.
  */
 export function wavDurationSeconds(buffer) {
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
