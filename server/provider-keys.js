@@ -4,6 +4,45 @@ import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
 export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
+// D-270: tautan resmi untuk mendapatkan API key tiap provider (dibuka di tab baru).
+// Satu sumber kebenaran supaya label, link, dan catatan gratisnya sinkron.
+export const PROVIDER_INFO = {
+  groq: {
+    label: 'Groq',
+    keyUrl: 'https://console.groq.com/keys',
+    signupUrl: 'https://console.groq.com/keys',
+    docsUrl: 'https://console.groq.com/docs/overview',
+    hint: 'Buat key di console.groq.com/keys. Tier gratis tersedia, tanpa kartu kredit.',
+  },
+  gemini: {
+    label: 'Google Gemini',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    signupUrl: 'https://aistudio.google.com/apikey',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs',
+    hint: 'Buat key di Google AI Studio (aistudio.google.com/apikey). Tier gratis tersedia.',
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    keyUrl: 'https://openrouter.ai/keys',
+    signupUrl: 'https://openrouter.ai/keys',
+    docsUrl: 'https://openrouter.ai/docs',
+    hint: 'Buat key di openrouter.ai/keys. Gratis untuk model berakhiran :free; model lain pakai kredit.',
+  },
+  kie: {
+    label: 'Kie AI',
+    keyUrl: 'https://kie.ai',
+    signupUrl: 'https://kie.ai',
+    docsUrl: 'https://docs.kie.ai',
+    hint: 'Buat key di dashboard kie.ai. Paket kredit pay-as-you-go (5.000 kredit gratis saat daftar).',
+  },
+  custom: {
+    label: 'Kustom (OpenAI-compatible)',
+    keyUrl: '',
+    signupUrl: '',
+    docsUrl: '',
+    hint: 'Provider sendiri yang kompatibel OpenAI — masukkan base URL + key di form Tambah Provider.',
+  },
+};
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
 export const PERSONAL_PROVIDERS = ['gemini', 'groq', 'openrouter', 'custom'];
 // D-146: multi key per provider per akun (fallback otomatis antar key saat chat).

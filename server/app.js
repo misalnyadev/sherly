@@ -9,7 +9,7 @@ import { chatWithAI, generateImageWithGemini, generateImageWithKie, generateImag
 import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPrompt, boardPrompt, resolveBoardPrompt, biblePrompt, VISION_SYSTEM_PROMPT, BIBLE_SYSTEM_PROMPT } from './character-wizard.js';
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
-import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
+import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, sanitizeStyleHint } from './tts.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
@@ -2177,11 +2177,11 @@ app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   const envFallback = envFallbackStatus();
   const vaultReady = vaultConfigured();
   const models = vaultReady ? await getAllProviderModels(req.supabase).catch(() => ({})) : {};
-  if (!vaultReady) return { groups: [], models, vaultConfigured: false, vaultSelfTest: false, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES, warning: 'AI_ENCRYPTION_KEY belum dikonfigurasi di environment server.' };
+  if (!vaultReady) return { groups: [], models, vaultConfigured: false, vaultSelfTest: false, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES, providerInfo: PROVIDER_INFO, warning: 'AI_ENCRYPTION_KEY belum dikonfigurasi di environment server.' };
   try {
-    return { groups: await listKeyGroups(req.supabase), models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES };
+    return { groups: await listKeyGroups(req.supabase), models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES, providerInfo: PROVIDER_INFO };
   } catch (error) {
-    return { groups: [], models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES, warning: 'Tabel ai_provider_keys belum bisa diakses. Jalankan migrasi vault (schema.sql, ai_key_vault_migration.sql, ai_key_vault_groups_migration.sql). (' + error.message + ')' };
+    return { groups: [], models, vaultConfigured: true, vaultSelfTest: vaultSelfTest().ok, envFallback, autoOrder: AUTO_ORDER, capabilities: CAPABILITIES, providerCapabilities: PROVIDER_CAPABILITIES, providerInfo: PROVIDER_INFO, warning: 'Tabel ai_provider_keys belum bisa diakses. Jalankan migrasi vault (schema.sql, ai_key_vault_migration.sql, ai_key_vault_groups_migration.sql). (' + error.message + ')' };
   }
 }));
 app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {

@@ -378,8 +378,9 @@
       finally { busy(false); }
     });
     // D-144: alur form jelas — pilih provider → ambil key (link) → tempel → deteksi model → simpan.
+    // D-270: URL Gemini diperbarui (aistudio.google.com/apikey) & hinted free-tier.
     const PC_KEY_LINKS = {
-      gemini: { href: 'https://aistudio.google.com/app/apikey', text: 'Ambil gratis di Google AI Studio' },
+      gemini: { href: 'https://aistudio.google.com/apikey', text: 'Ambil gratis di Google AI Studio' },
       groq: { href: 'https://console.groq.com/keys', text: 'Ambil gratis di console.groq.com' },
       openrouter: { href: 'https://openrouter.ai/keys', text: 'Ambil di openrouter.ai/keys' },
       custom: null,
