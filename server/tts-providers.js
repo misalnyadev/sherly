@@ -1,5 +1,6 @@
 /**
- * D-276 / D-277 / D-278 — Provider TTS cadangan yang support bahasa Indonesia.
+ * D-276 / D-277 / D-278 / D-279 / D-280 — Provider TTS cadangan yang support
+ * bahasa Indonesia.
  *
  * Konteks: kalau kredit/kuota Gemini habis, TTS jangan langsung gagal —
  * ada engine lain yang **benar-benar bisa berbahasa Indonesia**.
@@ -12,17 +13,17 @@
  *                  pay-as-you-go → ❌ DIHAPUS
  *   - Voicemaker→ developer API pay-as-you-go, free plan web tidak membawa API
  *                  → ❌ DIHAPUS
+ *   - Azure     → user tidak bisa mendaftar (butuh kartu kredit verifikasi
+ *                  akun Azure + region wajib) → ❌ DIHAPUS (D-280)
  *
- * Yang DIPAKAI (dua-duanya punya free tier bulanan, tanpa subscription):
- *   1. **Azure Speech** (F0) — **500.000 karakter/bulan gratis**, reset bulanan,
- *      tidak pernah kedaluwarsa. Voice native Indonesia: `id-ID-ArdiNeural`
- *      (pria), `id-ID-GadisNeural` (wanita), plus Neural HD.
- *      ⚠️ D-279 — KOREKSI: Azure Free subscription **wajib kartu kredit/
- *      debit untuk verifikasi** (hold sementara yang dikembalikan) dan akun
- *      free **dinonaktifkan setelah 30 hari** kalau tidak pindah ke pay-as-you-go.
- *      Jadi F0 TIDAK bisa diklaim "tanpa info pembayaran".
- *      ⚠️ D-279 — Kunci Azure **regional**: hanya valid di region tempat resource
- *      dibuat. Region bisa diisi per-key atau dideteksi otomatis.
+ * Yang DIPAKAI (dua-duanya free tier bulanan, tanpa subscription, tanpa
+ * kartu kredit):
+ *   1. **TTSForFree** (TTS Forge API) — **30.000 karakter/bulan gratis**,
+ *      reset bulanan, API key **tanpa kartu kredit** (registrasi Google
+ *      Sign-In), **44 voice Bahasa Indonesia** (Azure Ardi/Gadis, Google
+ *      `id-ID-*` Standard/WaveNet, 4 voice Gemini).
+ *      ⚠️ Batasan: free plan **personal & non-commercial only**; API
+ *      **asynchronous** (create job → poll status → unduh audio).
  *   2. **ElevenLabs** (Free) — **10.000 kredit/bulan gratis** (~10 menit audio),
  *      API key **tanpa kartu kredit**, Indonesian didukung Multilingual v2.
  *      ⚠️ Batasan penting: free plan **tidak memberi hak komersial** dan wajib
@@ -35,46 +36,6 @@
 
 /** Batas panjang teks TTS (karakter). */
 export const TTS_MAX_CHARS = 20000;
-
-// ---------------------------------------------------------------------------
-// Azure Speech (fallback #1) — free tier F0, butuh kartu kredit + region
-// ---------------------------------------------------------------------------
-
-/** Host Azure Speech (region diambil dari key user, mis. `jakarta`, `southeastasia`). */
-export const AZURE_SPEECH_HOST = 'tts.speech.microsoft.com';
-
-/**
- * Region default Azure Speech kalau user tidak mengisi region.
- * D-279: ini hanya fallback terakhir — `detectAzureRegion()` mencoba daftar
- * region umum dulu supaya kunci yang dibuat di region lain tetap ketemu.
- */
-export const AZURE_SPEECH_DEFAULT_REGION = 'southeastasia';
-
-/**
- * Voice Azure Speech native Indonesia (`id-ID`).
- * Standard (Neuro) & Neural HD — Standard yang masuk free tier F0.
- * Sumber: dokumentasi resmi "Language and Voice Support for Azure Speech".
- */
-export const AZURE_ID_VOICES = [
-  {id: 'id-ID-ArdiNeural', key: 'ardi', label: 'Ardi · Indonesia', gender: 'male', tier: 'neural'},
-  {id: 'id-ID-GadisNeural', key: 'gadis', label: 'Gadis · Indonesia', gender: 'female', tier: 'neural'},
-  {id: 'id-ID-Ardi:DragonHDLatestNeural', key: 'ardi-hd', label: 'Ardi HD · Indonesia', gender: 'male', tier: 'hd'},
-  {id: 'id-ID-Gadis:DragonHDLatestNeural', key: 'gadis-hd', label: 'Gadis HD · Indonesia', gender: 'female', tier: 'hd'},
-];
-
-/** Key voice Azure yang valid (dipakai validasi + UI). */
-export const AZURE_VOICE_IDS = new Set(AZURE_ID_VOICES.map((v) => v.id));
-
-/**
- * Peta format output Azure -> header `X-Microsoft-OutputFormat` + MIME.
- * `mp3` dipakai sebagai default (Mediabunny sudah support, kecil).
- */
-export const AZURE_OUTPUT_FORMATS = {
-  mp3: {header: 'audio-24khz-48kbitrate-mono-mp3', mimeType: 'audio/mpeg'},
-  mp3_16k: {header: 'audio-16khz-128kbitrate-mono-mp3', mimeType: 'audio/mpeg'},
-  opus: {header: 'ogg-24khz-16bit-mono-opus', mimeType: 'audio/ogg'},
-  wav: {header: 'riff-24khz-16bit-mono-pcm', mimeType: 'audio/wav'},
-};
 
 // ---------------------------------------------------------------------------
 // ElevenLabs (fallback #2) — free tier 10.000 kredit/bulan, tanpa kartu kredit
@@ -112,17 +73,17 @@ export const ELEVENLABS_MAX_CHARS = 5000;
 
 /** Peta provider -> label (untuk UI & pesan error). */
 export const TTS_FALLBACK_PROVIDERS = {
-  azure: {
-    id: 'azure',
-    label: 'Azure Speech',
-    keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech',
-    signupUrl: 'https://portal.azure.com/#create/Microsoft.SpeechServices',
-    docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support',
-    hint: 'Cadangan TTS bahasa Indonesia. Paket F0 gratis 500.000 karakter/bulan. BUTUH kartu kredit/debit untuk verifikasi akun Azure + Region wajib (dari Keys and Endpoint). Voice native Indonesia (Ardi, Gadis).',
-    languages: 'Bahasa Indonesia (native, 400+ voice, 140+ bahasa)',
-    freeTier: '500.000 karakter/bulan (F0, reset bulanan)',
-    commercial: true,
-    needsRegion: true,
+  ttsforfree: {
+    id: 'ttsforfree',
+    label: 'TTSForFree',
+    keyUrl: 'https://ttsforfree.com/en/profile/',
+    signupUrl: 'https://ttsforfree.com/en/login/',
+    docsUrl: 'https://ttsforfree.com/en/docs/',
+    hint: 'Cadangan utama TTS bahasa Indonesia. Gratis 30.000 karakter/bulan (reset bulanan), API key tanpa kartu kredit (daftar lewat Google). 44 voice Indonesia (Ardi, Gadis, id-ID Standard/WaveNet). Paket gratis hanya untuk penggunaan pribadi — bukan komersial.',
+    languages: 'Bahasa Indonesia (44 voice: Azure, Google id-ID, Gemini)',
+    freeTier: '30.000 karakter/bulan (reset bulanan)',
+    commercial: false,
+    attribution: 'Paket gratis hanya untuk penggunaan pribadi/non-komersial. Untuk komersial perlu lisensi TTS Forge.',
   },
   elevenlabs: {
     id: 'elevenlabs',
@@ -209,169 +170,13 @@ export function ttsProviderOrder(fallbacks = []) {
 
 /**
  * Urutan fallback TTS default (dipakai route saat Gemini gagal).
- * D-278/D-279: **Azure Speech** (free 500rb karakter/bulan; butuh kartu kredit
- * untuk verifikasi + region per-key) → **ElevenLabs** (free 10rb kredit/bulan,
- * tanpa kartu kredit).
+ * D-280: **TTSForFree** (free 30rb karakter/bulan, tanpa kartu kredit,
+ * 44 voice Indonesia) → **ElevenLabs** (free 10rb kredit/bulan, tanpa kartu
+ * kredit). Azure dihapus (user tidak bisa mendaftar).
  * @returns {string[]}
  */
 export function ttsFallbackChain() {
-  return ['azure', 'elevenlabs'];
-}
-
-// ---------------------------------------------------------------------------
-// Azure Speech
-// ---------------------------------------------------------------------------
-
-/**
- * Escape teks untuk disisipkan ke SSML.
- * @param {string} text
- * @returns {string}
- */
-function escapeSsml(text) {
-  return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-/**
- * Ambil daftar voice Azure Speech (dipakai buat cek key & UI).
- * @param {string} apiKey
- * @param {string} [region]
- * @returns {Promise<Array<object>>}
- */
-export async function listAzureVoices(apiKey, region = '') {
-  if (!apiKey) throw new Error('API key Azure Speech belum diisi.');
-  // D-279: coba beberapa region — kunci Azure hanya valid di satu region.
-  const {detectAzureRegion, azureErrorMessage} = await import('./azure-region.js');
-  const found = await detectAzureRegion(apiKey, region);
-  if (!found.ok) {
-    const msg = azureErrorMessage(found.status, found.message, found.tried);
-    if (found.status === 429 || found.status === 403 || isQuotaError(msg)) throw new TtsQuotaError(msg);
-    throw new Error(msg);
-  }
-  return found.voices.filter((v) => String(v?.Locale || '').startsWith('id-ID'));
-}
-
-/**
- * Sintesis speech via Azure Speech.
- *
- * Endpoint: `POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1`
- * Header: `Ocp-Apim-Subscription-Key` + `Content-Type: application/ssml+xml` +
- * `X-Microsoft-OutputFormat`.
- * Respons: body = file audio langsung (mp3/wav/ogg).
- *
- * @param {object} opts
- * @param {string} opts.apiKey
- * @param {string} opts.text
- * @param {string} [opts.voice] ShortName voice (default `id-ID-ArdiNeural`)
- * @param {string} [opts.region] region resource Azure (default `southeastasia`)
- * @param {string} [opts.format] mp3 | mp3_16k | opus | wav
- * @param {number} [opts.rate] kecepatan SSML (0.5–2)
- * @param {number} [opts.pitch] pitch SSML dalam persen (-50..50)
- * @returns {Promise<{audio: Buffer, mimeType: string, voice: string, model: string, chars: number}>}
- */
-export async function synthesizeAzure({
-  apiKey,
-  text,
-  voice = 'id-ID-ArdiNeural',
-  region = '',
-  format = 'mp3',
-  rate = 1,
-  pitch = 0,
-}) {
-  const clean = sanitizeTtsText(text, TTS_MAX_CHARS);
-  if (!clean) throw new Error('Teks untuk suara kosong.');
-  if (!apiKey) throw new Error('API key Azure Speech belum diisi.');
-
-  const fmtKey = AZURE_OUTPUT_FORMATS[format] ? format : 'mp3';
-  const fmt = AZURE_OUTPUT_FORMATS[fmtKey];
-  const usedVoice = AZURE_VOICE_IDS.has(voice) ? voice : 'id-ID-ArdiNeural';
-
-  const prosody = [];
-  const r = Number(rate);
-  if (Number.isFinite(r) && r !== 1) {
-    prosody.push(`rate="${Math.min(Math.max(r, 0.5), 2).toFixed(2)}"`);
-  }
-  const p = Number(pitch);
-  if (Number.isFinite(p) && p !== 0) {
-    prosody.push(`pitch="${Math.min(Math.max(p, -50), 50).toFixed(0)}%"`);
-  }
-  const prosodyTag = prosody.length ? `<prosody ${prosody.join(' ')}>` : '';
-  const prosodyClose = prosody.length ? '</prosody>' : '';
-
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="id-ID">`
-    + `<voice name="${usedVoice}">${prosodyTag}${escapeSsml(clean)}${prosodyClose}</voice>`
-    + `</speak>`;
-
-  // D-279: kunci Azure regional → coba daftar region sampai ada yang cocok.
-  const {detectAzureRegion, azureErrorMessage, azureRegionCandidates} = await import('./azure-region.js');
-  const preferred = String(region || '').trim();
-  const detected = await detectAzureRegion(apiKey, preferred);
-  if (!detected.ok && detected.status !== 403 && detected.status !== 429) {
-    // Tidak ada region yang cocok → gagal dengan pesan yang bisa ditindaklanjuti.
-    const msg = azureErrorMessage(detected.status, detected.message, detected.tried);
-    throw new Error(msg);
-  }
-
-  const candidates = detected.ok
-    ? [detected.region]
-    : [detected.region || preferred || AZURE_SPEECH_DEFAULT_REGION];
-  // Kalau region yang diberikan user kosong, tetap coba daftar umum.
-  if (!detected.ok && !preferred) {
-    for (const r of azureRegionCandidates(preferred)) {
-      if (!candidates.includes(r)) candidates.push(r);
-    }
-  }
-
-  let lastErr = null;
-  let usedRegion = candidates[0];
-  for (const reg of candidates) {
-    let res;
-    try {
-      res = await fetch(`https://${reg}.${AZURE_SPEECH_HOST}/cognitiveservices/v1`, {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': apiKey,
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': fmt.header,
-          'User-Agent': 'SherlyStudio',
-        },
-        body: ssml,
-        signal: AbortSignal.timeout(45000),
-      });
-    } catch (error) {
-      lastErr = new Error(`Azure Speech gagal menghubungi region ${reg}: ${error?.message || error}`);
-      continue;
-    }
-
-    if (res.ok) {
-      usedRegion = reg;
-      const audio = Buffer.from(await res.arrayBuffer());
-      if (!audio.length) throw new Error('Audio Azure Speech kosong.');
-      return {
-        audio,
-        mimeType: fmt.mimeType,
-        voice: usedVoice,
-        model: 'azure-speech-v1',
-        chars: clean.length,
-        region: reg,
-      };
-    }
-
-    const data = await res.json().catch(() => ({}));
-    const rawMsg = String(data?.message || data?.error?.message || `Azure Speech error (${res.status})`).slice(0, 300);
-    if (res.status === 429 || res.status === 403 || isQuotaError(rawMsg)) {
-      const msg = azureErrorMessage(res.status, rawMsg, [reg]);
-      throw new TtsQuotaError(msg);
-    }
-    // 401/404 → region salah, coba region berikutnya.
-    lastErr = new Error(azureErrorMessage(res.status, rawMsg, candidates));
-  }
-
-  throw lastErr || new Error('Azure Speech gagal tanpa keterangan.');
+  return ['ttsforfree', 'elevenlabs'];
 }
 
 // ---------------------------------------------------------------------------

@@ -3,9 +3,10 @@
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  // D-278: azure + elevenlabs = cadangan TTS bahasa Indonesia dengan free tier
-  // tanpa subscription (TTSMaker/Soniox/Voicemaker dibuang — wajib bayar di awal).
-  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'azure', 'elevenlabs'];
+  // D-280: ttsforfree + elevenlabs = cadangan TTS bahasa Indonesia dengan free
+  // tier tanpa subscription DAN tanpa kartu kredit (TTSMaker/Soniox/Voicemaker/
+  // Azure dibuang — semua butuh bayar/subscribe di awal).
+  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsforfree', 'elevenlabs'];
   const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
   // D-270: tautan resmi untuk mendapatkan API key (server jadi sumber utama;
   // fallback di bawah supaya UI tetap hidup bila payload lama).
@@ -14,7 +15,7 @@
     gemini: { label: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs', hint: 'Tier gratis tersedia di Google AI Studio.' },
     openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
     kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
-    azure: { label: 'Azure Speech', keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech', docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support', hint: 'Cadangan TTS bahasa Indonesia. Paket F0 gratis 500.000 karakter/bulan (reset bulanan). BUTUH kartu kredit/debit untuk verifikasi akun Azure + region wajib diisi (dari Keys and Endpoint). Voice native Indonesia (Ardi, Gadis).' },
+    ttsforfree: { label: 'TTSForFree', keyUrl: 'https://ttsforfree.com/en/profile/', docsUrl: 'https://ttsforfree.com/en/docs/', hint: 'Cadangan utama TTS bahasa Indonesia. Gratis 30.000 karakter/bulan (reset bulanan), API key tanpa kartu kredit (daftar lewat Google). 44 voice Indonesia (Ardi, Gadis, id-ID Standard/WaveNet). Paket gratis hanya untuk penggunaan pribadi — bukan komersial.' },
     elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech', hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. Paket gratis tanpa hak komersial — wajib atribusi.' },
   };
   let providerInfo = FALLBACK_PROVIDER_INFO;
@@ -33,7 +34,7 @@
     { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: 'clapperboard', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
     { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: 'film', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
   ];
-  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], azure: ['tts'], elevenlabs: ['tts'] };
+  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], ttsforfree: ['tts'], elevenlabs: ['tts'] };
   let capabilityRegistry = FALLBACK_CAPABILITIES;
   let providerCapabilities = FALLBACK_PROVIDER_CAPS;
   let activeCapability = 'all';
@@ -317,9 +318,6 @@
     const p = $('keyProvider')?.value;
     const info = infoOf(p);
     if (hint) hint.textContent = info && info.hint ? info.hint : '';
-    // D-279: field Region Azure hanya tampil untuk provider azure.
-    const regionField = $('keyRegionField');
-    if (regionField) regionField.hidden = p !== 'azure';
     if (!link) return;
     if (info && info.keyUrl) {
       link.href = info.keyUrl;
@@ -345,9 +343,6 @@
     $('keyValue').parentElement.style.display = mode === 'edit' ? 'none' : 'flex';
     $('keyPriority').value = item?.priority ?? 100;
     $('keyPriority').parentElement.style.display = mode === 'rotate' ? 'none' : 'flex';
-    // D-279: region Azure (opsional — dikosongkan = deteksi otomatis).
-    const regionInput = $('keyRegion');
-    if (regionInput) regionInput.value = item?.region || addPrefill?.region || '';
     $('saveKeyBtn').textContent = mode === 'rotate' ? 'Simpan Key Baru' : 'Simpan Key';
     $('probeKeyBtn').style.display = mode === 'edit' ? 'none' : '';
     resetProbeResult();
@@ -378,8 +373,7 @@
     btn.textContent = 'Menguji…';
     showProbeResult('pending', 'Menguji koneksi ke ' + (PROVIDER_LABEL[provider] || provider) + '…');
     try {
-      const region = ($('keyRegion')?.value || '').trim();
-      const data = await api('/api/ai-keys/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, api_key, region }) });
+      const data = await api('/api/ai-keys/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, api_key }) });
       if (data.probe?.ok) showProbeResult('ok', '✓ Koneksi OK — key valid. Aman disimpan dengan “Simpan Key”.');
       else showProbeResult('err', '✗ Key DITOLAK. ' + (PROVIDER_LABEL[provider] || provider) + ' menjawab: ' + (data.probe?.error || 'error tidak diketahui'));
     } catch (error) {
@@ -398,8 +392,6 @@
     try {
       if (keyModalMode === 'add') {
         const body = { provider: $('keyProvider').value, key_name: $('keyName').value.trim(), api_key: $('keyValue').value.trim(), priority: Number($('keyPriority').value) || 100 };
-        const region = ($('keyRegion')?.value || '').trim();
-        if (region) body.region = region;
         const data = await api('/api/ai-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         toast('Key tersimpan — koneksi valid (grup “' + body.key_name + '”).');
       } else if (keyModalMode === 'edit') {

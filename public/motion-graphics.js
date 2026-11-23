@@ -116,7 +116,7 @@ export function bitrateForDuration(durationInSeconds) {
 /**
  * D-276 — Ambil audio voice-over TTS dari server.
  *
- * Server otomatis memakai provider cadangan (Azure Speech / ElevenLabs, bahasa Indonesia)
+ * Server otomatis memakai provider cadangan (TTSForFree / ElevenLabs, bahasa Indonesia)
  * kalau kuota Gemini habis —客户端 cukup menerima audio yang benar.
  *
  * @param {string} text
@@ -147,9 +147,9 @@ export async function fetchTtsAudio(text, opts = {}) {
   return {
     buffer,
     mimeType: res.headers.get('Content-Type') || 'audio/wav',
-    // D-278: fallback chain = Azure Speech → ElevenLabs (server yang
+    // D-280: fallback chain = TTSForFree → ElevenLabs (server yang
     // memilih; header ini hanya untuk menampilkan provider di toast/metadata).
-    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'azure' : 'gemini'),
+    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'ttsforfree' : 'gemini'),
   };
 }
 

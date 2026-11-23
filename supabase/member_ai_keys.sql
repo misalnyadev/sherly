@@ -6,13 +6,11 @@
 -- 1) Izinkan provider kustom + Kie AI (D-271)
 alter table public.ai_provider_keys drop constraint if exists ai_provider_keys_provider_check;
 alter table public.ai_provider_keys add constraint ai_provider_keys_provider_check
-  check (provider in ('groq','gemini','openrouter','kie','custom','azure','elevenlabs'));  -- D-278: +azure +elevenlabs (cadangan TTS free tier, tanpa subscribe)
+  check (provider in ('groq','gemini','openrouter','kie','custom','ttsforfree','elevenlabs'));  -- D-280: +ttsforfree +elevenlabs (cadangan TTS free tier, tanpa subscribe)
 
 -- 2) Kolom khusus provider kustom (base URL + model; NULL untuk provider standar)
 alter table public.ai_provider_keys add column if not exists base_url text;
 alter table public.ai_provider_keys add column if not exists model text;
--- D-279: region per-key untuk Azure Speech (opsional, deteksi otomatis kalau kosong).
-alter table public.ai_provider_keys add column if not exists region text;
 
 -- 3) Percakapan dengan provider kustom + Kie AI (check lama hanya 3 provider)
 alter table public.ai_conversations drop constraint if exists ai_conversations_provider_check;
