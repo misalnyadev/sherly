@@ -49,7 +49,7 @@ export const PROVIDER_INFO = {
     keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech',
     signupUrl: 'https://portal.azure.com/#create/Microsoft.SpeechServices',
     docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support',
-    hint: 'Cadangan TTS bahasa Indonesia. Buat resource Speech dengan paket F0 gratis (500.000 karakter/bulan, tanpa info pembayaran). Voice native Indonesia.',
+    hint: 'Cadangan TTS bahasa Indonesia. Buat resource Speech dengan paket F0 gratis (500.000 karakter/bulan). BUTUH kartu kredit/debit untuk verifikasi akun Azure + isi Region (dari Keys and Endpoint). Voice native Indonesia.',
   },
   // D-278: ElevenLabs = cadangan terakhir, free tier 10.000 kredit/bulan
   // (~10 menit audio), API key tanpa kartu kredit.
@@ -126,6 +126,7 @@ export function toMeta(row) {
     key_name: row.key_name,
     base_url: row.base_url || null,
     model: row.model || null,
+    region: row.region || null,
     last4: row.last4,
     priority: row.priority,
     is_active: row.is_active,
@@ -189,12 +190,12 @@ export async function listKeyGroups(supabase) {
   return groupKeyRows(await listKeyRows(supabase));
 }
 
-export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
+export async function createKey(supabase, { provider, key_name, api_key, priority, user_id, region }) {
   if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, azure, atau elevenlabs.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
-  const probe = await probeProviderKey(provider, api_key).catch(e => ({ ok: false, error: e.message }));
+  const probe = await probeProviderKey(provider, api_key, null, { region }).catch(e => ({ ok: false, error: e.message }));
   if (!probe.ok) {
     throw Object.assign(new Error(`Tes koneksi gagal — key TIDAK disimpan. ${PROBE_LABEL[provider] || provider} menjawab: ${probe.error || 'tidak diketahui'}`), { status: 400 });
   }
@@ -214,6 +215,9 @@ export async function createKey(supabase, { provider, key_name, api_key, priorit
     last_failure_at: null,
     last_error: null,
   };
+  // D-279: region Azure Speech disimpan per-key (kunci Azure bersifat regional).
+  const azRegion = String(region || '').trim().toLowerCase();
+  if (provider === 'azure' && azRegion) row.region = azRegion;
   const { data, error } = await supabase.from('ai_provider_keys').insert(row).select().single();
   if (error) {
     if (/duplicate|unique/i.test(error.message)) {
@@ -285,7 +289,7 @@ export async function getUsableKeys(supabase, provider) {
   if (!vaultConfigured()) return [];
   let { data, error } = await supabase
     .from('ai_provider_keys')
-    .select('id,key_name,ciphertext,iv,auth_tag,priority,base_url,model')
+    .select('id,key_name,ciphertext,iv,auth_tag,priority,base_url,model,region')
     .eq('provider', provider)
     .eq('is_active', true)
     .order('priority', { ascending: true })
@@ -304,7 +308,7 @@ export async function getUsableKeys(supabase, provider) {
   const usable = [];
   for (const row of data || []) {
     try {
-      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row), baseUrl: row.base_url || null, customModel: row.model || null });
+      usable.push({ keyId: row.id, keyName: row.key_name, apiKey: decryptSecret(row), baseUrl: row.base_url || null, customModel: row.model || null, region: row.region || null });
     } catch (decryptError) {
       await recordFailure(supabase, row.id, decryptError.message);
     }
@@ -444,7 +448,7 @@ export async function pickReplacementModel(provider, apiKey, failedModel) {
 
 /** Connection test that needs NO specific model: lists models with the key (≈zero tokens).
  *  A key that is valid passes even if a particular model (e.g. gemini-2.5-flash) is retired. */
-export async function probeProviderKey(provider, apiKey, baseUrl) {
+export async function probeProviderKey(provider, apiKey, baseUrl, opts = {}) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 8) return { ok: false, error: 'API key tidak valid (kosong/terlalu pendek).' };
   const controller = AbortSignal.timeout(20000);
   const key = apiKey.trim();
@@ -469,21 +473,24 @@ export async function probeProviderKey(provider, apiKey, baseUrl) {
     }
   }
   if (provider === 'azure') {
-    // D-278: Azure Speech — endpoint resmi GET /cognitiveservices/voices/list.
-    // Butuh region; pakai env AZURE_SPEECH_REGION atau default southeastasia.
+    // D-279: kunci Azure Speech bersifat REGIONAL. Coba region yang diisi user,
+    // lalu beberapa region umum, supaya kunci tetap ketemu walau region lupa diisi.
     try {
-      const region = String(process.env.AZURE_SPEECH_REGION || 'southeastasia').trim();
-      const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`, {
-        headers: { Accept: 'application/json', 'Ocp-Apim-Subscription-Key': key },
-        signal: controller,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && Array.isArray(data)) {
-        const id = data.filter((v) => String(v?.Locale || '').startsWith('id-ID')).length;
-        return { ok: true, status: res.status, note: id ? `Kunci valid — ${id} voice Indonesia tersedia.` : 'Kunci valid.' };
+      const {detectAzureRegion, azureErrorMessage} = await import('./azure-region.js');
+      const preferred = String(opts.region || '').trim();
+      const found = await detectAzureRegion(key, preferred, controller);
+      if (found.ok) {
+        const id = found.voices.filter((v) => String(v?.Locale || '').startsWith('id-ID')).length;
+        return {
+          ok: true,
+          status: found.status,
+          region: found.region,
+          note: id
+            ? `Kunci valid — region ${found.region}, ${id} voice Indonesia tersedia.`
+            : `Kunci valid — region ${found.region}.`,
+        };
       }
-      const msg = data?.message || data?.error?.message || `azure error (${res.status})`;
-      return { ok: false, status: res.status, error: msg };
+      return { ok: false, status: found.status, error: azureErrorMessage(found.status, found.message, found.tried) };
     } catch (error) {
       if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
       return { ok: true, status: 0, note: 'Validasi format saja — kunci Azure Speech teruji saat synthesize pertama.' };

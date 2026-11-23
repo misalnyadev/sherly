@@ -143,3 +143,36 @@ test('D-278: hint provider menyebut free tier tanpa subscribe', () => {
     'hint harus menyebut tidak perlu kartu kredit / info pembayaran',
   );
 });
+
+// ---------------------------------------------------------------------------
+// D-279 — Azure harus bisa dipilih di form key + ada field Region
+// ---------------------------------------------------------------------------
+
+test('D-279: dropdown provider form key memuat azure & elevenlabs', () => {
+  const select = html.match(/<select id="keyProvider"[\s\S]*?<\/select>/);
+  assert.ok(select, 'select#keyProvider tidak ditemukan');
+  assert.match(select[0], /value="azure"/, 'opsi azure tidak ada di dropdown provider');
+  assert.match(select[0], /value="elevenlabs"/, 'opsi elevenlabs tidak ada di dropdown provider');
+});
+
+test('D-279: form key punya field Region Azure (opsional)', () => {
+  assert.match(html, /id="keyRegion"/, 'input#keyRegion tidak ditemukan');
+  assert.match(html, /id="keyRegionField"/, 'wadah #keyRegionField tidak ditemukan');
+  // Region harus opsional (bukan required) — dikosongkan = deteksi otomatis.
+  assert.doesNotMatch(html, /id="keyRegion"[^>]*required/, 'Region harus opsional');
+});
+
+test('D-279: server menerima parameter region untuk azure', () => {
+  assert.match(appJs, /probeProviderKey\(provider, api_key\.trim\(\), null, \{ region \}\)/,
+    'route probe tidak mengirim region');
+  assert.match(appJs, /createKey\(req\.supabase, \{[^}]*region/s,
+    'route create key tidak mengirim region');
+});
+
+test('D-279: hint azure tidak lagi mengklaim tanpa info pembayaran', () => {
+  const azureLine = clientJs.split('\n').find((l) => l.includes('azure: {') && l.includes('hint'));
+  assert.ok(azureLine, 'metadata azure tidak ditemukan');
+  assert.doesNotMatch(azureLine, /tanpa info pembayaran/i,
+    'klaim "tanpa info pembayaran" untuk Azure harus dikoreksi');
+  assert.match(azureLine, /kartu kredit/i, 'hint harus menyebut kebutuhan kartu kredit');
+});
