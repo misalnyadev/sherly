@@ -65,7 +65,10 @@ const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize
 const bucket = 'character-references';
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json({ limit: '5mb' }));
+// D-273: batas body JSON dinaikkan ke 12 MB — hasil generate Kie AI 2K/4K
+// dalam bentuk base64 bisa > 5 MB. (File yang lebih besar tetap lewat
+// signed-upload langsung ke Supabase Storage, D-263 — bypass limit ini.)
+app.use(express.json({ limit: '12mb' }));
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 function requireUser(req, res, next) {
