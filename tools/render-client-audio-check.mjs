@@ -149,7 +149,8 @@ const withAudio = await page.evaluate(async (beats) => {
 }, BEATS);
 ok(withAudio.hasAudio === true, 'dengan naskah voice-over -> track audio TERPASANG');
 ok(withAudio.ttsProvider === 'ttsmaker', `provider terbaca dari header (${withAudio.ttsProvider})`);
-ok(withAudio.bytes > noAudio.bytes, `MP4 dengan audio lebih besar (${withAudio.bytes} > ${noAudio.bytes} byte)`);
+// Ukuran file TIDAK dipakai sebagai penanda audio (encoding video beda-beda
+// tiap run) — penanda yang sahih: MP4 punya sample entry audio (lihat bawah).
 
 const file = path.join(OUT, 'beat-sequence-with-voice.mp4');
 fs.writeFileSync(file, Buffer.from(withAudio.b64, 'base64'));
@@ -166,6 +167,18 @@ const audioCodecBox = ['mp4a', 'mp3', 'Opus', 'sowt', 'lpcm', 'raw ']
 ok(hasVideoTrak, 'MP4 punya track video');
 ok(hasAudioTrak, 'MP4 punya kotak track tambahan (trak)');
 ok(Boolean(audioCodecBox), 'MP4 punya sample entry audio (codec: ' + (audioCodecBox || 'tidak ketemu') + ')');
+
+// --- 4) Bandingkan dengan MP4 TANPA audio ---
+// Penanda paling sahih: file tanpa audio tidak punya sample entry audio.
+const fileNoAudio = path.join(OUT, 'beat-sequence-no-voice.mp4');
+fs.writeFileSync(fileNoAudio, Buffer.from(noAudio.b64, 'base64'));
+const mp4No = fs.readFileSync(fileNoAudio);
+const audioCodecNoAudio = ['mp4a', 'mp3', 'Opus', 'sowt', 'lpcm', 'raw ']
+  .find((tag) => mp4No.includes(Buffer.from(tag)));
+ok(
+  !audioCodecNoAudio,
+  'MP4 TANPA voice-over tidak punya sample entry audio (kontrol: ' + (audioCodecNoAudio || 'tidak ada') + ')',
+);
 
 await browser.close();
 server.kill('SIGTERM');
