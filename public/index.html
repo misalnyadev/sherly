@@ -315,6 +315,24 @@ form > .pink-btn + .form-field,
 form > .outline-btn + .form-field{margin-top:14px}
 /* Di dalam .form-grid jarak sudah diatur oleh gap grid (jangan dobel). */
 .form-grid > .form-field + .form-field{margin-top:0}
+/* D-271: panel Pengaturan (Provider Kustom, Bank Suara) memakai blok div
+   biasa — bukan .form-field — sehingga jaraknya tetap nempel. Beri jarak
+   antar blok di dalam panel admin. */
+#customProvidersPanel > * + *,
+#bankSuaraPanel > * + *{margin-top:14px}
+#customProvidersPanel > .form-grid{margin-top:16px}
+#customProvidersPanel #customProviders{margin-bottom:0}
+#customProvidersPanel #customProviders p{margin:0}
+#customProvidersPanel #customProviders .pl-item + .pl-item{margin-top:8px}
+#customProvidersPanel .form-grid .form-field.full{margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+/* Bank Suara: area upload & daftar diberi jarak jelas dari blok sebelumnya. */
+#bankSuaraPanel .bank-suara-actions{margin-top:0;margin-bottom:4px}
+#bankSuaraPanel .bank-upload{margin-top:14px}
+#bankSuaraPanel .bank-upload-drop{gap:12px 14px;align-items:flex-start;flex-direction:column}
+#bankSuaraPanel .bank-upload-note{flex:0 0 auto;min-width:0;max-width:100%}
+#bankSuaraPanel .bank-upload-foot{margin-top:14px;padding-top:12px;border-top:1px dashed #f044a833}
+#bankSuaraPanel .bank-suara-list{margin-top:12px}
+#bankSuaraPanel .bank-suara-empty{padding:26px 8px}
 .pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;border:1px solid transparent}
 .pill.ok{background:#311738;color:#ff9bdc;border-color:#49334e}
 .pill.failing{background:#24142a;color:#ff9bdc;border-color:#5b1f4e}
