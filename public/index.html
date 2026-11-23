@@ -310,6 +310,18 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
   border:1px solid #74436c;border-radius:8px;background:transparent;color:#ffd0ec;
   font-size:10.5px;font-weight:700;text-decoration:none;line-height:1.2;transition:filter .18s}
 .vault-keylink svg{width:12px;height:12px;stroke:currentColor}
+/* D-281: panduan API key ElevenLabs (permission key wajib diaktifkan). */
+.key-guide{margin-top:10px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;
+  background:rgba(255,255,255,.03);font-size:12px;line-height:1.65;color:var(--muted)}
+.key-guide strong{color:var(--text)}
+.key-guide ol{margin:8px 0 0;padding-left:20px}
+.key-guide li{margin-bottom:5px}
+.key-guide a{color:var(--pink);text-decoration:underline}
+.key-guide code{padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--text)}
+.key-guide em{font-style:normal;font-weight:600;color:var(--text)}
+.key-guide-warn{display:block;margin-top:8px;padding:7px 10px;border-radius:7px;
+  border:1px solid #f044a826;background:#f044a810;color:#ff9bdc}
 .vault-keylink:hover{filter:brightness(1.18)}
 .vault-keylink.ghost{border-color:#24344e;color:#a9b8cd}
 .vault-card .vault-keyhint{margin:0;color:var(--muted);font-size:10px;line-height:1.4;opacity:.85}
@@ -2091,7 +2103,7 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
  <form id="keyForm"><input type="hidden" id="keyFormId"><div class="form-grid">
   <div class="form-field"><label>Provider *</label><select id="keyProvider" required><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openrouter">OpenRouter</option><option value="kie">Kie AI</option><option value="ttsforfree">TTSForFree (TTS)</option><option value="elevenlabs">ElevenLabs (TTS)</option><option value="custom" id="ssProviderCustom" hidden>Kustom (key sendiri)</option></select><small id="keyProviderHint"></small><a class="vault-keylink" id="keyProviderLink" href="#" target="_blank" rel="noopener noreferrer" hidden><span>Ambil API key di situs resmi</span></a></div>
   <div class="form-field"><label>Nama grup / label key *</label><input id="keyName" required maxlength="80" list="keyNameSuggestions" placeholder="mis. groq-utama"><small>Pakai label yang sama untuk menggabungkan banyak key ke satu grup.</small><datalist id="keyNameSuggestions"></datalist></div>
-  <div class="form-field full"><label id="keyValueLabel">API Key *</label><input id="keyValue" type="password" required minlength="8" autocomplete="off" placeholder="Tempel API key di sini"><small id="keyValueNote">Minimal 8 karakter. Nilai asli tidak pernah tersimpan di server/frontend.</small></div>
+  <div class="form-field full"><label id="keyValueLabel">API Key *</label><input id="keyValue" type="password" required minlength="8" autocomplete="off" placeholder="Tempel API key di sini"><small id="keyValueNote">Minimal 8 karakter. Nilai asli tidak pernah tersimpan di server/frontend.</small><div class="key-guide" id="keyGuideElevenlabs" hidden><strong>Cara dapat API key ElevenLabs yang bisa dipakai:</strong><ol><li>Buat akun di <a href="https://elevenlabs.io/sign-up" target="_blank" rel="noopener noreferrer">elevenlabs.io</a> (gratis, tanpa kartu kredit).</li><li>Buka <strong>Profile → API Keys</strong> → <strong>+ Create Key</strong>. Salin key yang diawali <code>sk_</code> (hanya ditampilkan sekali) — <strong>jangan</strong> yang "API Key ID".</li><li><strong>WAJIB</strong>: kembali ke daftar key → klik <strong>⋯</strong> → <strong>Edit</strong> → nyalakan permission:<br>&bull; <strong>Text to Speech</strong> → <em>Access</em><br>&bull; <strong>Voices</strong> → <em>Read</em><br>&bull; <strong>User</strong> → <em>Read</em><br><span class="key-guide-warn">Key baru ElevenLabs aktif dengan "Restrict Key" dan semua permission = <em>No Access</em>. Tanpa langkah ini, semua permintaan akan ditolak dengan 401.</span></li><li>Copy ulang key-nya (tidak berubah), paste di bawah, lalu klik <strong>Tes koneksi</strong>.</li></ol></div></div>
   <div class="form-field"><label>Prioritas (kecil = lebih didahulukan)</label><input id="keyPriority" type="number" min="1" max="1000" value="100"></div>
  </div><div class="probe-result" id="probeResult" hidden></div><div class="modal-actions"><button type="button" class="outline-btn" id="probeKeyBtn">Tes koneksi</button><button type="button" class="outline-btn" id="cancelKeyBtn">Batal</button><button type="submit" class="pink-btn" id="saveKeyBtn">Simpan Key</button></div></form>
 </div></div>

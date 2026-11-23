@@ -16,7 +16,7 @@
     openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
     kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
     ttsforfree: { label: 'TTSForFree', keyUrl: 'https://ttsforfree.com/en/profile/', docsUrl: 'https://ttsforfree.com/en/docs/', hint: 'Cadangan utama TTS bahasa Indonesia. Gratis 30.000 karakter/bulan (reset bulanan), API key tanpa kartu kredit (daftar lewat Google). 44 voice Indonesia (Ardi, Gadis, id-ID Standard/WaveNet). Paket gratis hanya untuk penggunaan pribadi — bukan komersial.' },
-    elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech', hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. Paket gratis tanpa hak komersial — wajib atribusi.' },
+    elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech', hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. ⚠️ WAJIB: setelah membuat key, edit key-nya → nyalakan permission "Text to Speech: Access" + "Voices: Read" + "User: Read" (key baru default-nya semua No Access). Paste API KEY PENUH berawalan "sk_", bukan "API Key ID". Paket gratis tanpa hak komersial — wajib atribusi.' },
   };
   let providerInfo = FALLBACK_PROVIDER_INFO;
   const infoOf = (p) => providerInfo[p] || FALLBACK_PROVIDER_INFO[p] || null;
@@ -318,6 +318,9 @@
     const p = $('keyProvider')?.value;
     const info = infoOf(p);
     if (hint) hint.textContent = info && info.hint ? info.hint : '';
+    // D-281: panduan langkah demi langkah khusus ElevenLabs (permission key).
+    const elGuide = $('keyGuideElevenlabs');
+    if (elGuide) elGuide.hidden = p !== 'elevenlabs';
     if (!link) return;
     if (info && info.keyUrl) {
       link.href = info.keyUrl;

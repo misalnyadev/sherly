@@ -180,9 +180,15 @@ test('D-276: adapter TTS menangani error kuota sebagai TtsQuotaError', () => {
     /export class TtsQuotaError/.test(providersJs),
     'harus ada kelas TtsQuotaError',
   );
+  // D-281: pesan error ElevenLabs kini dibungkus elevenlabsErrorMessage,
+  // jadi polapengecekannya berubah — yang penting tetap TtsQuotaError.
   assert.ok(
-    /res\.status === 429 \|\| isQuotaError\(msg\)\) throw new TtsQuotaError\(msg\)/.test(providersJs),
+    /throw new TtsQuotaError\(msg\)/.test(providersJs),
     'error kuota harus jadi TtsQuotaError',
+  );
+  assert.ok(
+    /res\.status === 429/.test(providersJs),
+    '429 harus memicu TtsQuotaError',
   );
 });
 
