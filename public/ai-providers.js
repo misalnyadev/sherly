@@ -14,7 +14,7 @@
     gemini: { label: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs', hint: 'Tier gratis tersedia di Google AI Studio.' },
     openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
     kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
-    azure: { label: 'Azure Speech', keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech', docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support', hint: 'Cadangan TTS bahasa Indonesia. Paket F0 gratis 500.000 karakter/bulan tanpa info pembayaran. Voice native Indonesia.' },
+    azure: { label: 'Azure Speech', keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech', docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support', hint: 'Cadangan TTS bahasa Indonesia. Paket F0 gratis 500.000 karakter/bulan (reset bulanan). BUTUH kartu kredit/debit untuk verifikasi akun Azure + region wajib diisi (dari Keys and Endpoint). Voice native Indonesia (Ardi, Gadis).' },
     elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech', hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. Paket gratis tanpa hak komersial — wajib atribusi.' },
   };
   let providerInfo = FALLBACK_PROVIDER_INFO;
@@ -317,6 +317,9 @@
     const p = $('keyProvider')?.value;
     const info = infoOf(p);
     if (hint) hint.textContent = info && info.hint ? info.hint : '';
+    // D-279: field Region Azure hanya tampil untuk provider azure.
+    const regionField = $('keyRegionField');
+    if (regionField) regionField.hidden = p !== 'azure';
     if (!link) return;
     if (info && info.keyUrl) {
       link.href = info.keyUrl;
@@ -342,6 +345,9 @@
     $('keyValue').parentElement.style.display = mode === 'edit' ? 'none' : 'flex';
     $('keyPriority').value = item?.priority ?? 100;
     $('keyPriority').parentElement.style.display = mode === 'rotate' ? 'none' : 'flex';
+    // D-279: region Azure (opsional — dikosongkan = deteksi otomatis).
+    const regionInput = $('keyRegion');
+    if (regionInput) regionInput.value = item?.region || addPrefill?.region || '';
     $('saveKeyBtn').textContent = mode === 'rotate' ? 'Simpan Key Baru' : 'Simpan Key';
     $('probeKeyBtn').style.display = mode === 'edit' ? 'none' : '';
     resetProbeResult();
@@ -372,7 +378,8 @@
     btn.textContent = 'Menguji…';
     showProbeResult('pending', 'Menguji koneksi ke ' + (PROVIDER_LABEL[provider] || provider) + '…');
     try {
-      const data = await api('/api/ai-keys/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, api_key }) });
+      const region = ($('keyRegion')?.value || '').trim();
+      const data = await api('/api/ai-keys/probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, api_key, region }) });
       if (data.probe?.ok) showProbeResult('ok', '✓ Koneksi OK — key valid. Aman disimpan dengan “Simpan Key”.');
       else showProbeResult('err', '✗ Key DITOLAK. ' + (PROVIDER_LABEL[provider] || provider) + ' menjawab: ' + (data.probe?.error || 'error tidak diketahui'));
     } catch (error) {
@@ -391,6 +398,8 @@
     try {
       if (keyModalMode === 'add') {
         const body = { provider: $('keyProvider').value, key_name: $('keyName').value.trim(), api_key: $('keyValue').value.trim(), priority: Number($('keyPriority').value) || 100 };
+        const region = ($('keyRegion')?.value || '').trim();
+        if (region) body.region = region;
         const data = await api('/api/ai-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         toast('Key tersimpan — koneksi valid (grup “' + body.key_name + '”).');
       } else if (keyModalMode === 'edit') {

@@ -10,6 +10,9 @@ import {
   synthesizeElevenLabs,
   isQuotaError, ttsProviderOrder, ttsFallbackChain, sanitizeTtsText,
 } from '../server/tts-providers.js';
+import {
+  normalizeAzureRegion, azureRegionCandidates, azureErrorMessage, detectAzureRegion,
+} from '../server/azure-region.js';
 
 const AUDIO_BYTES = new Uint8Array([0xff, 0xfb, 0x90, 0x00, 0x00, 0x01, 0x02, 0x03]);
 const calls = [];
@@ -104,7 +107,41 @@ ok(
   'tidak ada URL sementara — audio langsung di body',
 );
 
-// 6) Sintesis ElevenLabs.
+// 6) D-279 — Region Azure: normalisasi + kandidat + pesan error.
+ok(normalizeAzureRegion('  EastUS ') === 'eastus', 'normalisasi region benar');
+ok(normalizeAzureRegion('bad region!!') === '', 'region tidak valid dikosongkan');
+ok(azureRegionCandidates('eastus')[0] === 'eastus', 'region pilihan user jadi kandidat pertama');
+ok(new Set(azureRegionCandidates('eastus')).size === azureRegionCandidates('eastus').length, 'kandidat tanpa duplikat');
+ok(azureRegionCandidates('').length >= 10, 'daftar kandidat region cukup panjang');
+const err401 = azureErrorMessage(401, 'invalid subscription key', ['eastus', 'westus']);
+ok(/region/i.test(err401) && /eastus/.test(err401), 'pesan 401 menyebut region yang dicoba');
+ok(/Keys and Endpoint/.test(err401), 'pesan 401 memberi cara memperbaiki');
+
+// 7) D-279 — Deteksi region otomatis: region keliru harus ketemu region benar.
+{
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    if (u.includes('westeurope.') && u.includes('voices/list')) {
+      return new Response(JSON.stringify([{ShortName: 'id-ID-GadisNeural', Locale: 'id-ID'}]), {
+        status: 200, headers: {'Content-Type': 'application/json'},
+      });
+    }
+    if (u.includes('voices/list')) {
+      return new Response(JSON.stringify({message: 'wrong API endpoint'}), {
+        status: 401, headers: {'Content-Type': 'application/json'},
+      });
+    }
+    return saved(url);
+  };
+  const found = await detectAzureRegion('probe-key', 'southeastasia');
+  ok(found.ok === true, 'deteksi region otomatis berhasil');
+  ok(found.region === 'westeurope', `region terdeteksi = ${found.region}`);
+  globalThis.fetch = saved;
+}
+
+// 8) Sintesis ElevenLabs.
 const elOut = await synthesizeElevenLabs({
   apiKey: 'probe-key',
   text: 'Halo, ini uji suara bahasa Indonesia.',

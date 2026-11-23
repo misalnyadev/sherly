@@ -10,7 +10,7 @@
 --                    pay-as-you-go → dibuang.
 --     - Voicemaker → developer API pay-as-you-go, free plan web tidak membawa
 --                    API → dibuang.
---   Yang dipakai (dua-duanya punya free tier bulanan, tanpa info pembayaran):
+--   Yang dipakai (dua-duanya punya free tier bulanan tanpa subscription):
 --     - Azure Speech (F0) → 500.000 karakter/bulan, reset tiap bulan.
 --     - ElevenLabs (Free) → 10.000 kredit/bulan (~10 menit audio), API key
 --       tanpa kartu kredit. ⚠️ free plan tanpa hak komersial.
@@ -48,3 +48,8 @@ on conflict (id) do update
       file_size_limit = 8388608,
       allowed_mime_types = array['audio/wav','audio/mpeg','audio/x-wav','audio/mp3','audio/ogg',
                                 'audio/aac','audio/opus','audio/flac','audio/pcm','audio/x-pcm'];
+
+-- D-279: kolom region per-key untuk Azure Speech.
+-- Kunci Azure Speech hanya valid di region tempat resource dibuat, jadi
+-- region ikut disimpan per-key (opsional — kalau kosong, dideteksi otomatis).
+alter table public.ai_provider_keys add column if not exists region text;

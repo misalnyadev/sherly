@@ -1055,11 +1055,12 @@ async function synthesizeTtsFallbackChain(req, text) {
     const keys = [];
     if (vaultConfigured()) {
       const usable = await getUsableKeys(req.supabase, provider).catch(() => []);
-      for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
+      // D-279: region Azure disimpan per-key (kunci Azure bersifat regional).
+      for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId, region: vk.region || ''});
     }
     const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
       : process.env.ELEVENLABS_API_KEY;
-    if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null});
+    if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null, region: process.env.AZURE_SPEECH_REGION || ''});
     if (!keys.length) continue;
 
     for (const k of keys) {
@@ -1070,7 +1071,7 @@ async function synthesizeTtsFallbackChain(req, text) {
             apiKey: k.apiKey,
             text,
             voice: process.env.AZURE_TTS_VOICE || 'id-ID-ArdiNeural',
-            region: process.env.AZURE_SPEECH_REGION || '',
+            region: k.region || process.env.AZURE_SPEECH_REGION || '',
           });
         } else {
           out = await synthesizeElevenLabs({
@@ -1785,8 +1786,9 @@ const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message ||
  *
  * Rantai cadangan (semua WAJIB punya API key sendiri dari user):
  *   1. **Azure Speech** → native `id-ID` (Indonesia), REST SSML, free tier F0
- *      500.000 karakter/bulan, reset bulanan, tanpa info pembayaran, hak
- *      komersial termasuk. → fallback utama.
+ *      500.000 karakter/bulan, reset bulanan, hak komersial termasuk. →
+ *      fallback utama. ⚠️ BUTUH kartu kredit/debit untuk verifikasi akun Azure
+ *      + region WAJIB diisi (kunci Azure bersifat regional).
  *   2. **ElevenLabs**   → model `eleven_multilingual_v2` (29 bahasa termasuk
  *      Indonesia), free tier 10.000 kredit/bulan tanpa kartu kredit. ⚠️ free
  *      plan tanpa hak komersial + wajib atribusi → fallback terakhir.
@@ -2487,11 +2489,11 @@ app.get('/api/ai-keys', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
   }
 }));
 app.post('/api/ai-keys', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => {
-  const { provider, key_name, api_key, priority } = req.body || {};
+  const { provider, key_name, api_key, priority, region } = req.body || {};
   if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
   const { data: userData, error: userError } = await req.supabase.auth.getUser(req.accessToken);
   if (userError || !userData?.user) throw Object.assign(new Error('Sesi login tidak valid. Silakan login kembali.'), { status: 401 });
-  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority, user_id: userData.user.id });
+  const { key, probe } = await createKey(req.supabase, { provider, key_name, api_key, priority, region, user_id: userData.user.id });
   return { key, probe };
 }));
 app.put('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => ({ key: await updateKey(req.supabase, req.params.id, req.body || {}) })));
@@ -2503,10 +2505,11 @@ app.post('/api/ai-keys/:id/rotate', requireUser, requireAdmin, requireVault, wra
 }));
 app.post('/api/ai-keys/:id/test', requireUser, requireAdmin, requireVault, wrapKeyRoute(async (req) => ({ probe: await testKey(req.supabase, req.params.id) })));
 app.post('/api/ai-keys/probe', requireUser, requireAdmin, wrapKeyRoute(async (req) => {
-  const { provider, api_key } = req.body || {};
+  const { provider, api_key, region } = req.body || {};
   if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider tidak dikenal.'), { status: 400 });
   if (typeof api_key !== 'string' || api_key.trim().length < 8) throw Object.assign(new Error('API key wajib diisi (minimal 8 karakter).'), { status: 400 });
-  return { probe: await probeProviderKey(provider, api_key.trim()) };
+  // D-279: region Azure Speech dikirim dari form (opsional — kosong = deteksi otomatis).
+  return { probe: await probeProviderKey(provider, api_key.trim(), null, { region }) };
 }));
 app.delete('/api/ai-keys/:id', requireUser, requireAdmin, wrapKeyRoute(async (req) => { await deleteKey(req.supabase, req.params.id); return { ok: true }; }));
 

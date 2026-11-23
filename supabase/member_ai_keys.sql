@@ -11,6 +11,8 @@ alter table public.ai_provider_keys add constraint ai_provider_keys_provider_che
 -- 2) Kolom khusus provider kustom (base URL + model; NULL untuk provider standar)
 alter table public.ai_provider_keys add column if not exists base_url text;
 alter table public.ai_provider_keys add column if not exists model text;
+-- D-279: region per-key untuk Azure Speech (opsional, deteksi otomatis kalau kosong).
+alter table public.ai_provider_keys add column if not exists region text;
 
 -- 3) Percakapan dengan provider kustom + Kie AI (check lama hanya 3 provider)
 alter table public.ai_conversations drop constraint if exists ai_conversations_provider_check;
