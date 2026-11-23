@@ -10,7 +10,8 @@ import { sanitizeTraits, sanitizeVoiceProfile, parseVisionTraits, visionTraitsPr
 import { supabaseConfigured, createPublicClient, createUserClient } from './supabase.js';
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
-import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint } from './tts.js';
+import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint, audioDurationFromBase64 } from './tts.js';
+import { lipsyncErrorMessage } from './lipsync-errors.js';
 // D-276 / D-277 / D-278 / D-280: cadangan TTS bahasa Indonesia (dipakai kalau
 // kuota Gemini habis). Hanya provider dengan free tier tanpa subscription
 // DAN tanpa kartu kredit:
@@ -32,7 +33,7 @@ import {
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
   STUDIO_BUCKET, createAssetUploadTicket, registerUploadedAsset,
 } from './studio-assets.js';
-import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUploadBase64 } from './ai.js';
+import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUploadBase64, createKieImageTask, pollKieImageTask } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
@@ -606,45 +607,51 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
       imageSpec = spec;
     }
     let image, usedProvider = 'gemini', fallbackUsed = false;
+    // D-283: Kie image generation jadi ASYNC (dua fase) supaya tidak kena
+    // batas 60 detik Vercel (maxDuration). Kalau mesin = Kie -> buat task &
+    // balas SEKETIKA, lalu client poll GET /api/ai/image/:id.
+    // Gemini & provider custom tetap sinkron (keduanya < 30 detik).
+    if (wantsKie && !customId && imageSpec) {
+      const useMulti = references.length > 0;
+      const finalPrompt = useMulti ? multiPrompt : prompt;
+      const refs = useMulti ? references : (reference ? [reference] : []);
+      const created = await createKieImageTask(finalPrompt, aspect, auth, {
+        model: imageSpec.model.id, resolution: imageSpec.resolution, references: refs,
+      });
+      const taskMeta = {
+        kind: 'image',
+        prompt: finalPrompt,
+        aspect,
+        resolution: imageSpec.resolution,
+        model: imageSpec.model.id,
+        modelLabel: imageSpec.model.label,
+        characters: mentions.map((m) => ({ name: m.name, token: m.token })),
+        assets: charLabels.map((l) => ({ name: l.name, kind: l.kind })),
+        scene_reference: !!sceneImage,
+        sourcePrompt: prompt,
+      };
+      const task = await createVideoTask(req.supabase, req.user.id, {
+        provider: 'kie', model: imageSpec.model.id, taskId: created.taskId,
+        prompt: finalPrompt, meta: taskMeta,
+      });
+      // D-283: balas SEKETIKA — client yang menunggu & polling.
+      return res.status(202).json({
+        ok: true, async: true, id: task.id, task_id: created.taskId,
+        provider: 'kie', model: imageSpec.model.id, model_label: imageSpec.model.label,
+        resolution: imageSpec.resolution, aspect,
+        characters: taskMeta.characters, assets: taskMeta.assets,
+        scene_reference: taskMeta.scene_reference,
+      });
+    }
     if (references.length) {
-      // D-239: Kie (Nano Banana 2/Pro, GPT Image 2, Seedream 5.0, FLUX 2 Pro) sudah
-      // mendukung multi-referensi -> pakai mesin yang user pilih, bukan dipaksa Gemini.
-      // Kalau Kie gagal -> fallback ke Gemini (konsistensi karakter tetap terjaga).
-      if (wantsKie && !customId) {
-        try {
-          image = await generateImageWithKie(multiPrompt, aspect, auth, {
-            model: imageSpec.model.id, resolution: imageSpec.resolution, references,
-          });
-          usedProvider = 'kie';
-        } catch (kieErr) {
-          image = await generateImageWithGemini(multiPrompt, auth, { aspect, references });
-          usedProvider = 'gemini';
-          fallbackUsed = true;
-        }
-      } else {
-        // Gemini / provider custom: multi-referensi hanya didukung Gemini.
-        if (provider !== 'gemini') fallbackUsed = true;
-        image = await generateImageWithGemini(multiPrompt, auth, { aspect, references }); usedProvider = 'gemini';
-      }
+      // Gemini / provider custom: multi-referensi hanya didukung Gemini.
+      if (provider !== 'gemini') fallbackUsed = true;
+      image = await generateImageWithGemini(multiPrompt, auth, { aspect, references }); usedProvider = 'gemini';
     }
     else if (reference) {
-      // D-98: img2img dengan foto referensi — D-239: Kie juga mendukung (1 referensi).
-      if (wantsKie && !customId) {
-        try {
-          image = await generateImageWithKie(prompt, aspect, auth, {
-            model: imageSpec.model.id, resolution: imageSpec.resolution, reference,
-          });
-          usedProvider = 'kie';
-        } catch (kieErr) {
-          image = await generateImageWithGemini(prompt, auth, { aspect, reference });
-          usedProvider = 'gemini';
-          fallbackUsed = true;
-        }
-      } else {
-        // D-98: img2img hanya didukung Gemini — mesin lain dialihkan otomatis.
-        if (provider !== 'gemini') fallbackUsed = true;
-        image = await generateImageWithGemini(prompt, auth, { aspect, reference }); usedProvider = 'gemini';
-      }
+      // D-98: img2img hanya didukung Gemini — mesin lain dialihkan otomatis.
+      if (provider !== 'gemini') fallbackUsed = true;
+      image = await generateImageWithGemini(prompt, aspect, auth, { aspect, reference }); usedProvider = 'gemini';
     }
     else if (customId) {
       const customs = await listCustomProviders(req.supabase, req.user.id, true);
@@ -652,27 +659,18 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
       if (!cp) return res.status(404).json({ ok: false, error: 'Provider kustom tidak ditemukan.' });
       image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name;
     }
-    else if (provider === 'kie') {
-      image = await generateImageWithKie(prompt, aspect, auth, { model: imageSpec.model.id, resolution: imageSpec.resolution });
-      usedProvider = 'kie';
-    }
-    else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; }
+    else if (provider === 'gemini') { image = await generateImageWithGemini(prompt, aspect, auth, { aspect }); usedProvider = 'gemini'; }
     else {
-      // Otomatis: Kie dulu (mesin produksi) -> provider kustom -> Gemini.
+      // Otomatis (tanpa Kie): provider kustom dulu -> Gemini.
+      // D-283: jalur Kie sudah ditangani di atas (async, return duluan).
+      let done = false;
       try {
-        image = await generateImageWithKie(prompt, aspect, auth, { model: imageSpec.model.id, resolution: imageSpec.resolution });
-        usedProvider = 'kie';
-      }
-      catch {
-        let done = false;
-        try {
-          const customs = await listCustomProviders(req.supabase, req.user.id, true);
-          for (const cp of customs) {
-            try { image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name; done = true; break; } catch {}
-          }
-        } catch {}
-        if (!done) { image = await generateImageWithGemini(prompt, auth, { aspect }); usedProvider = 'gemini'; fallbackUsed = true; }
-      }
+        const customs = await listCustomProviders(req.supabase, req.user.id, true);
+        for (const cp of customs) {
+          try { image = await generateImageWithCustom(cp, prompt, aspect); usedProvider = cp.name; done = true; break; } catch {}
+        }
+      } catch {}
+      if (!done) { image = await generateImageWithGemini(prompt, aspect, auth, { aspect }); usedProvider = 'gemini'; fallbackUsed = true; }
     }
     res.json({
       ok: true, provider: usedProvider, fallback_used: fallbackUsed, image,
@@ -687,6 +685,88 @@ app.post('/api/ai/image', requireUser, requireAdmin, async (req, res) => {
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
     res.status(status).json({ ok: false, error: error.message || 'Generator gambar gagal.' });
+  }
+});
+
+// ===== D-283: Poll task GAMBAR (fase 2 dari generate gambar async) =====
+//
+// Kenapa perlu: Vercel serverless punya maxDuration 60 detik. Generate gambar
+// Kie (terutama landscape 16:9 2K/4K) sering lebih dari itu -> fungsi
+// dibunuh -> client tidak dapat respons -> foto HILANG, tidak masuk galeri.
+//
+// Pola async dua fase (sama seperti video):
+//   1. POST /api/ai/image     -> buat task Kie, balas { id, task_id } seketika.
+//   2. GET  /api/ai/image/:id -> poll Kie; kalau selesai: unduh gambar ->
+//      simpan sebagai aset -> balas signed URL-nya.
+app.get('/api/ai/image/:id', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const task = await getVideoTask(req.supabase, req.user.id, req.params.id);
+    if (!task) return res.status(404).json({ ok: false, error: 'Task gambar tidak ditemukan.' });
+    const taskMeta = task.meta && typeof task.meta === 'object' ? task.meta : {};
+    // Hanya task gambar yang boleh lewat endpoint ini.
+    if (taskMeta.kind !== 'image') {
+      return res.status(400).json({ ok: false, error: 'Task ini bukan task gambar.' });
+    }
+    if (task.status === 'success' && task.asset_id) {
+      const asset = await getAsset(req.supabase, req.user.id, task.asset_id);
+      const signed = await signedAsset(asset, req.supabase);
+      return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
+    }
+    if (task.status === 'fail') {
+      return res.json({ ok: true, status: 'fail', progress: task.progress, error: task.error || 'Generator gambar gagal.' });
+    }
+    if (!task.task_id) {
+      return res.json({ ok: true, status: task.status, progress: task.progress });
+    }
+    const auth = { supabase: req.supabase, accessToken: req.accessToken };
+    const info = await pollKieImageTask(auth, task.task_id);
+    const state = String(info.state || '').toLowerCase();
+    const progress = Math.max(Number(info.progress) || 0, task.progress || 0);
+    if ((state === 'success' || state === 'completed') && info.resultUrls.length) {
+      // Unduh gambar hasil -> simpan sebagai aset -> tautkan ke task.
+      const imgRes = await fetch(info.resultUrls[0], { signal: AbortSignal.timeout(120000) });
+      if (!imgRes.ok) throw new Error('Gagal mengunduh hasil gambar (' + imgRes.status + ').');
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      const mime = (imgRes.headers.get('content-type') || 'image/png').split(';')[0];
+      const cleanMime = ASSET_MIME.includes(mime) ? mime : 'image/png';
+      // D-283: dimensi dari header file (server-side, akurat) — penting supaya
+      // foto LANDSCAPE 16:9 masuk baris "Horizontal", bukan dianggap vertikal.
+      const dim = detectDimensions(buffer, cleanMime);
+      const width = dim?.width || undefined;
+      const height = dim?.height || undefined;
+      const asset = await saveAsset(req.supabase, req.user.id, {
+        buffer, mimetype: cleanMime,
+        originalname: 'studio-image-' + Date.now() + '.png',
+      }, {
+        kind: 'generate',
+        prompt: taskMeta.sourcePrompt || task.prompt,
+        meta: {
+          model: taskMeta.model || task.model,
+          modelLabel: taskMeta.modelLabel || null,
+          aspect: taskMeta.aspect || null,
+          resolution: taskMeta.resolution || null,
+          characters: taskMeta.characters || [],
+          assets: taskMeta.assets || [],
+          scene_reference: !!taskMeta.scene_reference,
+          width: width || null,
+          height: height || null,
+        },
+        width, height,
+      });
+      await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'success', progress: 100, asset_id: asset.id });
+      const signed = await signedAsset(asset, req.supabase);
+      return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
+    }
+    if (state === 'fail' || state === 'failed' || state === 'error') {
+      const message = info.error || 'Generator gambar gagal.';
+      await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
+      return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
+    }
+    await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'running', progress });
+    return res.json({ ok: true, status: 'running', progress });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 502;
+    res.status(status).json({ ok: false, error: error.message || 'Gagal mengecek status gambar.' });
   }
 });
 
@@ -1384,11 +1464,23 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     }
     if (!audioBase64) return res.status(400).json({ ok: false, error: 'Audio tidak tersedia.' });
     // Batas durasi audio InfiniteTalk = 15 detik.
-    const approxSeconds = Math.max(1, Math.round((audioBase64.length * 0.75) / 16000));
+    // D-283: durasi dibaca PERSIS dari header WAV._estimasi lama
+    // (base64*0.75/16000) menganggap PCM 16 kHz, padahal Gemini TTS
+    // menghasilkan WAV 24 kHz -> durasi dihitung ~3x lebih besar ->
+    // naskah 4-5 detik dianggap 12-15 detik -> DITOLAK "terlalu panjang"
+    // sebelum pernah sampai ke Kie.
+    const approxSeconds = audioDurationFromBase64(audioBase64);
     // D-245: batas durasi audio mengikuti model (InfiniteTalk 15 dtk, LTX 2.5 A2V 20 dtk).
     const maxSeconds = lipsyncModel.maxSeconds || LIPSYNC_MAX_SECONDS;
     if (approxSeconds > maxSeconds + 3) {
-      return res.status(400).json({ ok: false, error: 'Audio terlalu panjang untuk ' + lipsyncModel.label + ' (maks ' + maxSeconds + ' detik).' });
+      // D-283: sebut durasi ASLI supaya user tahu Persis harus memangkas berapa.
+      return res.status(400).json({
+        ok: false,
+        error: 'Naskah terlalu panjang untuk ' + lipsyncModel.label + ' — durasi suara '
+          + approxSeconds + ' detik, maksimal ' + maxSeconds + ' detik. '
+          + 'Pendekkan naskah jadi ±' + Math.max(3, Math.floor(maxSeconds * 13 / 10))
+          + ' karakter.',
+      });
     }
     // D-246: sebagian model butuh durasi minimum (OmniHuman 2.0 >= 4 detik).
     const minSeconds = lipsyncModel.minSeconds || 1;
@@ -1477,6 +1569,10 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
         characterId: character.id, characterName: character.name, audioSource,
         imageFrom, sceneHint,
         duration: Math.min(approxSeconds, maxSeconds),
+        // D-283: simpan batas & durasi asli supaya pesan error bisa menyebut
+        // angka yang tepat (mis. "maksimal 15 detik").
+        maxSeconds,
+        audioSeconds: approxSeconds,
       },
     });
     res.status(202).json({
@@ -1486,7 +1582,14 @@ app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
     });
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 502;
-    res.status(status).json({ ok: false, error: error.message || 'Generator lipsync gagal.' });
+    // D-283: error lipsync diterjemahkan jadi pesan yang bisa ditindaklanjuti.
+    res.status(status).json({
+      ok: false,
+      error: lipsyncErrorMessage(error, {
+        model: (typeof lipsyncModel === 'object' && lipsyncModel?.label) || 'InfiniteTalk',
+        maxSeconds,
+      }),
+    });
   }
 });
 
@@ -1538,7 +1641,16 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
       return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
     }
     if (state === 'fail' || state === 'failed' || state === 'error') {
-      const message = info.error || 'Generator video gagal.';
+      // D-283: task LIPSYNC & VIDEO pakai penerjemah error yang sama supaya
+      // user tidak lagi lihat "ConnectException: Operation timed out" tanpa
+      // tahu harus melakukan apa.
+      const isLipsync = taskMeta.kind === 'lipsync';
+      const message = isLipsync
+        ? lipsyncErrorMessage(info.error || 'Generator karakter bicara gagal.', {
+          model: taskMeta.modelLabel || 'InfiniteTalk',
+          maxSeconds: Number(taskMeta.maxSeconds) || LIPSYNC_MAX_SECONDS,
+        })
+        : (info.error || 'Generator video gagal.');
       await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
       return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
     }

@@ -288,7 +288,11 @@ async function kieImageToImage(apiKey, base, prompt, reference, aspect, model, o
   const data = await res.json().catch(() => ({}));
   const taskId = data?.data?.taskId || data?.taskId;
   if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task img2img.');
-  const deadline = Date.now() + 55000; // di bawah maxDuration 60 dtk Vercel
+  // D-283: deadline diperpendek jadi 40 detik supaya jalur sinkron lama
+  // (dipakai board AK Talent) selesai dengan error TERLIHAT, bukan dibunuh
+  // platform di detik ke-60 (hasil hilang tanpa pesan apa pun).
+  // Jalur utama Studio sudah ASYNC (createKieImageTask) -> tidak terpengaruh.
+  const deadline = Date.now() + 40000;
   let delay = 3000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, delay));
@@ -512,6 +516,117 @@ export async function pollKieVideoTask(auth = {}, taskId) {
  * (createTask + poll) supaya konsisten dengan video.
  * Env: KIE_API_KEY, KIE_API_BASE.
  */
+/**
+ * D-283: BUAT task gambar Kie (createTask) TANPA menunggu hasilnya.
+ *
+ * Kenapa dihapus dari jalur sinkron:
+ * - Vercel serverless `maxDuration` = 60 detik (lihat api/index.js + vercel.json).
+ * - Poll Kie di dalam satu request bisa memakan 55 detik + createTask + upload
+ *   referensi -> TOTAL bisa > 60 detik -> fungsi dibunuh platform -> client
+ *   tidak pernah dapat respons -> FOTO HILANG TOTAL (tidak masuk galeri).
+ * - Efeknya paling kena pada gambar LANDSCAPE 16:9: Kie menghitung ukuran
+ *   dari sisi PENDEK, jadi 16:9 2K = 3641x2048 (7,5 MP) — jauh lebih besar
+ *   & jauh lebih lambat daripada 9:16 2K (2,4 MP).
+ *
+ * Solusi: pola ASYNC dua fase seperti video (D-200):
+ *   1. POST /api/ai/image  -> buat task Kie, simpan taskId, LANGSUNG balas.
+ *   2. GET  /api/ai/image/:id -> poll Kie; kalau selesai, unduh + simpan
+ *      sebagai aset & balas signed URL-nya.
+ *
+ * @returns {{taskId: string, model: string, provider: string}}
+ */
+export async function createKieImageTask(prompt, aspect, auth = {}, opts = {}) {
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
+  }
+  const { base } = kieConfig();
+  const spec = findImageModel(opts.model) || findImageModel(DEFAULT_IMAGE_MODEL);
+  const referenceList = (Array.isArray(opts.references) ? opts.references
+    : opts.reference ? [opts.reference] : [])
+    .filter((r) => r && typeof r.data === 'string' && r.data.length > 8);
+  const reference = referenceList.length ? referenceList : null;
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      let input = null;
+      if (reference) {
+        // img2img: referensi di-upload dulu ke file host Kie.
+        const refUrls = [];
+        for (const r of reference.slice(0, spec.maxReferences || 1)) {
+          refUrls.push(await kieUploadReference(attempt.apiKey, r.mime, r.data));
+        }
+        input = buildImageInput(spec.schema, {
+          prompt, aspect: aspect || '1:1',
+          resolution: opts.resolution || spec.defaultResolution,
+        }, refUrls);
+      } else {
+        input = buildImageInput(spec.schema, {
+          prompt, aspect: aspect || '1:1',
+          resolution: opts.resolution || spec.defaultResolution,
+        }, []);
+      }
+      const res = await fetch(base + '/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
+        body: JSON.stringify({ model: spec.id, input }),
+        signal: AbortSignal.timeout(30000),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const t = res ? String(await res.text()).slice(0, 200) : 'tidak terjangkau';
+        throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
+      }
+      const data = await res.json().catch(() => ({}));
+      if (Number(data?.code) && Number(data.code) !== 200) {
+        throw new Error('Kie menolak task gambar: ' + String(data?.msg || ('kode ' + data.code)));
+      }
+      const taskId = data?.data?.taskId || data?.taskId;
+      if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task gambar.');
+      return { taskId: String(taskId), model: spec.id, provider: 'kie' };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Generator Kie gagal.'), { status: 502 });
+}
+
+/**
+ * D-283: poll task gambar Kie (satu kali, tanpa menunggu) -> status + URL hasil.
+ * Mirip pollKieVideoTask, tapi untuk task gambar.
+ */
+export async function pollKieImageTask(auth = {}, taskId) {
+  if (!taskId) throw Object.assign(new Error('Task gambar tidak ditemukan.'), { status: 400 });
+  const attempts = await kieAttempts(auth);
+  if (!attempts.length) {
+    throw Object.assign(new Error('Kunci Kie AI belum tersedia.'), { status: 503 });
+  }
+  const { base } = kieConfig();
+  const id = encodeURIComponent(String(taskId));
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + id, {
+        headers: { Authorization: 'Bearer ' + attempt.apiKey },
+        signal: AbortSignal.timeout(20000),
+      }).catch(() => null);
+      if (!qr || !qr.ok) { lastError = new Error('Gagal mengecek status task gambar.'); continue; }
+      const qd = await qr.json().catch(() => ({}));
+      const d = qd?.data || {};
+      const state = String(d.state || d.status || '').toLowerCase();
+      let rj = d.resultJson || d.result;
+      if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch { /* bukan JSON */ } }
+      const urls = rj?.resultUrls || rj?.data?.result_urls || rj?.data?.resultUrls
+        || d.resultUrls || (Array.isArray(rj?.data?.origin_urls) ? rj.data.origin_urls : null);
+      const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+      return {
+        state: state || 'running',
+        progress: Number(d.progress) || 0,
+        resultUrls: list,
+        error: d.failMsg || d.failCode || null,
+      };
+    } catch (error) { lastError = error; }
+  }
+  throw Object.assign(lastError || new Error('Gagal mengecek status task gambar.'), { status: 502 });
+}
+
 export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {}) {
   const attempts = await kieAttempts(auth);
   if (!attempts.length) {
@@ -562,7 +677,9 @@ export async function generateImageWithKie(prompt, aspect, auth = {}, opts = {})
  * Return { mime, data } (base64).
  */
 async function kiePollImageTask(apiKey, base, taskId) {
-  const deadline = Date.now() + 55000;
+  // D-283: sama seperti jalur img2img — 40 detik, biar error terlihat
+  // daripada request dibunuh platform (foto hilang tanpa pesan).
+  const deadline = Date.now() + 40000;
   let delay = 3000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, delay));

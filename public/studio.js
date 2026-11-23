@@ -272,6 +272,9 @@
   let mentionAt = -1;       // posisi karakter "@" yang memicu dropdown
   let videoTask = null;     // D-198: task video yang sedang berjalan
   let videoTimer = null;
+  // D-283: task GAMBAR yang sedang berjalan (generate Kie async dua fase).
+  let imageTask = null;
+  let imageTimer = null;
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
   // D-276 / D-278: daftar suara TTS (Gemini + cadangan bahasa Indonesia:
@@ -3017,6 +3020,21 @@
       const r = await fetch('/api/ai/image', { method: 'POST', headers: await authHeaders(), body: JSON.stringify(reqBody) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Generator gambar gagal.');
+      // D-283: Kie sekarang ASYNC (dua fase) supaya tidak kena batas 60 dtk
+      // Vercel — dulu satu request menunggu Kie sampai selesai, sehingga
+      // foto landscape 16:9 (2K/4K, jauh lebih besar & lambat) HILANG TOTAL
+      // dan tidak pernah masuk galeri.
+      // Gemini & provider custom tetap sinkron (balas langsung di `image`).
+      if (d.async && d.id) {
+        // Skeleton dilepas di sini — hasilnya nanti masuk lewat pollImage()
+        // (aset sudah disimpan server, tinggal ditampilkan di galeri).
+        skel.remove();
+        imageTask = { id: d.id, progress: 0, status: 'running', tries: 0 };
+        renderImageProgress();
+        window.toast?.('Gambar sedang dibuat… (±20-60 detik)');
+        pollImage();
+        return;
+      }
       // D-198: hasil foto langsung disimpan sebagai aset & tampil di galeri.
       const meta = {
         aspect: state.aspect,
@@ -3041,6 +3059,75 @@
       window.toast?.(e.message || 'Generator gambar gagal.');
     } finally {
       btn.disabled = false; btn.innerHTML = icon('image-plus') + ' Buat';
+    }
+  }
+
+  // ===== D-283: progres & polling generate GAMBAR (mode async Kie) =====
+  //
+  // Fokus: gambar yang dibuat lewat Kie (yang balannya 202 + id task) perlu
+  // ditunggu dari sisi browser, bukan dari server. Server cukup balas cepat
+  // "task dibuat", lalu browser poll GET /api/ai/image/:id tiap 3 detik.
+  function renderImageProgress() {
+    const box = $('stImageProgress');
+    if (!box) return;
+    if (!imageTask) { box.classList.add('st-hidden'); box.setAttribute('data-progress', '0'); return; }
+    box.classList.remove('st-hidden');
+    const pct = Math.max(2, Math.min(99, Number(imageTask.progress) || 0));
+    box.setAttribute('data-progress', String(pct));
+    box.innerHTML = '<div class="st-vp-bar"><span style="width:' + pct + '%"></span></div>'
+      + '<p>' + icon('image-plus') + ' <b>Gambar sedang dibuat</b> — ' + pct + '%'
+      + (imageTask.status === 'fail' ? ' · gagal: ' + esc(imageTask.error || '') : '')
+      + '<button type="button" class="st-vp-cancel" id="stImageCancel">Batalkan</button></p>';
+    $('stImageCancel')?.addEventListener('click', () => {
+      if (imageTimer) clearTimeout(imageTimer);
+      imageTimer = null; imageTask = null;
+      renderImageProgress();
+      resetGenerateButtons();
+      window.toast?.('Pemantauan gambar dibatalkan.');
+    });
+  }
+  async function pollImage() {
+    if (!imageTask) return;
+    try {
+      const r = await fetch('/api/ai/image/' + imageTask.id, { headers: await authHeaders() });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Gagal mengecek status gambar.');
+      imageTask.progress = d.progress || imageTask.progress;
+      imageTask.status = d.status || 'running';
+      if (d.status === 'success') {
+        // D-283: aset sudah disimpan server (yang unduh & catat dimensinya),
+        // jadi di sini cukup masukkan ke galeri.
+        if (d.asset) { assets.unshift(d.asset); renderGallery(); }
+        imageTask = null;
+        renderImageProgress();
+        resetGenerateButtons();
+        window.toast?.('Gambar jadi ✨ — tersimpan di galeri aset.');
+        return;
+      }
+      if (d.status === 'fail') {
+        imageTask.error = d.error || 'Generator gambar gagal.';
+        imageTask = null;
+        renderImageProgress();
+        resetGenerateButtons();
+        window.toast?.(d.error || 'Generator gambar gagal.');
+        return;
+      }
+      renderImageProgress();
+      imageTimer = setTimeout(pollImage, 3000);
+    } catch (e) {
+      // D-283: koneksi ke server kadang putus sesaat (reload, jaringan).
+      // Beri chance 3x sebelum menyerah — gambar yang sedang dibuat tidak
+      // hilang karena satu request poll gagal.
+      imageTask.tries = (imageTask.tries || 0) + 1;
+      if (imageTask.tries < 3) {
+        renderImageProgress();
+        imageTimer = setTimeout(pollImage, 4000);
+        return;
+      }
+      imageTask = null;
+      renderImageProgress();
+      resetGenerateButtons();
+      window.toast?.(e.message || 'Gagal mengecek status gambar.');
     }
   }
 
@@ -3369,7 +3456,10 @@
       const modelLabel = model ? model.label : '';
       // Durasi lipsync mengikuti naskah, bukan diset di awal.
       // Baris 1: durasi (otomatis dari naskah). Baris 2: provider + model + sumber gambar.
+      // D-283: tandai kalau naskah sudah melebihi batas durasi model.
+      const overLimit = est > max + 3;
       meta.textContent = (est ? '±' + est + ' dtk (maks ' + max + ')' : 'maks ' + max + ' dtk')
+        + (overLimit ? ' — terlalu panjang, pendekkan naskah' : '')
         + '\n' + provLabel + ' · ' + modelLabel.replace(' Fast A2V', '') + ' · ' + src;
       meta.classList.toggle('st-lipsync-meta-warn', est > max);
     }
@@ -3410,6 +3500,19 @@
     const minSec = lipsyncModel()?.minSeconds || 1;
     if (minSec > 1 && estimateLipsyncSeconds(script) < minSec) {
       window.toast?.('Naskah terlalu pendek — minimal ' + minSec + ' detik untuk model ini.');
+      ta?.focus();
+      return;
+    }
+    // D-283: cek batas maksimum SEBELUM kirim, biar user tahu persis harus
+    // memangkas berapa (server juga akan menolak, tapi dengan pesan yang
+    // jauh lebih jelas).
+    const lipModel = lipsyncModel();
+    const maxSec = lipModel?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
+    const estSec = estimateLipsyncSeconds(script);
+    if (estSec > maxSec + 3) {
+      window.toast?.('Naskah terlalu panjang — ±' + estSec + ' detik, maksimal ' + maxSec
+        + ' detik untuk ' + (lipModel?.label || 'model ini')
+        + '. Pendekkan jadi ±' + Math.max(3, Math.floor(maxSec * 13 / 10)) + ' karakter.');
       ta?.focus();
       return;
     }
@@ -3628,6 +3731,8 @@
       // (dropdown di atas pemicu). Anak langsung composer supaya posisinya stabil.
       + '<div class="st-pop st-pop-settings" id="stPop-settings"></div>'
       + '<div class="st-video-progress st-hidden" id="stVideoProgress" data-progress="0"></div>'
+      // D-283: progres generate GAMBAR (mode async Kie, dua fase).
+      + '<div class="st-video-progress st-hidden" id="stImageProgress" data-progress="0"></div>'
       // D-249: progres render Motion Graphics (baris sendiri).
       + '<div class="st-video-progress st-hidden" id="stMotionProgress" data-progress="0"></div>'
       + '<input type="file" id="stUploadInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" hidden>'
