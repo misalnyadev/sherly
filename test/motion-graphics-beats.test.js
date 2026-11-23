@@ -507,6 +507,56 @@ test('D-276: client renderer bisa mux audio TTS ke video', () => {
   );
 });
 
+test('D-276: AudioBufferSource WAJIB dapat codec (regresi "Invalid audio codec undefined")', () => {
+  // Tanpa codec, mediabunny melempar:
+  // "Invalid audio codec 'undefined'. Must be one of: aac, opus, mp3, ...".
+  const block = /new mediabunny\.AudioBufferSource\(\{[\s\S]*?\}\)/.exec(clientMg);
+  assert.ok(block, 'harus ada pemanggilan AudioBufferSource');
+  assert.ok(
+    /codec:\s*audioCodec/.test(block[0]),
+    'AudioBufferSource harus menerima codec',
+  );
+  // Codec harus dicek dulu (tidak semua browser bisa encode AAC/MP3).
+  assert.ok(
+    /getFirstEncodableAudioCodec/.test(clientMg),
+    'harus mengecek codec yang bisa di-encode browser',
+  );
+  for (const codec of ['aac', 'mp3', 'opus']) {
+    assert.ok(
+      clientMg.includes(`'${codec}'`),
+      `urutan codec harus memuat ${codec}`,
+    );
+  }
+});
+
+test('D-276: AudioBufferSource diisi dengan audio lalu ditutup', () => {
+  // Tanpa .add(audioBuffer) tracknya kosong; tanpa .close() finalize bisa macet.
+  assert.ok(
+    /audioSourceToFeed\.add\(audioBuffer\)/.test(clientMg),
+    'audio harus dikirim ke source',
+  );
+  assert.ok(
+    /audioSourceToFeed\.close\(\)/.test(clientMg),
+    'source audio harus ditutup',
+  );
+});
+
+test('D-276: ada jalur decode cadangan kalau Web Audio gagal', () => {
+  assert.ok(
+    clientMg.includes('export async function decodeTtsAudio'),
+    'harus ada helper decode TTS dengan jalur cadangan',
+  );
+  assert.ok(
+    /AudioBufferSink/.test(clientMg),
+    'jalur cadangan pakai AudioBufferSink mediabunny',
+  );
+  // Kegagalan decode tidak boleh menggagalkan render.
+  assert.ok(
+    /opts\.onWarning\?\.\('Audio voice-over tidak bisa di-decode/.test(clientMg),
+    'kegagalan decode harus memberi peringatan, bukan error',
+  );
+});
+
 test('D-276: server render Motion Graphics menyintesis voice-over', () => {
   assert.ok(
     appJs.includes('synthesizeVoiceoverForMotion'),

@@ -171,6 +171,37 @@ export async function decodeAudioBuffer(buffer, sampleRate = 44100) {
   }
 }
 
+/**
+ * D-276 — Decode audio (WAV/MP3) jadi AudioBuffer.
+ *
+ * Jalur 1: Web Audio (OfflineAudioContext.decodeAudioData) — paling luas
+ * didukung, otomatis resample ke sample rate context.
+ * Jalur 2: mediabunny (mp3/webm input) — cadangan kalau Web Audio tidak
+ * bisa decode format tertentu (mis. MP3 di browser lama).
+ *
+ * @param {ArrayBuffer} buffer
+ * @param {number} sampleRate
+ * @returns {Promise<AudioBuffer|null>}
+ */
+export async function decodeTtsAudio(buffer, sampleRate = 44100) {
+  const viaWebAudio = await decodeAudioBuffer(buffer, sampleRate);
+  if (viaWebAudio) return viaWebAudio;
+  try {
+    const mediabunny = await import('./vendor/mediabunny.min.mjs');
+    if (typeof mediabunny.Input !== 'function') return null;
+    const input = new mediabunny.Input({
+      formats: mediabunny.ALL_FORMATS,
+      source: new mediabunny.BlobSource(new Blob([buffer])),
+    });
+    const track = await input.getPrimaryAudioTrack();
+    if (!track) return null;
+    const sink = new mediabunny.AudioBufferSink(track);
+    return await sink.getAudioBuffer();
+  } catch {
+    return null;
+  }
+}
+
 /** Template Motion Graphics (harus sama dengan server/motion-graphics.js). */
 export const MG_CLIENT_TEMPLATES = [
   {
@@ -1009,9 +1040,13 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
         headers: opts.headers || {},
       });
       if (tts) {
-        audioBuffer = await decodeAudioBuffer(tts.buffer);
+        audioBuffer = await decodeTtsAudio(tts.buffer);
         ttsProvider = tts.provider;
-        if (!audioBuffer) opts.onProgress?.({progress: 3, phase: 'voiceover'});
+        if (!audioBuffer) {
+          // Audio tidak bisa di-decode -> video tetap jadi tanpa suara.
+          opts.onWarning?.('Audio voice-over tidak bisa di-decode di browser ini.');
+          opts.onProgress?.({progress: 3, phase: 'voiceover'});
+        }
       }
     } catch (error) {
       // Voice-over gagal -> video tetap dirender (tanpa suara), jangan gagal
@@ -1021,13 +1056,37 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
     }
   }
 
+  let audioSourceToFeed = null;
   if (audioBuffer && typeof mediabunny.AudioBufferSource === 'function') {
-    const audioSource = new mediabunny.AudioBufferSource({
-      buffer: audioBuffer,
-      // Awal sedikit Mundur supaya suara masuk pas di frame pertama.
-      timestamp: 0,
-    });
-    output.addAudioTrack(audioSource);
+    // D-276: track audio — codec WAJIB diisi (tanpa itu mediabunny melempar
+    // "Invalid audio codec undefined"). AAC = standar MP4, tapi tidak semua
+    // browser bisa encode konfigurasi itu -> cek dulu lewat
+    // getFirstEncodableAudioCodec, lalu jatuh ke MP3.
+    // Urutan codec: AAC (standar MP4, paling universal) -> MP3 -> Opus
+    // -> PCM. Tidak semua browser bisa encode AAC/MP3 (mis. Chromium
+    // headless di sandbox ini cuma punya Opus + PCM), jadi WAJIB dicek dulu.
+    let audioCodec = 'aac';
+    try {
+      if (typeof mediabunny.getFirstEncodableAudioCodec === 'function') {
+        const found = await mediabunny.getFirstEncodableAudioCodec(['aac', 'mp3', 'opus', 'pcm-s16']);
+        if (found) audioCodec = found;
+      }
+    } catch { /* biarkan default aac */ }
+    if (audioCodec === 'pcm-s16') {
+      // PCM tidak lossy -> file lebih besar, tapi selalu bisa di-encode.
+      opts.onWarning?.('Codec audio fallback PCM (tidak terkompresi).');
+    }
+    try {
+      const audioSource = new mediabunny.AudioBufferSource({
+        codec: audioCodec,
+        bitrate: mediabunny.QUALITY_HIGH ?? 128e3,
+      });
+      output.addAudioTrack(audioSource);
+      audioSourceToFeed = audioSource;
+    } catch (error) {
+      // Codec tidak didukung -> video tetap jadi tanpa suara.
+      opts.onWarning?.('Codec audio tidak didukung: ' + (error?.message || 'tidak diketahui'));
+    }
   }
 
   // Output harus started sebelum sample bisa masuk.
@@ -1056,6 +1115,16 @@ export async function renderMotionGraphicsOnClient(req, opts = {}) {
       // Yield supaya UI tetap responsif.
       await new Promise((r) => setTimeout(r, 0));
     }
+  }
+
+  // D-276: kirim voice-over ke track audio (AudioBufferSource.add), lalu tutup.
+  if (audioSourceToFeed && audioBuffer) {
+    try {
+      await audioSourceToFeed.add(audioBuffer);
+    } catch (error) {
+      opts.onWarning?.('Gagal menyisipkan audio: ' + (error?.message || 'tidak diketahui'));
+    }
+    try { await audioSourceToFeed.close(); } catch { /* abaikan */ }
   }
 
   opts.onProgress?.({progress: 90, phase: 'encoding'});

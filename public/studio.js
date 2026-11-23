@@ -3162,6 +3162,10 @@
           motionTask.phase = phase;
           renderMotionProgress();
         },
+        // D-276: beri tahu user kalau voice-over gagal (video tetap jadi).
+        onWarning: (message) => {
+          window.toast?.(message);
+        },
       });
       // Upload hasil render sebagai aset.
       // D-263: video besar (> 4 MB) TIDAK boleh lewat server Vercel (batas
@@ -3176,6 +3180,9 @@
         width: result.width,
         height: result.height,
         renderer: 'client',
+        // D-276: info voice-over (buat dipakai galeri / catatan).
+        hasAudio: Boolean(result.hasAudio),
+        ttsProvider: result.ttsProvider || null,
       };
       let mgAsset = null;
       if (result.blob.size >= 4 * 1024 * 1024) {
@@ -3206,7 +3213,11 @@
       motionTask = null;
       renderMotionProgress();
       resetGenerateButtons();
-      window.toast?.('Video Motion Graphics jadi ✨');
+      // D-276: sebut voice-over kalau memang ada, biar user tahu
+      // videonya-suara (atau tidak).
+      window.toast?.(result?.hasAudio
+        ? 'Video Motion Graphics jadi ✨ (dengan voice-over ' + (result.ttsProvider || 'TTS') + ')'
+        : 'Video Motion Graphics jadi ✨');
     } catch (e) {
       // D-252: kalau gagal kirim ke galeri, jangan hilangkan hasil render —
       // simpan ke perangkat user supaya videonya tetap bisa dipakai.
