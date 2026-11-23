@@ -566,9 +566,14 @@ test('D-276: server render Motion Graphics menyintesis voice-over', () => {
     appJs.includes('audioSrc'),
     'props render harus membawa URL audio untuk Remotion',
   );
+  // D-277: jalur cadangan pakai rantai provider (bukan satu fungsi per provider).
   assert.ok(
-    appJs.includes('ttsmakerKey'),
-    'route harus punya ambil key TTSMaker',
+    appJs.includes('synthesizeTtsFallbackChain'),
+    'route harus punya rantai cadangan TTS (Soniox → Voicemaker → TTSMaker)',
+  );
+  assert.ok(
+    appJs.includes('synthesizeSoniox'),
+    'route harus punya jalur Soniox',
   );
 });
 
@@ -580,5 +585,44 @@ test('D-276: komposisi Remotion BeatSequence bisa menempel audio', () => {
   assert.ok(
     /<Audio src=\{audioSrc\}/.test(beatSeqTsx),
     'komposisi harus merender elemen Audio',
+  );
+});
+
+// ===== D-277: migrasi provider cadangan TTS =====
+
+test('D-277: migrasi DB mengizinkan provider soniox & voicemaker', () => {
+  const mig = readFileSync(
+    path.resolve('supabase/ai_provider_soniox_constraint_migration.sql'),
+    'utf8',
+  );
+  assert.ok(
+    /ai_provider_keys_provider_check[\s\S]*'soniox'[\s\S]*'voicemaker'/.test(mig),
+    'constraint ai_provider_keys harus menerima soniox + voicemaker',
+  );
+  assert.ok(
+    /ai_provider_settings_provider_check[\s\S]*'soniox'[\s\S]*'voicemaker'/.test(mig),
+    'constraint ai_provider_settings harus menerima soniox + voicemaker',
+  );
+  // Bucket Bank Suara tetap PRIVATE (bukan publik) + RLS.
+  assert.ok(
+    /'tts-clips',\s*'tts-clips',\s*false/.test(mig),
+    'bucket tts-clips harus tetap private',
+  );
+  // Soniox bisa kirim aac/opus/flac/pcm -> MIME baru harus diizinkan.
+  for (const mime of ['audio/mpeg', 'audio/aac', 'audio/opus', 'audio/flac', 'audio/pcm']) {
+    assert.ok(new RegExp(mime.replace('/', '\\/')).test(mig), `MIME ${mime} harus diizinkan`);
+  }
+  // ai_conversations TIDAK boleh ikut berubah (TTS bukan provider chat).
+  assert.ok(
+    !/ai_conversations_provider_check/.test(mig),
+    'ai_conversations tidak boleh diubah (TTS bukan provider chat)',
+  );
+});
+
+test('D-277: setup SQL mengizinkan provider cadangan TTS baru', () => {
+  const memberSql = readFileSync(path.resolve('supabase/member_ai_keys.sql'), 'utf8');
+  assert.ok(
+    /provider in \([^)]*'soniox'[^)]*'voicemaker'/.test(memberSql),
+    'setup SQL harus menerima soniox + voicemaker',
   );
 });

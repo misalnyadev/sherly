@@ -147,7 +147,9 @@ export async function fetchTtsAudio(text, opts = {}) {
   return {
     buffer,
     mimeType: res.headers.get('Content-Type') || 'audio/wav',
-    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'ttsmaker' : 'gemini'),
+    // D-277: fallback chain = Soniox → Voicemaker → TTSMaker (server yang
+    // memilih; header ini hanya untuk menampilkan provider di toast/metadata).
+    provider: res.headers.get('X-TTS-Provider') || (res.headers.get('X-TTS-Source') === 'fallback' ? 'soniox' : 'gemini'),
   };
 }
 

@@ -6,7 +6,7 @@
 -- 1) Izinkan provider kustom + Kie AI (D-271)
 alter table public.ai_provider_keys drop constraint if exists ai_provider_keys_provider_check;
 alter table public.ai_provider_keys add constraint ai_provider_keys_provider_check
-  check (provider in ('groq','gemini','openrouter','kie','custom','ttsmaker'));  -- D-276: +ttsmaker
+  check (provider in ('groq','gemini','openrouter','kie','custom','soniox','voicemaker','ttsmaker'));  -- D-276/D-277: +ttsmaker +soniox +voicemaker
 
 -- 2) Kolom khusus provider kustom (base URL + model; NULL untuk provider standar)
 alter table public.ai_provider_keys add column if not exists base_url text;

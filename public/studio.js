@@ -274,9 +274,14 @@
   let videoTimer = null;
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
-  // D-276: daftar suara TTS (Gemini + cadangan TTSMaker bahasa Indonesia).
+  // D-276 / D-277: daftar suara TTS (Gemini + cadangan bahasa Indonesia:
+  // Soniox → Voicemaker → TTSMaker).
   let ttsVoices = [];
-  let ttsProviders = {ttsmaker: {configured: false, quota: null}};
+  let ttsProviders = {
+    soniox: {configured: false},
+    voicemaker: {configured: false},
+    ttsmaker: {configured: false, quota: null},
+  };
   let ttsVoicesLoaded = false;
   let motionAvailable = false;   // renderer siap di server?
   let motionStatus = 'idle';     // idle | ready | installing | missing | failed
@@ -1614,11 +1619,12 @@
     }
   }
   /**
-   * D-276: muat daftar suara TTS.
+   * D-276 / D-277: muat daftar suara TTS.
    *
-   * Server mengembalikan suara Gemini (default) + suara cadangan TTSMaker
-   * (native Indonesia & Sunda). Kalau kuota Gemini habis, server otomatis
-   * memakai suara cadangan — jadi user tidak perlu memilih.
+   * Server mengembalikan suara Gemini (default) + suara cadangan bahasa
+   * Indonesia: Soniox (fallback #1) → Voicemaker (#2) → TTSMaker (#3).
+   * Kalau kuota Gemini habis, server otomatis memakai suara cadangan —
+   * jadi user tidak perlu memilih.
    */
   async function loadTtsVoices() {
     try {
@@ -1626,56 +1632,65 @@
       if (!r.ok) return;
       const d = await r.json();
       if (Array.isArray(d?.voices)) ttsVoices = d.voices;
-      if (d?.ttsmaker) ttsProviders.ttsmaker = d.ttsmaker;
+      for (const p of ['soniox', 'voicemaker', 'ttsmaker']) {
+        if (d?.[p]) ttsProviders[p] = d[p];
+      }
       ttsVoicesLoaded = true;
       renderMotionBar();
     } catch { /* diamkan — kolom suara tetap kosong */ }
   }
 
   /**
-   * D-276: opsi suara TTS untuk dropdown.
-   * Dikelompokkan per provider: Gemini (default) lalu TTSMaker (cadangan
-   * bahasa Indonesia + Sunda).
+   * D-276 / D-277: opsi suara TTS untuk dropdown.
+   * Dikelompokkan per provider: Gemini (default) lalu cadangan bahasa Indonesia
+   * (Soniox → Voicemaker → TTSMaker).
    */
   function ttsVoiceOptions() {
     const gemini = ttsVoices.filter((v) => v.provider === 'gemini');
-    const ttsmaker = ttsVoices.filter((v) => v.provider === 'ttsmaker');
     const out = [];
     if (gemini.length) {
       out.push({value: '', label: '— Gemini (bawaan) —'});
       for (const v of gemini) out.push({value: v.id, label: 'Gemini · ' + v.label});
     }
-    if (ttsmaker.length) {
-      out.push({value: '', label: '— TTSMaker (bahasa Indonesia) —'});
-      for (const v of ttsmaker) {
+    for (const provider of ['soniox', 'voicemaker', 'ttsmaker']) {
+      const group = ttsVoices.filter((v) => v.provider === provider);
+      if (!group.length) continue;
+      const name = provider === 'soniox' ? 'Soniox' : provider === 'voicemaker' ? 'Voicemaker' : 'TTSMaker';
+      out.push({value: '', label: '— ' + name + ' (bahasa Indonesia) —'});
+      for (const v of group) {
         const tag = v.language === 'Bahasa Sunda' ? 'Sunda' : 'Indonesia';
-        out.push({value: String(v.id), label: 'TTSMaker · ' + v.label + ' (' + tag + ')'});
+        out.push({value: String(v.id), label: name + ' · ' + v.label + ' (' + tag + ')'});
       }
     }
     return out;
   }
 
   /**
-   * D-276: catatan status engine TTS.
-   * Kalau engine cadangan belum dikonfigurasi, user diberi tahu Supaya
+   * D-276 / D-277: catatan status engine TTS cadangan.
+   * Kalau engine cadangan belum dikonfigurasi, user diberi tahu supaya
    * suara tetap jalan saat kuota Gemini habis.
    */
   function ttsProviderNote() {
-    const cfg = ttsProviders?.ttsmaker;
-    if (!cfg?.configured) {
+    const ready = [];
+    for (const provider of ['soniox', 'voicemaker', 'ttsmaker']) {
+      if (ttsProviders?.[provider]?.configured) ready.push(provider);
+    }
+    if (!ready.length) {
       return '<small class="st-motion-tts-note st-motion-tts-note-warn">'
         + icon('bell')
-        + ' <span>Engine cadangan TTSMaker belum aktif. Tambah key-nya di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
+        + ' <span>Engine cadangan TTS belum aktif. Tambahkan key <b>Soniox</b> (Utama), <b>Voicemaker</b>, atau <b>TTSMaker</b> di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
         + '</small>';
     }
-    const q = cfg.quota;
-    if (q && q.left) {
+    const NAME = {soniox: 'Soniox', voicemaker: 'Voicemaker', ttsmaker: 'TTSMaker'};
+    const list = ready.map((p) => NAME[p] || p).join(', ');
+    const quota = ready.find((p) => ttsProviders?.[p]?.quota?.left);
+    if (quota) {
       return '<small class="st-motion-tts-note">' + icon('audio-lines')
-        + ' <span>Cadangan TTSMaker siap — sisa <b>' + Number(q.left).toLocaleString('id-ID') + '</b> karakter.</span>'
+        + ' <span>Cadangan TTS siap (<b>' + list + '</b>) — sisa <b>' + Number(ttsProviders[quota].quota.left).toLocaleString('id-ID') + '</b> karakter.</span>'
         + '</small>';
     }
     return '<small class="st-motion-tts-note">' + icon('audio-lines')
-      + ' <span>Cadangan TTSMaker siap dipakai kalau kuota Gemini habis.</span>'
+      + ' <span>Cadangan TTS siap dipakai kalau kuota Gemini habis (<b>' + list + '</b>).</span>'
       + '</small>';
   }
 

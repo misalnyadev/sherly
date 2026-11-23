@@ -2,7 +2,7 @@
 // RLS scopes every row to the owning admin; ciphertext never leaves this module toward HTTP responses.
 import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
-export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsmaker'];
+export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'soniox', 'voicemaker', 'ttsmaker'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
 // D-270: tautan resmi untuk mendapatkan API key tiap provider (dibuka di tab baru).
 // Satu sumber kebenaran supaya label, link, dan catatan gratisnya sinkron.
@@ -42,14 +42,31 @@ export const PROVIDER_INFO = {
     docsUrl: '',
     hint: 'Provider sendiri yang kompatibel OpenAI — masukkan base URL + key di form Tambah Provider.',
   },
-  // D-276: TTSMaker = cadangan TTS yang support bahasa Indonesia (native +
-  // Sunda). Dipakai kalau kuota Gemini habis.
+  // D-277: Soniox = cadangan TTS bahasa Indonesia (native id + Sunda).
+  // Pay-as-you-go (~$0,70/jam audio), TANPA langganan wajib.
+  soniox: {
+    label: 'Soniox',
+    keyUrl: 'https://console.soniox.com/',
+    signupUrl: 'https://console.soniox.com/signup',
+    docsUrl: 'https://docs.soniox.com/tts',
+    hint: 'Cadangan TTS bahasa Indonesia. Bayar sesuai pemakaian (~$0,70/jam audio), tidak perlu langganan. Native Indonesia + Sunda.',
+  },
+  // D-277: Voicemaker = cadangan TTS bahasa Indonesia (native id-ID + Jawa).
+  voicemaker: {
+    label: 'Voicemaker',
+    keyUrl: 'https://developer.voicemaker.in/',
+    signupUrl: 'https://developer.voicemaker.in/user/subscribe',
+    docsUrl: 'https://developer.voicemaker.in/apidocs/',
+    hint: 'Cadangan TTS bahasa Indonesia. Ambil token di developer.voicemaker.in. Native Indonesia + Jawa, plus voice cloning.',
+  },
+  // D-276: TTSMaker = cadangan TTS opsional (native Indonesia + Sunda).
+  // D-277: turun ke urutan terakhir karena API resmi WAJIB paket Pro/Studio.
   ttsmaker: {
     label: 'TTSMaker',
     keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list',
     signupUrl: 'https://pro.ttsmaker.com/pricing',
     docsUrl: 'https://ttsmaker.com/developer-api-docs',
-    hint: 'Cadangan TTS bahasa Indonesia. Butuh paket Pro/Studio (API resmi tidak tersedia di Lite/Gratis). Voice native Indonesia + Sunda.',
+    hint: 'Cadangan opsional. WAJIB paket Pro/Studio — tanpa subscribe tidak ada API key. Voice native Indonesia + Sunda.',
   },
 };
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
@@ -77,7 +94,9 @@ export const PROVIDER_CAPABILITIES = {
   gemini: ['chat', 'vision', 'tts'],
   openrouter: ['chat', 'vision'],
   kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'],
-  // D-276: TTSMaker hanya untuk TTS (cadangan kalau kuota Gemini habis).
+  // D-277: cadangan TTS bahasa Indonesia (dipakai kalau kuota Gemini habis).
+  soniox: ['tts'],
+  voicemaker: ['tts'],
   ttsmaker: ['tts'],
 };
 const PROBE_LABEL = {
@@ -85,6 +104,8 @@ const PROBE_LABEL = {
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
   kie: 'Kie AI',
+  soniox: 'Soniox',
+  voicemaker: 'Voicemaker',
   ttsmaker: 'TTSMaker',
 };
 
@@ -179,7 +200,7 @@ export async function listKeyGroups(supabase) {
 }
 
 export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
-  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, atau ttsmaker.'), { status: 400 });
+  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, soniox, voicemaker, atau ttsmaker.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
@@ -398,6 +419,9 @@ export async function fetchProviderModels(provider, apiKey, baseUrl) {
   if (provider === 'kie') throw new Error('Daftar model Kie dikelola lewat katalog Studio (pilihan model di komposer).');
   // D-276: TTSMaker tidak punya konsep "model" — yang dipilih adalah voice.
   if (provider === 'ttsmaker') throw new Error('TTSMaker memakai pilihan voice, bukan model. Daftar voice Indonesia diambil dari API get-voice-list.');
+  // D-277: Soniox & Voicemaker juga berbasis voice, bukan model bebas-pilih.
+  if (provider === 'soniox') throw new Error('Soniox memakai pilihan voice, bukan model. Daftar voice diambil dari API tts-models.');
+  if (provider === 'voicemaker') throw new Error('Voicemaker memakai pilihan voice, bukan model. Daftar voice diambil dari API voice/list.');
   if (provider === 'gemini') {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey }, signal: controller });
     const data = await res.json().catch(() => ({}));
@@ -454,6 +478,46 @@ export async function probeProviderKey(provider, apiKey, baseUrl) {
       if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
       // Jaringan/API tidak terjangkau — jangan blokir penyimpanan key yang valid.
       return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
+    }
+  }
+  if (provider === 'soniox') {
+    // D-277: Soniox — endpoint resmi GET /v1/tts-models (butuh Bearer key).
+    try {
+      const res = await fetch('https://api.soniox.com/v1/tts-models', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${key}` },
+        signal: controller,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const count = Array.isArray(data?.models) ? data.models.length : 0;
+        return { ok: true, status: res.status, note: count ? `Kunci valid — ${count} model TTS tersedia.` : 'Kunci valid.' };
+      }
+      const msg = data?.error_message || data?.message || `soniox error (${res.status})`;
+      return { ok: false, status: res.status, error: msg };
+    } catch (error) {
+      if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci Soniox teruji saat synthesize pertama.' };
+    }
+  }
+  if (provider === 'voicemaker') {
+    // D-277: Voicemaker — endpoint resmi POST /api/v1/voice/list.
+    try {
+      const res = await fetch('https://developer.voicemaker.in/api/v1/voice/list', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({language: 'id-ID'}),
+        signal: controller,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success !== false) {
+        const count = Array.isArray(data?.data?.voices_list) ? data.data.voices_list.length : 0;
+        return { ok: true, status: res.status, note: count ? `Kunci valid — ${count} voice Indonesia tersedia.` : 'Kunci valid.' };
+      }
+      const msg = data?.message || data?.msg || `voicemaker error (${res.status})`;
+      return { ok: false, status: res.status, error: msg };
+    } catch (error) {
+      if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci Voicemaker teruji saat synthesize pertama.' };
     }
   }
   if (provider === 'ttsmaker') {

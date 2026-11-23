@@ -92,3 +92,38 @@ test('D-270: kartu provider tidak melebar di HP (grid minmax(0,1fr))', () => {
   assert.ok(html.includes('.vault-model-row{flex-wrap:wrap}'),
     'baris model harus boleh wrap di HP');
 });
+
+// ===== D-277: provider cadangan TTS =====
+
+test('D-277: provider cadangan TTS punya link resmi + capability TTS', () => {
+  for (const p of ['soniox', 'voicemaker', 'ttsmaker']) {
+    const info = PROVIDER_INFO[p];
+    assert.ok(info, `provider ${p} harus punya info`);
+    assert.ok(/^https:\/\//.test(info.keyUrl), `provider ${p} punya keyUrl https`);
+    assert.ok(/^https:\/\//.test(info.docsUrl), `provider ${p} punya docsUrl https`);
+  }
+  assert.equal(PROVIDER_INFO.soniox.keyUrl, 'https://console.soniox.com/');
+  assert.equal(PROVIDER_INFO.voicemaker.keyUrl, 'https://developer.voicemaker.in/');
+  assert.equal(PROVIDER_INFO.ttsmaker.keyUrl, 'https://pro.ttsmaker.com/api-platform/api-key-list');
+});
+
+test('D-277: provider cadangan TTS terdaftar di PROVIDERS & capability tts', () => {
+  for (const p of ['soniox', 'voicemaker', 'ttsmaker']) {
+    assert.ok(PROVIDERS.includes(p), `provider ${p} harus terdaftar`);
+  }
+  assert.ok(clientJs.includes("'soniox'"), 'client harus mengenali soniox');
+  assert.ok(clientJs.includes("'voicemaker'"), 'client harus mengenali voicemaker');
+  assert.ok(clientJs.includes("soniox: ['tts']"), 'capability fallback client harus punya soniox: tts');
+  assert.ok(clientJs.includes("voicemaker: ['tts']"), 'capability fallback client harus punya voicemaker: tts');
+});
+
+test('D-277: TTSMaker diberi tahu bahwa wajib subscription', () => {
+  assert.ok(
+    /Pro\/Studio/i.test(PROVIDER_INFO.ttsmaker.hint),
+    'hint TTSMaker harus menyebut paket Pro/Studio (tanpa subscribe tidak ada API key)',
+  );
+  assert.ok(
+    /Pro\/Studio/i.test(clientJs),
+    'client juga harus menampilkan catatan subscription TTSMaker',
+  );
+});

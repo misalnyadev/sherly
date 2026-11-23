@@ -3,8 +3,8 @@
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  // D-276: ttsmaker = cadangan TTS bahasa Indonesia (native + Sunda).
-  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsmaker'];
+  // D-276 / D-277: soniox + voicemaker + ttsmaker = cadangan TTS bahasa Indonesia.
+  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'soniox', 'voicemaker', 'ttsmaker'];
   const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
   // D-270: tautan resmi untuk mendapatkan API key (server jadi sumber utama;
   // fallback di bawah supaya UI tetap hidup bila payload lama).
@@ -13,7 +13,9 @@
     gemini: { label: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs', hint: 'Tier gratis tersedia di Google AI Studio.' },
     openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
     kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
-    ttsmaker: { label: 'TTSMaker', keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list', docsUrl: 'https://ttsmaker.com/developer-api-docs', hint: 'Cadangan TTS bahasa Indonesia. Butuh paket Pro/Studio (API resmi tidak tersedia di Lite/Gratis).' },
+    soniox: { label: 'Soniox', keyUrl: 'https://console.soniox.com/', docsUrl: 'https://docs.soniox.com/tts', hint: 'Cadangan TTS bahasa Indonesia. Bayar sesuai pemakaian (~$0,70/jam audio), tidak perlu langganan. Native Indonesia + Sunda.' },
+    voicemaker: { label: 'Voicemaker', keyUrl: 'https://developer.voicemaker.in/', docsUrl: 'https://developer.voicemaker.in/apidocs/', hint: 'Cadangan TTS bahasa Indonesia. Ambil token di developer.voicemaker.in. Native Indonesia + Jawa.' },
+    ttsmaker: { label: 'TTSMaker', keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list', docsUrl: 'https://ttsmaker.com/developer-api-docs', hint: 'Cadangan opsional. WAJIB paket Pro/Studio — tanpa subscribe tidak ada API key.' },
   };
   let providerInfo = FALLBACK_PROVIDER_INFO;
   const infoOf = (p) => providerInfo[p] || FALLBACK_PROVIDER_INFO[p] || null;
@@ -31,7 +33,7 @@
     { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: 'clapperboard', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
     { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: 'film', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
   ];
-  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], ttsmaker: ['tts'] };
+  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], soniox: ['tts'], voicemaker: ['tts'], ttsmaker: ['tts'] };
   let capabilityRegistry = FALLBACK_CAPABILITIES;
   let providerCapabilities = FALLBACK_PROVIDER_CAPS;
   let activeCapability = 'all';

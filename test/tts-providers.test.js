@@ -9,9 +9,11 @@ import assert from 'node:assert/strict';
 
 import {
   synthesizeTtsmaker, getTtsmakerTokenStatus, listTtsmakerVoices,
-  isQuotaError, sanitizeTtsText, ttsProviderOrder,
+  isQuotaError, sanitizeTtsText, ttsProviderOrder, ttsFallbackChain,
   TTSMAKER_ID_VOICES, TTSMAKER_VOICE_IDS, TTSMAKER_EMOTIONS,
   TTSMAKER_MAX_CHARS, TTS_FALLBACK_PROVIDERS, TtsQuotaError,
+  synthesizeSoniox, listSonioxVoices, SONIOX_ID_VOICES, SONIOX_VOICE_IDS,
+  synthesizeVoicemaker, VOICEMAKER_ID_VOICES,
 } from '../server/tts-providers.js';
 
 const AUDIO = new Uint8Array([0xff, 0xfb, 0x90, 0x00, 0x01, 0x02, 0x03, 0x04]);
@@ -251,4 +253,195 @@ test('D-276: metadata provider punya link resmi + bahasa', () => {
   assert.ok(info.keyUrl.startsWith('https://'), 'link ambil key');
   assert.ok(info.docsUrl.startsWith('https://'), 'link dokumentasi');
   assert.ok(info.languages.includes('Indonesia'), 'support bahasa Indonesia');
+});
+
+// ===== D-277: Soniox (fallback #1) =====
+
+test('D-277: synthesizeSoniox POST ke /tts dan balas audio langsung', async () => {
+  let called = null;
+  const restore = mockFetch((u, opts) => {
+    called = {u, opts};
+    return new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/mpeg'}});
+  });
+  try {
+    const out = await synthesizeSoniox({apiKey: 'k-soniox', text: 'Halo dunia', voice: 'Sari', language: 'id'});
+    assert.ok(out.audio.length === AUDIO.length, 'audio harus utuh');
+    assert.equal(out.mimeType, 'audio/mpeg');
+    assert.equal(out.voice, 'Sari');
+    assert.equal(out.language, 'id');
+    assert.equal(out.model, 'tts-rt-v2');
+    assert.equal(out.chars, 'Halo dunia'.length);
+    assert.ok(called.u.includes('tts-rt.soniox.com/tts'), 'harus panggil endpoint TTS Soniox');
+    assert.equal(called.opts.method, 'POST');
+    assert.equal(called.opts.headers.authorization, 'Bearer k-soniox');
+    const body = JSON.parse(called.opts.body);
+    assert.equal(body.language, 'id');
+    assert.equal(body.voice, 'Sari');
+    assert.equal(body.text, 'Halo dunia');
+    assert.equal(body.audio_format, 'mp3');
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Soniox mendukung bahasa Sunda (su)', async () => {
+  let body = null;
+  const restore = mockFetch((u, opts) => {
+    body = JSON.parse(opts.body);
+    return new Response(AUDIO, {status: 200});
+  });
+  try {
+    const out = await synthesizeSoniox({apiKey: 'k', text: 'Salam nu', language: 'su'});
+    assert.equal(body.language, 'su', 'harus kirim language=su');
+    assert.equal(out.language, 'su');
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Soniox format WAV menghasilkan mime audio/wav', async () => {
+  const restore = mockFetch(() => new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/wav'}}));
+  try {
+    const out = await synthesizeSoniox({apiKey: 'k', text: 'Halo', format: 'wav'});
+    assert.equal(out.mimeType, 'audio/wav');
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Soniox error kuota jadi TtsQuotaError', async () => {
+  const restore = mockFetch(() => json({error_message: 'Rate limit exceeded'}, 429));
+  try {
+    await assert.rejects(
+      () => synthesizeSoniox({apiKey: 'k', text: 'Halo'}),
+      (e) => e instanceof TtsQuotaError,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Soniox error lain jadi Error biasa', async () => {
+  const restore = mockFetch(() => json({error_message: 'Invalid API key'}, 401));
+  try {
+    await assert.rejects(
+      () => synthesizeSoniox({apiKey: 'k', text: 'Halo'}),
+      (e) => !(e instanceof TtsQuotaError) && /Invalid API key/.test(e.message),
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: listSonioxVoices membaca daftar voice dari API', async () => {
+  const restore = mockFetch(() => json({
+    models: [{
+      id: 'tts-rt-v2',
+      voices: [
+        {id: 'Sari', description: 'Voice Indonesia', gender: 'female'},
+        {id: 'Adrian', description: 'Voice maskulin', gender: 'male'},
+      ],
+    }],
+  }));
+  try {
+    const out = await listSonioxVoices('k-soniox');
+    assert.equal(out.models.length, 1);
+    assert.equal(out.voices.length, 2);
+    assert.ok(out.voices.some((v) => v.id === 'Sari'));
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Soniox API key kosong ditolak sebelum memanggil jaringan', async () => {
+  let called = false;
+  const restore = mockFetch(() => { called = true; return new Response(AUDIO, {status: 200}); });
+  try {
+    await assert.rejects(() => synthesizeSoniox({apiKey: '', text: 'Halo'}), /API key Soniox/);
+    assert.equal(called, false, 'tidak boleh memanggil jaringan tanpa key');
+  } finally {
+    restore();
+  }
+});
+
+// ===== D-277: Voicemaker (fallback #2) =====
+
+test('D-277: synthesizeVoicemaker POST ke /voice/convert', async () => {
+  let called = null;
+  const restore = mockFetch((u, opts) => {
+    called = {u, opts};
+    return new Response(AUDIO, {status: 200, headers: {'Content-Type': 'audio/mpeg'}});
+  });
+  try {
+    const out = await synthesizeVoicemaker({apiKey: 'k-vm', text: 'Halo dunia', voice: 'ai2-Ardi'});
+    assert.ok(out.audio.length === AUDIO.length);
+    assert.equal(out.mimeType, 'audio/mpeg');
+    assert.equal(out.voice, 'ai2-Ardi');
+    assert.ok(called.u.includes('developer.voicemaker.in/api/v1/voice/convert'), 'endpoint Voicemaker benar');
+    const body = JSON.parse(called.opts.body);
+    assert.equal(body.VoiceId, 'ai2-Ardi');
+    assert.equal(body.LanguageCode, 'id-ID');
+    assert.equal(body.Text, 'Halo dunia');
+    assert.equal(body.ResponseType, 'stream');
+  } finally {
+    restore();
+  }
+});
+
+test('D-277: Voicemaker error kuota jadi TtsQuotaError', async () => {
+  const restore = mockFetch(() => json({message: 'Quota exceeded'}, 429));
+  try {
+    await assert.rejects(
+      () => synthesizeVoicemaker({apiKey: 'k', text: 'Halo'}),
+      (e) => e instanceof TtsQuotaError,
+    );
+  } finally {
+    restore();
+  }
+});
+
+// ===== D-277: metadata provider baru =====
+
+test('D-277: metadata Soniox & Voicemaker punya link resmi + bahasa Indonesia', () => {
+  for (const provider of ['soniox', 'voicemaker']) {
+    const info = TTS_FALLBACK_PROVIDERS[provider];
+    assert.ok(info, `metadata ${provider} harus ada`);
+    assert.ok(info.keyUrl.startsWith('https://'), `${provider} punya link ambil key`);
+    assert.ok(info.docsUrl.startsWith('https://'), `${provider} punya link dokumentasi`);
+    assert.ok(info.languages.includes('Indonesia'), `${provider} support bahasa Indonesia`);
+    assert.equal(info.commercial, true, `${provider} mendukung pemakaian komersial`);
+  }
+});
+
+test('D-277: TTSMaker ditandai butuh subscription (bukan fallback siap pakai)', () => {
+  const info = TTS_FALLBACK_PROVIDERS.ttsmaker;
+  assert.equal(info.requiresSubscription, true, 'TTSMaker wajib subscription Pro/Studio');
+  assert.ok(/Pro\/Studio/i.test(info.hint), 'hint harus menyebut Pro/Studio');
+});
+
+test('D-277: ttsProviderOrder menerima provider cadangan baru', () => {
+  assert.deepEqual(ttsProviderOrder(['soniox']), ['gemini', 'soniox']);
+  assert.deepEqual(ttsProviderOrder(['voicemaker']), ['gemini', 'voicemaker']);
+  assert.deepEqual(ttsProviderOrder(['soniox', 'soniox']), ['gemini', 'soniox']);
+  assert.deepEqual(ttsProviderOrder(['bogus']), ['gemini']);
+});
+
+test('D-277: ttsFallbackChain = Soniox → Voicemaker → TTSMaker', () => {
+  assert.deepEqual(ttsFallbackChain(), ['soniox', 'voicemaker', 'ttsmaker']);
+});
+
+test('D-277: daftar voice Soniox & Voicemaker lengkap', () => {
+  assert.ok(SONIOX_ID_VOICES.length >= 5, 'minimal 5 voice Soniox');
+  for (const v of SONIOX_ID_VOICES) {
+    assert.ok(v.id, 'voice harus punya id');
+    assert.ok(v.label, 'voice harus punya label');
+    assert.ok(SONIOX_VOICE_IDS.has(v.id), `${v.label} harus ada di set id`);
+  }
+  assert.ok(SONIOX_ID_VOICES.some((v) => v.id === 'Sari'), 'voice Sari harus ada');
+  assert.ok(VOICEMAKER_ID_VOICES.length >= 5, 'minimal 5 voice Voicemaker');
+  for (const v of VOICEMAKER_ID_VOICES) {
+    assert.ok(v.id, 'voice harus punya id');
+    assert.ok(v.label, 'voice harus punya label');
+    assert.equal(v.lang, 'id-ID', `${v.label} harus native id-ID`);
+  }
 });

@@ -419,6 +419,79 @@ Dokumentasi resmi `developer.voicemaker.in/apidocs` (REST + WebSocket):
 > ⚠️ **Kenapa bukan GPT-SoVITS / Qwen3-TTS sebagai fallback hosted?** Keduanya butuh GPU (VPS sendiri) dan/atau tidak support ID. See §4.3.
 > ⚠️ **Kenapa bukan Azure/ElevenLabs?** Keduanya support ID dan API-nya stabil, tapi **tidak ada voice native Indonesia** yang sekelas TTSMaker — hasilnya aksen Inggris, persis masalah yang bikin GPT-SoVITS gagal. Cocok jadi fallback level-3 kalau TTSMaker/Voicemaker kosong, bukan level-1.
 
+### 4.6.4 D-277 — Evaluasi ulang fallback TTS (koreksi: TTSMaker wajib subscribe)
+
+#### 4.6.4.1 Koreksi penting
+
+> **TTSMaker API HANYA tersedia untuk akun ber-subscription Pro/Studio.**
+> Tanpa subscribe, **tidak ada API key** sama sekali — jadi TTSMaker **tidak bisa**
+> dipakai sebagai fallback "yang bisa langsung dipakai". Semua fallback
+> **wajib自带 API key** dari user (D-270: tiap provider punya link resmi).
+
+#### 4.6.4.2 Hasil evaluasi kandidat (semua dicek langsung ke sumber resmi)
+
+| Kandidat | Bahasa Indonesia | API resmi | Key tanpa subscribe? | Harga | Putusan |
+|---|---|---|---|---|---|
+| **EasyVoice** (`easyvoice.ae/geo/id`) | ❌ **TIDAK ADA** — situs resmi: tidak punya voice Bahasa Indonesia dan tidak direncanakan | — | — | free 2.000–5.000 karakter/hari; Pro $9,99/bln + API | ❌ **DIHapus** — bukan kandidat ID sama sekali |
+| **Soniox** (`soniox.com`) | ✅ **native `id`** + **`su` (Sunda)** | ✅ REST `POST https://tts-rt.soniox.com/tts` | ✅ ya, key per project di console — **tanpa subscription** (pay-as-you-go) | ~$0,70/jam audio (token) | ✅ **Fallback #1** |
+| **TTSForFree** (`ttsforfree.com/id/`) | ✅ voice native **Ardi** & **Gadis** | ❌ tidak ada API resmi (UI web) | — | free 200 karakter/hari | ❌ **Dihapus** — membungkus Gemini/OpenAI/Azure, jadi provider baru untuk key yang sudah kita punya |
+| **Voicemaker** (`developer.voicemaker.in`) | ✅ **native `id-ID`** (Ardi, Henry, Putri, David, Fitri, Salsabilla, Anastasia) + **Javanese** | ✅ REST + WebSocket | ⚠️ developer API **pay-as-you-go** (mulai ~$20–25/1M karakter), free plan web **tidak** membawa API | free web: 100 konversi/minggu, 250 karakter/konversi, personal use | ✅ **Fallback #2** (sudah ada di §4.6.2) |
+| **TTSMaker** (`ttsmaker.com`) | ✅ native `id` + Sunda | ✅ `api.ttsmaker.com/v2` | ❌ **subscription Pro/Studio wajib** | $12,99/bln Pro | ⚠️ Turun ke **fallback #3** (opsional) |
+| **VideoGrid AI** (`videogridai.com`) | n/a (video, bukan TTS) | ❌ **TIDAK ADA API publik** — studio web saja, credit-based, watermark di akun free | — | Plus $19,9/bln · Pro $49,9/bln · Max $99,9/bln | ❌ **Bukan kandidat** untuk integrasi API |
+
+> ⚠️ **Jangan tertukar:** `videogridai.com` (**Video Grid AI**) berbeda dari
+> `vidogrid.ai` (**VidoGrid AI**). Yang punya REST API + webhook adalah
+> **VidoGrid AI** (`api.vidogrid.ai`, plan $199/bln, "Request API access") —
+> bukan yang diminta user, dan terlalu mahal/tertutup untuk fallback.
+
+#### 4.6.4.3 Detail Soniox (fallback utama baru)
+
+- **Endpoint**: `POST https://tts-rt.soniox.com/tts`, header `Authorization: Bearer <SONIOX_API_KEY>`, body JSON.
+- **Body**: `{model, language, voice, text, audio_format, sample_rate?, bitrate?}`.
+  - `model`: `tts-rt-v2` (default), `tts-rt-v1`.
+  - `language`: `id` (Indonesia), `su` (Sundanese).
+  - `voice`: nama voice shared — contoh **`Sari`** (Indonesia), `Maya`, `Daniel`, `Nina`, `Emma`, `Adrian`, …
+    **Setiap voice bisaSpeaking di 60+ bahasa** (identitas suara konsisten lintas bahasa).
+  - `audio_format`: `mp3` (default praktis), `wav`, `aac`, `opus`, `flac`, `pcm_f32le`, `pcm_s16le`, `pcm_mulaw`, `pcm_alaw`.
+  - `sample_rate`: 8000/16000/24000/44100/48000. `bitrate`: 32000–256000.
+- **Respons**: body = raw audio bytes, `Content-Type` sesuai format (`audio/mpeg`, `audio/wav`, `audio/opus`, …).
+  Tidak ada URL sementara → **tidak perlu download kedua** (lebih sederhana & andal daripada TTSMaker).
+- **Error**: JSON `{error_code, error_type, error_message, more_info, request_id}` → branch di `error_type`.
+- **Limit**: 100 request/menit, 3 request konkuren, **durasi audio maks 2 menit** (fixed).
+  Audio > 2 menit terpotong → pecah teks (Motion Graphics maks 30 detik, jadi aman).
+- **Voice list via API**: `GET https://api.soniox.com/v1/tts-models` (Authorization Bearer) → `models[].voices[]`
+  berisi `id`, `description`, `gender`. Endpoint lain: `GET /v1/shared-voices` dengan filter gender/age/accent/usecase/style.
+- **Voice cloning**: bikin voice custom dari sample pendek, dipakai lewat `voice` = voice ID.
+- ⚠️ **Free credit untuk signup baru DIHENTIKAN** (Oktober 2025, `soniox.com/blog/2025-10-27-free-credits-update-for-soniox-api`).
+  Artinya Soniox = **pay-as-you-go sejak daftar**; tidak ada trial gratis. Ini berbeda dari TTSMaker yang
+  *mensyaratkan* subscription — Soniox tidak butuh langganan, cukup top-up usage.
+
+#### 4.6.4.4 Urutan fallback final (D-277)
+
+```
+1. Gemini TTS            → default, gratis selama kuota (14 voice, style hint)
+2. Soniox                → fallback #1. Native id + su, REST sederhana, pay-as-you-go, key per project
+3. Voicemaker            → fallback #2. Native id-ID + Javanese, VoxFX, voice cloning
+4. TTSMaker              → fallback #3 (opsional). Hanya kalau user punya subscription Pro/Studio
+```
+
+Semua fallback **wajib punya API key sendiri** dari user — tidak ada satu pun yang bisa
+dipakai "gratis tanpa daftar". Urutan ini diterapkan otomatis oleh
+`synthesizeTtsFallback()` di `server/app.js`.
+
+#### 4.6.4.5 Perbandingan biaya praktis (30 detik Motion Graphics)
+
+| Provider | Karakter ± 75 kata (≈ 450 karakter) | Biaya |
+|---|---|---|
+| Gemini TTS | 450 | $0 (kuota free) |
+| Soniox | 450 | ~$0,004 (≈ 1 detik audio di $0,70/jam → ~0,02 dtk biaya text; audio ~30 dtk ≈ $0,006) |
+| Voicemaker | 450 | ~$0,009–0,011 (~$20–25/1M karakter) |
+| TTSMaker | 450 | ~$0,006 (1 jt karakter ≈ $12,99) |
+
+> Kesimpulan biaya: **tidak ada bedanya berarti** untuk usage SherlyStudio yang sesekali.
+> Yang menentukan cuma **ketersediaan key** — dan itu sebabnya TTSMaker (wajib subscribe)
+> tidak boleh berada di posisi fallback utama.
+
 ### 4.7 Cara pasang audio ke Motion Graphics
 
 **Sudah siap!** `public/vendor/mediabunny.min.mjs` sudah expose:

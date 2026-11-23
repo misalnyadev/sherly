@@ -1,30 +1,72 @@
 /**
- * D-276 — Provider TTS cadangan yang support bahasa Indonesia.
+ * D-276 / D-277 — Provider TTS cadangan yang support bahasa Indonesia.
  *
  * Konteks: kalau kredit/kuota Gemini habis, TTS jangan langsung gagal —
  * ada engine lain yang **benar-benar bisa berbahasa Indonesia**.
  *
- * Kenapa TTSMaker jadi fallback utama:
- *  - Voice NATIVE Indonesia (bukan aksen Inggris): ardi, citra, ayu, stefan,
- *    indah, gadis, dewi — plus voice **Sundanese** (sarah, william).
- *  - `audio_speed` (0,5–2,0) -> ngatur tempo narasi.
- *  - `text_paragraph_pause_time` (0–10.000 ms) -> jeda antar baris = jeda
- *    antar beat. Persis yang dibutuhkan sistem beat.
- *  - `emotion_style_key` + `emotion_intensity` -> intonasi per beat.
- *  - 100% hak komersial (halaman resmi TTSMaker).
+ * ⚠️ D-277 — koreksi urutan fallback:
+ *  - **TTSMaker** (fallback #3) — API resmi HANYA ada untuk akun ber-subscription
+ *    Pro/Studio. Tanpa subscribe **tidak ada API key sama sekali**, jadi tidak
+ *    bisa dipakai sebagai fallback yang "siap pakai".
+ *  - **Soniox** (fallback #1) — native `id` (Indonesia) + `su` (Sunda),
+ *    REST sederhana, **pay-as-you-go tanpa subscription**, key per project.
+ *  - **Voicemaker** (fallback #2) — native `id-ID` + Javanese, VoxFX, cloning.
  *
- * API resmi: https://api.ttsmaker.com/v2
+ * Semua fallback WAJIB punya API key sendiri dari user (D-270: link resmi).
+ *
+ * API Soniox: https://docs.soniox.com/tts
+ *  - POST https://tts-rt.soniox.com/tts        (Authorization: Bearer <key>)
+ *  - GET  https://api.soniox.com/v1/tts-models  (daftar voice)
+ *
+ * API TTSMaker: https://api.ttsmaker.com/v2
  *  - GET  /v2/get-voice-list?api_key=...&language=id
  *  - POST /v2/create-tts-order
  *  - GET  /v2/get-token-status?api_key=...
  * Catatan: wajib subscription Pro/Studio (Lite/FREE tidak bisa API), QPS 1/detik.
- *
- * Voicemaker (https://developer.voicemaker.in)Dicatat sebagai alternatif level-2:
- * juga support Indonesian + Javanese, punya Voice Cloning & VoxFX.
  */
 
 /** Base URL API TTSMaker. */
 export const TTSMAKER_API_BASE = 'https://api.ttsmaker.com/v2';
+
+/** Base URL API Soniox. */
+export const SONIOX_API_BASE = 'https://api.soniox.com/v1';
+/** Endpoint synthesise speech Soniox (REST). */
+export const SONIOX_TTS_ENDPOINT = 'https://tts-rt.soniox.com/tts';
+
+/** Model TTS Soniox (v2 = terbaru). */
+export const SONIOX_TTS_MODEL = 'tts-rt-v2';
+
+/**
+ * Voice Soniox untuk bahasa Indonesia.
+ * Semua voice Soniox bisa berbicara di 60+ bahasa; `id` = Indonesia,
+ * `su` = Sunda (bahasa Jawa Barat).
+ * Daftar lengkap bisa diambil dari `GET /v1/tts-models`.
+ */
+export const SONIOX_ID_VOICES = [
+  {id: 'Sari', key: 'sari', label: 'Sari · Indonesia', gender: 'female', lang: 'id'},
+  {id: 'Maya', key: 'maya', label: 'Maya · Indonesia', gender: 'female', lang: 'id'},
+  {id: 'Nina', key: 'nina', label: 'Nina · Indonesia', gender: 'female', lang: 'id'},
+  {id: 'Emma', key: 'emma', label: 'Emma · Indonesia', gender: 'female', lang: 'id'},
+  {id: 'Daniel', key: 'daniel', label: 'Daniel · Indonesia', gender: 'male', lang: 'id'},
+  {id: 'Noah', key: 'noah', label: 'Noah · Indonesia', gender: 'male', lang: 'id'},
+  {id: 'Jack', key: 'jack', label: 'Jack · Indonesia', gender: 'male', lang: 'id'},
+  {id: 'Adrian', key: 'adrian', label: 'Adrian · Indonesia', gender: 'male', lang: 'id'},
+];
+
+/** Key voice Soniox yang valid (dipakai validasi + UI). */
+export const SONIOX_VOICE_IDS = new Set(SONIOX_ID_VOICES.map((v) => v.id));
+
+/** Bahasa yang didukung Soniox untuk kebutuhan repo ini. */
+export const SONIOX_LANGUAGES = {
+  id: {code: 'id', label: 'Bahasa Indonesia'},
+  su: {code: 'su', label: 'Bahasa Sunda'},
+};
+
+/** Batas durasi audio Soniox per request (menit) — batas tetap, tidak bisa dinaikkan. */
+export const SONIOX_MAX_AUDIO_MINUTES = 2;
+
+/** Batas panjang teks Soniox per request (chars). */
+export const SONIOX_MAX_CHARS = 10000;
 
 /**
  * Voice TTSMaker berbahasa Indonesia (dari katalog resmi `language=id`).
@@ -67,13 +109,13 @@ export const TTSMAKER_MAX_CHARS = 20000;
 
 /** Peta provider -> label (untuk UI & pesan error). */
 export const TTS_FALLBACK_PROVIDERS = {
-  ttsmaker: {
-    id: 'ttsmaker',
-    label: 'TTSMaker',
-    keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list',
-    signupUrl: 'https://pro.ttsmaker.com/pricing',
-    docsUrl: 'https://ttsmaker.com/developer-api-docs',
-    hint: 'Butuh TTSMaker Pro/Studio. Voice native Indonesia + Sundanese. Cek di https://pro.ttsmaker.com/pricing',
+  soniox: {
+    id: 'soniox',
+    label: 'Soniox',
+    keyUrl: 'https://console.soniox.com/',
+    signupUrl: 'https://console.soniox.com/signup',
+    docsUrl: 'https://docs.soniox.com/tts',
+    hint: 'Cadangan TTS bahasa Indonesia. Bayar sesuai pemakaian (~$0,70/jam audio), tanpa langganan. Native Indonesia + Sunda.',
     languages: 'Bahasa Indonesia (native) + Sunda',
     commercial: true,
   },
@@ -86,6 +128,17 @@ export const TTS_FALLBACK_PROVIDERS = {
     hint: 'Ambil token di developer.voicemaker.in. Support Indonesia + Jawa, plus voice cloning.',
     languages: 'Bahasa Indonesia + Jawa',
     commercial: true,
+  },
+  ttsmaker: {
+    id: 'ttsmaker',
+    label: 'TTSMaker',
+    keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list',
+    signupUrl: 'https://pro.ttsmaker.com/pricing',
+    docsUrl: 'https://ttsmaker.com/developer-api-docs',
+    hint: 'Cadangan opsional. WAJIB paket Pro/Studio — tanpa subscribe tidak ada API key. Voice native Indonesia + Sundanese.',
+    languages: 'Bahasa Indonesia (native) + Sunda',
+    commercial: true,
+    requiresSubscription: true,
   },
 };
 
@@ -139,6 +192,10 @@ export function sanitizeTtsText(text, maxChars = TTSMAKER_MAX_CHARS) {
 /**
  * Buat urutan fallback berjenjang.
  * Gemini selalu jadi pilihan pertama (default repo), lalu engine ID lain.
+ *
+ * D-277: urutan default fallback = **soniox → voicemaker → ttsmaker**.
+ * TTSMaker ada paling akhir karena API-nya wajib subscription Pro/Studio.
+ *
  * @param {string[]} [fallbacks] provider fallback pilihan user
  * @returns {string[]}
  */
@@ -146,11 +203,20 @@ export function ttsProviderOrder(fallbacks = []) {
   const order = ['gemini'];
   for (const p of fallbacks) {
     const key = String(p || '').trim().toLowerCase();
-    if ((key === 'ttsmaker' || key === 'voicemaker') && !order.includes(key)) {
+    if (TTS_FALLBACK_PROVIDERS[key] && !order.includes(key)) {
       order.push(key);
     }
   }
   return order;
+}
+
+/**
+ * Urutan fallback TTS default (dipakai route saat Gemini gagal).
+ * D-277: Soniox (tanpa langganan, native id+su) → Voicemaker → TTSMaker (wajib subscribe).
+ * @returns {string[]}
+ */
+export function ttsFallbackChain() {
+  return ['soniox', 'voicemaker', 'ttsmaker'];
 }
 
 /**
@@ -281,5 +347,227 @@ export async function synthesizeTtsmaker({
     voice: body.voice_id,
     model: 'ttsmaker-v2',
     chars: Number(data?.tts_task_characters_count) || clean.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// D-277 — Soniox (fallback #1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ambil daftar voice Soniox + modelnya (dari API resmi).
+ * @param {string} apiKey
+ * @returns {Promise<{models: Array<object>, voices: Array<object>}>}
+ */
+export async function listSonioxVoices(apiKey) {
+  if (!apiKey) throw new Error('API key Soniox belum diisi.');
+  const res = await fetch(`${SONIOX_API_BASE}/tts-models`, {
+    headers: {accept: 'application/json', authorization: `Bearer ${apiKey}`},
+    signal: AbortSignal.timeout(20000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = String(data?.error_message || data?.message || `Soniox error (${res.status})`).slice(0, 300);
+    if (res.status === 429 || isQuotaError(msg)) throw new TtsQuotaError(msg);
+    throw new Error(msg);
+  }
+  const models = Array.isArray(data?.models) ? data.models : [];
+  const voices = [];
+  for (const model of models) {
+    for (const v of Array.isArray(model?.voices) ? model.voices : []) {
+      if (!v?.id) continue;
+      voices.push({
+        id: String(v.id),
+        label: String(v.description || v.id),
+        gender: v.gender || 'unknown',
+        model: String(model?.id || SONIOX_TTS_MODEL),
+      });
+    }
+  }
+  return {models, voices};
+}
+
+/**
+ * Sintesis speech via Soniox.
+ *
+ * Endpoint `POST https://tts-rt.soniox.com/tts` mengembalikan **raw audio
+ * bytes** langsung di body respons (bukan URL sementara) — jadi tidak perlu
+ * download kedua seperti TTSMaker.
+ *
+ * @param {object} opts
+ * @param {string} opts.apiKey
+ * @param {string} opts.text
+ * @param {string} [opts.voice] nama voice (default `Sari`)
+ * @param {string} [opts.language] `id` (Indonesia) atau `su` (Sunda)
+ * @param {string} [opts.format] mp3 | wav | aac | opus | flac | pcm_*
+ * @param {number} [opts.sampleRate]
+ * @param {number} [opts.bitrate]
+ * @returns {Promise<{audio: Buffer, mimeType: string, voice: string, model: string, chars: number, language: string}>}
+ */
+export async function synthesizeSoniox({
+  apiKey,
+  text,
+  voice = 'Sari',
+  language = 'id',
+  format = 'mp3',
+  sampleRate = 44100,
+  bitrate = 128000,
+  model = SONIOX_TTS_MODEL,
+}) {
+  const clean = sanitizeTtsText(text, SONIOX_MAX_CHARS);
+  if (!clean) throw new Error('Teks untuk suara kosong.');
+  if (!apiKey) throw new Error('API key Soniox belum diisi.');
+
+  const lang = SONIOX_LANGUAGES[String(language || 'id').toLowerCase()] ? String(language).toLowerCase() : 'id';
+  const fmt = String(format || 'mp3').toLowerCase();
+  const body = {
+    model: String(model || SONIOX_TTS_MODEL),
+    language: lang,
+    voice: String(voice || 'Sari'),
+    text: clean,
+    audio_format: fmt,
+    sample_rate: Number(sampleRate) || 44100,
+  };
+  if (fmt === 'mp3' || fmt === 'aac' || fmt === 'opus') {
+    body.bitrate = Number(bitrate) || 128000;
+  }
+
+  const res = await fetch(SONIOX_TTS_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(45000),
+  });
+
+  if (!res.ok) {
+    // Soniox balas JSON saat gagal (bukan audio).
+    const data = await res.json().catch(() => ({}));
+    const msg = String(data?.error_message || data?.message || `Soniox error (${res.status})`).slice(0, 300);
+    if (res.status === 429 || isQuotaError(msg)) throw new TtsQuotaError(msg);
+    throw new Error(msg);
+  }
+
+  const audio = Buffer.from(await res.arrayBuffer());
+  if (!audio.length) throw new Error('Audio Soniox kosong.');
+
+  const mimeType = fmt === 'wav' ? 'audio/wav'
+    : fmt === 'ogg' ? 'audio/ogg'
+      : fmt === 'opus' ? 'audio/opus'
+        : fmt === 'aac' ? 'audio/aac'
+          : fmt === 'flac' ? 'audio/flac'
+            : fmt.startsWith('pcm') ? 'audio/pcm'
+              : 'audio/mpeg';
+
+  return {
+    audio,
+    mimeType,
+    voice: body.voice,
+    model: body.model,
+    language: body.language,
+    chars: clean.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// D-277 — Voicemaker (fallback #2)
+// ---------------------------------------------------------------------------
+
+/** Base URL API Voicemaker. */
+export const VOICEMAKER_API_BASE = 'https://developer.voicemaker.in/api/v1';
+
+/**
+ * Voice Voicemaker native Indonesia (`id-ID`).
+ * Dari katalog resmi `voicemaker.in/text-to-speech/indonesian`.
+ */
+export const VOICEMAKER_ID_VOICES = [
+  {id: 'ai2-Ardi', key: 'ardi', label: 'Ardi · Indonesia', gender: 'male', lang: 'id-ID'},
+  {id: 'ai2-Henry', key: 'henry', label: 'Henry · Indonesia', gender: 'male', lang: 'id-ID'},
+  {id: 'ai2-David', key: 'david', label: 'David · Indonesia', gender: 'male', lang: 'id-ID'},
+  {id: 'ai2-Putri', key: 'putri', label: 'Putri · Indonesia', gender: 'female', lang: 'id-ID'},
+  {id: 'ai2-Fitri', key: 'fitri', label: 'Fitri · Indonesia', gender: 'female', lang: 'id-ID'},
+  {id: 'ai2-Salsabilla', key: 'salsabilla', label: 'Salsabilla · Indonesia', gender: 'female', lang: 'id-ID'},
+  {id: 'ai2-Anastasia', key: 'anastasia', label: 'Anastasia · Indonesia', gender: 'female', lang: 'id-ID'},
+];
+
+/**
+ * Sintesis speech via Voicemaker.
+ *
+ * Endpoint `POST https://developer.voicemaker.in/api/v1/voice/convert`.
+ * `ResponseType: 'stream'` mengembalikan audio langsung di body (bukan URL),
+ * jadi tidak perlu download kedua.
+ *
+ * @param {object} opts
+ * @param {string} opts.apiKey
+ * @param {string} opts.text
+ * @param {string} [opts.voice] VoiceId (default `ai2-Ardi`)
+ * @param {string} [opts.language] default `id-ID`
+ * @param {string} [opts.format] mp3 | wav | ogg | opus | aac | pcm | mulaw | alaw
+ * @param {number} [opts.sampleRate] default 44100
+ * @param {string} [opts.effect] gaya bicara (default/cheerful/friendly/…)
+ * @returns {Promise<{audio: Buffer, mimeType: string, voice: string, model: string, chars: number}>}
+ */
+export async function synthesizeVoicemaker({
+  apiKey,
+  text,
+  voice = 'ai2-Ardi',
+  language = 'id-ID',
+  format = 'mp3',
+  sampleRate = 44100,
+  effect = 'default',
+}) {
+  const clean = sanitizeTtsText(text, TTSMAKER_MAX_CHARS);
+  if (!clean) throw new Error('Teks untuk suara kosong.');
+  if (!apiKey) throw new Error('API key Voicemaker belum diisi.');
+
+  const fmt = String(format || 'mp3').toLowerCase();
+  const body = {
+    Engine: 'neural',
+    VoiceId: String(voice || 'ai2-Ardi'),
+    LanguageCode: String(language || 'id-ID'),
+    Text: clean,
+    OutputFormat: fmt,
+    SampleRate: String(Number(sampleRate) || 44100),
+    ResponseType: 'stream',
+    Effect: String(effect || 'default'),
+  };
+
+  const res = await fetch(`${VOICEMAKER_API_BASE}/voice/convert`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(45000),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const msg = String(data?.message || data?.msg || `Voicemaker error (${res.status})`).slice(0, 300);
+    if (res.status === 429 || isQuotaError(msg)) throw new TtsQuotaError(msg);
+    throw new Error(msg);
+  }
+
+  const audio = Buffer.from(await res.arrayBuffer());
+  if (!audio.length) throw new Error('Audio Voicemaker kosong.');
+
+  const mimeType = fmt === 'wav' ? 'audio/wav'
+    : fmt === 'ogg' ? 'audio/ogg'
+      : fmt === 'opus' ? 'audio/opus'
+        : fmt === 'aac' ? 'audio/aac'
+          : fmt === 'pcm' || fmt === 'mulaw' || fmt === 'alaw' ? 'audio/pcm'
+            : 'audio/mpeg';
+
+  return {
+    audio,
+    mimeType,
+    voice: body.VoiceId,
+    model: 'voicemaker-neural',
+    chars: clean.length,
   };
 }
