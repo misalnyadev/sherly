@@ -11,10 +11,14 @@ import { supabaseConfigured, createPublicClient, createUserClient } from './supa
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint } from './tts.js';
-// D-276: cadangan TTS yang support bahasa Indonesia (dipakai kalau kuota Gemini habis).
+// D-276 / D-277 / D-278: cadangan TTS bahasa Indonesia (dipakai kalau kuota
+// Gemini habis). Hanya provider dengan free tier tanpa subscription:
+// Azure Speech (F0, 500rb karakter/bulan) → ElevenLabs (free, 10rb kredit/bulan).
 import {
-  synthesizeTtsmaker, isQuotaError, TTSMAKER_ID_VOICES, TTSMAKER_EMOTIONS,
-  TTS_FALLBACK_PROVIDERS, getTtsmakerTokenStatus,
+  isQuotaError, TTS_FALLBACK_PROVIDERS,
+  synthesizeAzure, listAzureVoices, AZURE_ID_VOICES,
+  synthesizeElevenLabs, ELEVENLABS_VOICES,
+  ttsFallbackChain,
 } from './tts-providers.js';
 import { isMimeBlockedError, storageUploadHint } from './storage-errors.js';
 import { sanitizeDocInput } from './planner-docs.js';
@@ -957,10 +961,11 @@ app.post('/api/studio/motion-graphics', requireUser, requireAdmin, async (req, r
 });
 
 /**
- * D-276 — Buat voice-over TTS untuk Motion Graphics.
+ * D-276 / D-277 — Buat voice-over TTS untuk Motion Graphics.
  *
  * Memakai Gemini TTS dulu (default). Kalau kuota Gemini habis, otomatis
- * jatuh ke engine cadangan yang support bahasa Indonesia (TTSMaker).
+ * jatuh ke engine cadangan yang support bahasa Indonesia:
+ * **Azure Speech → ElevenLabs** (lihat `ttsFallbackChain()`).
  * Hasilnya diunggah ke Storage Supabase supaya Remotion bisa mereferensikan
  * URL-nya saat render.
  *
@@ -985,7 +990,7 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
   let mimeType = 'audio/wav';
   let provider = 'gemini';
   // Voice Gemini hanya valid kalau ID-nya dikenal; kalau user mengisi ID
-  // voice TTSMaker (angka), pakai default Gemini.
+  // voice provider lain (mis. "id-ID-ArdiNeural"/"21m00Tcm4TlvDq8ikWAM"), pakai default.
   const rawVoice = String(inputProps.voice || '').trim();
   const geminiVoice = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice : DEFAULT_VOICE;
   for (const attempt of attempts) {
@@ -1005,15 +1010,11 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
       if (attempt.keyId) await recordFailure(req.supabase, attempt.keyId, msg).catch(() => {});
       if (!isQuotaError(msg)) throw error;
       // Kuota habis -> engine cadangan (bahasa Indonesia).
-      const fallback = await synthesizeTtsmaker({
-        apiKey: (await ttsmakerKey(req)) || '',
-        text,
-        voiceId: Number(inputProps.voice) || Number(process.env.TTSMAKER_TTS_VOICE) || 729,
-      }).catch(() => null);
+      const fallback = await synthesizeTtsFallbackChain(req, text);
       if (fallback) {
         audio = fallback.audio;
         mimeType = fallback.mimeType;
-        provider = 'ttsmaker';
+        provider = fallback.provider;
       }
       break;
     }
@@ -1021,16 +1022,11 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
 
   // 2) Kalau Gemini tidak tersedia sama sekali -> engine cadangan.
   if (!audio) {
-    const key = await ttsmakerKey(req);
-    if (key) {
-      const fallback = await synthesizeTtsmaker({
-        apiKey: key,
-        text,
-        voiceId: Number(inputProps.voice) || Number(process.env.TTSMAKER_TTS_VOICE) || 729,
-      });
+    const fallback = await synthesizeTtsFallbackChain(req, text);
+    if (fallback) {
       audio = fallback.audio;
       mimeType = fallback.mimeType;
-      provider = 'ttsmaker';
+      provider = fallback.provider;
     }
   }
   if (!audio) return null;
@@ -1045,13 +1041,53 @@ async function synthesizeVoiceoverForMotion(req, inputProps) {
   return {url: signed.signedUrl, provider};
 }
 
-/** Ambil key TTSMaker dari vault (fallback env). */
-async function ttsmakerKey(req) {
-  if (vaultConfigured()) {
-    const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
-    if (usable.length) return usable[0].apiKey;
+/**
+ * D-277 / D-278 — Coba synthesize TTS lewat rantai cadangan
+ * (**Azure Speech → ElevenLabs**). Semua provider punya free tier tanpa
+ * subscription; tiap provider wajib punya API key sendiri dari user.
+ *
+ * @param {object} req
+ * @param {string} text
+ * @returns {Promise<{audio: Buffer, mimeType: string, provider: string, voice: any, model: string, chars: number}|null>}
+ */
+async function synthesizeTtsFallbackChain(req, text) {
+  for (const provider of ttsFallbackChain()) {
+    const keys = [];
+    if (vaultConfigured()) {
+      const usable = await getUsableKeys(req.supabase, provider).catch(() => []);
+      for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
+    }
+    const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+      : process.env.ELEVENLABS_API_KEY;
+    if (!keys.length && envKey) keys.push({apiKey: envKey, keyId: null});
+    if (!keys.length) continue;
+
+    for (const k of keys) {
+      try {
+        let out;
+        if (provider === 'azure') {
+          out = await synthesizeAzure({
+            apiKey: k.apiKey,
+            text,
+            voice: process.env.AZURE_TTS_VOICE || 'id-ID-ArdiNeural',
+            region: process.env.AZURE_SPEECH_REGION || '',
+          });
+        } else {
+          out = await synthesizeElevenLabs({
+            apiKey: k.apiKey,
+            text,
+            voice: process.env.ELEVENLABS_TTS_VOICE || '21m00Tcm4TlvDq8ikWAM',
+          });
+        }
+        if (k.keyId) await recordSuccess(req.supabase, k.keyId).catch(() => {});
+        return {...out, provider};
+      } catch (error) {
+        const msg = String(error?.message || 'Unknown error').slice(0, 500);
+        if (k.keyId) await recordFailure(req.supabase, k.keyId, msg).catch(() => {});
+      }
+    }
   }
-  return process.env.TTSMAKER_API_KEY || null;
+  return null;
 }
 
 // D-251: hasil render Motion Graphics yang dirender di browser (Canvas 2D +
@@ -1745,68 +1781,54 @@ const isMissingTtsTable = (error) => /sherly_tts_clips/i.test(error?.message || 
 const isMissingTtsBucket = (error) => /tts-clips|bucket/i.test(error?.message || '') && /not found|does not exist|schema/i.test(error?.message || '');
 
 /**
- * D-276 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
+ * D-276 / D-277 / D-278 — Cadangan TTS kalau Gemini gagal (mis. kuota habis).
  *
- * Engine cadangan: TTSMaker (voice native Indonesia + Sunda).
- * Kunci diambil dari vault (provider `ttsmaker`) atau env `TTSMAKER_API_KEY`.
+ * Rantai cadangan (semua WAJIB punya API key sendiri dari user):
+ *   1. **Azure Speech** → native `id-ID` (Indonesia), REST SSML, free tier F0
+ *      500.000 karakter/bulan, reset bulanan, tanpa info pembayaran, hak
+ *      komersial termasuk. → fallback utama.
+ *   2. **ElevenLabs**   → model `eleven_multilingual_v2` (29 bahasa termasuk
+ *      Indonesia), free tier 10.000 kredit/bulan tanpa kartu kredit. ⚠️ free
+ *      plan tanpa hak komersial + wajib atribusi → fallback terakhir.
+ *
+ * Kunci diambil dari vault (provider `azure`/`elevenlabs`) atau env
+ * (`AZURE_SPEECH_API_KEY` / `ELEVENLABS_API_KEY`).
  *
  * Return: fungsi yang mengirim respons audio ke `res`, atau null kalau tidak
  * ada cadangan yang bisa dipakai.
  */
 async function synthesizeTtsFallback(req, {clean, userId, cacheReady, reason}) {
-  // Kumpulkan key TTSMaker (vault -> env).
-  const keys = [];
-  if (vaultConfigured()) {
-    const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
-    for (const vk of usable) keys.push({apiKey: vk.apiKey, keyId: vk.keyId});
-  }
-  if (!keys.length && process.env.TTSMAKER_API_KEY) {
-    keys.push({apiKey: process.env.TTSMAKER_API_KEY, keyId: null});
-  }
-  if (!keys.length) return null;
-
-  for (const k of keys) {
+  const result = await synthesizeTtsFallbackChain(req, clean);
+  if (!result) return null;
+  const {audio, mimeType, voice, model, chars, provider} = result;
+  const clipHash = ttsClipHash({provider, model, voice, style: '', text: clean});
+  // Simpan ke Bank Suara (best-effort).
+  if (cacheReady) {
     try {
-      const {audio, mimeType, voice, model, chars} = await synthesizeTtsmaker({
-        apiKey: k.apiKey,
-        text: clean,
-        voiceId: Number(process.env.TTSMAKER_TTS_VOICE) || 729,
-      });
-      const clipHash = ttsClipHash({provider: 'ttsmaker', model, voice, style: '', text: clean});
-      // Simpan ke Bank Suara (best-effort).
-      if (cacheReady) {
-        try {
-          const ext = mimeType.split('/')[1] || 'mp3';
-          const storagePath = `${userId}/${clipHash}.${ext}`;
-          const {error: upError} = await req.supabase.storage.from('tts-clips').upload(storagePath, audio, {contentType: mimeType, upsert: true});
-          if (!upError) {
-            await req.supabase.from('sherly_tts_clips').upsert({
-              user_id: userId, clip_hash: clipHash, storage_path: storagePath,
-              provider: 'ttsmaker', voice: String(voice), model, style: '',
-              text: clean, mime_type: mimeType, bytes: audio.length,
-            }, {onConflict: 'user_id,clip_hash'});
-          }
-        } catch { /* bank belum dimigrasi — abaikan */ }
+      const ext = mimeType.split('/')[1] || 'mp3';
+      const storagePath = `${userId}/${clipHash}.${ext}`;
+      const {error: upError} = await req.supabase.storage.from('tts-clips').upload(storagePath, audio, {contentType: mimeType, upsert: true});
+      if (!upError) {
+        await req.supabase.from('sherly_tts_clips').upsert({
+          user_id: userId, clip_hash: clipHash, storage_path: storagePath,
+          provider, voice: String(voice), model, style: '',
+          text: clean, mime_type: mimeType, bytes: audio.length,
+        }, {onConflict: 'user_id,clip_hash'});
       }
-      if (k.keyId) await recordSuccess(req.supabase, k.keyId).catch(() => {});
-      return (res) => {
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('X-TTS-Source', 'fallback');
-        res.setHeader('X-TTS-Provider', 'ttsmaker');
-        res.setHeader('X-TTS-Model', model);
-        res.setHeader('X-TTS-Voice', String(voice));
-        res.setHeader('X-TTS-Chars', String(chars));
-        res.setHeader('X-TTS-Fallback-Reason', encodeURIComponent(String(reason || '').slice(0, 120)));
-        res.setHeader('X-TTS-Hash', clipHash);
-        return res.send(audio);
-      };
-    } catch (error) {
-      const msg = String(error?.message || 'Unknown error').slice(0, 500);
-      if (k.keyId) await recordFailure(req.supabase, k.keyId, msg).catch(() => {});
-    }
+    } catch { /* bank belum dimigrasi — abaikan */ }
   }
-  return null;
+  return (res) => {
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-TTS-Source', 'fallback');
+    res.setHeader('X-TTS-Provider', provider);
+    res.setHeader('X-TTS-Model', model);
+    res.setHeader('X-TTS-Voice', String(voice));
+    res.setHeader('X-TTS-Chars', String(chars));
+    res.setHeader('X-TTS-Fallback-Reason', encodeURIComponent(String(reason || '').slice(0, 120)));
+    res.setHeader('X-TTS-Hash', clipHash);
+    return res.send(audio);
+  };
 }
 
 /** Bersihkan teks agar enak dibacakan (tanpa markdown/token internal). */
@@ -2203,8 +2225,9 @@ app.post('/api/public/posts/:id/view', async (req, res) => {
     res.json({ ok: true });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
-// D-276: daftar voice TTS. Gemini = default; TTSMaker = cadangan bahasa
-// Indonesia (native + Sunda). UI pakai ini buat menampilkan pilihan suara.
+// D-276 / D-277 / D-278: daftar voice TTS. Gemini = default; cadangan bahasa
+// Indonesia: Azure Speech (free F0) → ElevenLabs (free, tanpa kartu kredit).
+// UI pakai ini buat menampilkan pilihan suara + status engine mana yang siap.
 app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
   try {
     const voices = [
@@ -2214,43 +2237,41 @@ app.get('/api/ai/tts/voices', requireUser, requireAdmin, async (req, res) => {
         label: v.label,
         language: 'Bahasa Indonesia',
       })),
-      ...TTSMAKER_ID_VOICES.map((v) => ({
-        provider: 'ttsmaker',
+      ...AZURE_ID_VOICES.map((v) => ({
+        provider: 'azure',
         id: v.id,
         label: v.label,
-        language: v.key.includes('sunda') ? 'Bahasa Sunda' : 'Bahasa Indonesia',
-        limit: v.limit,
-        unlimited: Boolean(v.unlimited),
-        emotion: Boolean(v.emotion),
+        language: 'Bahasa Indonesia',
+      })),
+      ...ELEVENLABS_VOICES.map((v) => ({
+        provider: 'elevenlabs',
+        id: v.id,
+        label: v.label,
+        language: 'Bahasa Indonesia',
       })),
     ];
-    // Status key cadangan (kalau ada) supaya UI tahuENGINE mana yang siap.
-    let ttsmaker = {configured: false, quota: null, error: null};
-    if (vaultConfigured()) {
-      const usable = await getUsableKeys(req.supabase, 'ttsmaker').catch(() => []);
-      if (usable.length) {
-        ttsmaker.configured = true;
-        try {
-          const status = await getTtsmakerTokenStatus(usable[0].apiKey);
-          const st = status?.data || status?.account_status || status;
-          ttsmaker.quota = {
-            quota: Number(st?.quota_characters ?? 0),
-            used: Number(st?.characters_used ?? 0),
-            left: Number(st?.available_quota ?? 0),
-          };
-        } catch (e) {
-          ttsmaker.error = String(e?.message || '').slice(0, 200);
-        }
+
+    // Status key cadangan per provider supaya UI tahu engine mana yang siap.
+    const status = {azure: {configured: false}, elevenlabs: {configured: false}};
+    for (const provider of ttsFallbackChain()) {
+      let usable = [];
+      if (vaultConfigured()) {
+        usable = await getUsableKeys(req.supabase, provider).catch(() => []);
       }
-    } else if (process.env.TTSMAKER_API_KEY) {
-      ttsmaker.configured = true;
+      if (!usable.length) {
+        const envKey = provider === 'azure' ? process.env.AZURE_SPEECH_API_KEY
+          : process.env.ELEVENLABS_API_KEY;
+        if (envKey) status[provider].configured = true;
+        continue;
+      }
+      status[provider].configured = true;
     }
+
     res.json({
       ok: true,
       voices,
       providers: TTS_FALLBACK_PROVIDERS,
-      emotions: TTSMAKER_EMOTIONS,
-      ttsmaker,
+      ...status,
     });
   } catch (error) {
     res.status(500).json({ok: false, error: error.message || 'Gagal memuat daftar voice.'});

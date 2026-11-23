@@ -2,7 +2,7 @@
 // RLS scopes every row to the owning admin; ciphertext never leaves this module toward HTTP responses.
 import { encryptSecret, decryptSecret, vaultConfigured } from './vault.js';
 
-export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsmaker'];
+export const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'azure', 'elevenlabs'];
 export const AUTO_ORDER = ['groq', 'gemini', 'openrouter', 'custom'];
 // D-270: tautan resmi untuk mendapatkan API key tiap provider (dibuka di tab baru).
 // Satu sumber kebenaran supaya label, link, dan catatan gratisnya sinkron.
@@ -42,14 +42,23 @@ export const PROVIDER_INFO = {
     docsUrl: '',
     hint: 'Provider sendiri yang kompatibel OpenAI — masukkan base URL + key di form Tambah Provider.',
   },
-  // D-276: TTSMaker = cadangan TTS yang support bahasa Indonesia (native +
-  // Sunda). Dipakai kalau kuota Gemini habis.
-  ttsmaker: {
-    label: 'TTSMaker',
-    keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list',
-    signupUrl: 'https://pro.ttsmaker.com/pricing',
-    docsUrl: 'https://ttsmaker.com/developer-api-docs',
-    hint: 'Cadangan TTS bahasa Indonesia. Butuh paket Pro/Studio (API resmi tidak tersedia di Lite/Gratis). Voice native Indonesia + Sunda.',
+  // D-278: Azure Speech = cadangan TTS bahasa Indonesia dengan free tier
+  // F0 (500.000 karakter/bulan, TANPA info pembayaran, reset tiap bulan).
+  azure: {
+    label: 'Azure Speech',
+    keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech',
+    signupUrl: 'https://portal.azure.com/#create/Microsoft.SpeechServices',
+    docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support',
+    hint: 'Cadangan TTS bahasa Indonesia. Buat resource Speech dengan paket F0 gratis (500.000 karakter/bulan, tanpa info pembayaran). Voice native Indonesia.',
+  },
+  // D-278: ElevenLabs = cadangan terakhir, free tier 10.000 kredit/bulan
+  // (~10 menit audio), API key tanpa kartu kredit.
+  elevenlabs: {
+    label: 'ElevenLabs',
+    keyUrl: 'https://elevenlabs.io/app/settings/api-keys',
+    signupUrl: 'https://elevenlabs.io/sign-up',
+    docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech',
+    hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit audio), API key tanpa kartu kredit. Paket gratis tidak termasuk hak komersial — wajib atribusi.',
   },
 };
 // Provider yang boleh dipakai tamu/klien untuk kunci pribadi (BYOK).
@@ -77,15 +86,17 @@ export const PROVIDER_CAPABILITIES = {
   gemini: ['chat', 'vision', 'tts'],
   openrouter: ['chat', 'vision'],
   kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'],
-  // D-276: TTSMaker hanya untuk TTS (cadangan kalau kuota Gemini habis).
-  ttsmaker: ['tts'],
+  // D-278: cadangan TTS bahasa Indonesia dengan free tier tanpa subscription.
+  azure: ['tts'],
+  elevenlabs: ['tts'],
 };
 const PROBE_LABEL = {
   groq: 'Groq',
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
   kie: 'Kie AI',
-  ttsmaker: 'TTSMaker',
+  azure: 'Azure Speech',
+  elevenlabs: 'ElevenLabs',
 };
 
 // Catatan 2026-11: Google menjawab bahwa gemini-2.5-flash “is no longer available to new users” (lihat error API live).
@@ -179,7 +190,7 @@ export async function listKeyGroups(supabase) {
 }
 
 export async function createKey(supabase, { provider, key_name, api_key, priority, user_id }) {
-  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, atau ttsmaker.'), { status: 400 });
+  if (!PROVIDERS.includes(provider)) throw Object.assign(new Error('Provider harus groq, gemini, openrouter, kie, azure, atau elevenlabs.'), { status: 400 });
   const name = String(key_name || '').trim();
   if (!name || name.length > 80) throw Object.assign(new Error('Nama key/label wajib diisi (maks 80 karakter).'), { status: 400 });
   if (!user_id) throw Object.assign(new Error('user_id tidak tersedia untuk insert vault.'), { status: 400 });
@@ -396,8 +407,9 @@ export async function fetchProviderModels(provider, apiKey, baseUrl) {
   // D-203: model Kie (gambar & video) memakai katalog internal server/image-models.js
   // & server/video-models.js — daftar model tidak diambil live dari API Kie.
   if (provider === 'kie') throw new Error('Daftar model Kie dikelola lewat katalog Studio (pilihan model di komposer).');
-  // D-276: TTSMaker tidak punya konsep "model" — yang dipilih adalah voice.
-  if (provider === 'ttsmaker') throw new Error('TTSMaker memakai pilihan voice, bukan model. Daftar voice Indonesia diambil dari API get-voice-list.');
+  // D-278: Azure Speech & ElevenLabs berbasis voice, bukan model bebas-pilih.
+  if (provider === 'azure') throw new Error('Azure Speech memakai pilihan voice, bukan model. Daftar voice Indonesia diambil dari API voices/list.');
+  if (provider === 'elevenlabs') throw new Error('ElevenLabs memakai pilihan voice, bukan model. Daftar voice diambil dari API v1/voices.');
   if (provider === 'gemini') {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey }, signal: controller });
     const data = await res.json().catch(() => ({}));
@@ -456,29 +468,45 @@ export async function probeProviderKey(provider, apiKey, baseUrl) {
       return { ok: true, status: 0, note: 'Validasi format saja — kunci Kie teruji saat generate pertama di Studio.' };
     }
   }
-  if (provider === 'ttsmaker') {
-    // D-276: TTSMaker — endpoint resmi get-token-status (cek kuota karakter).
+  if (provider === 'azure') {
+    // D-278: Azure Speech — endpoint resmi GET /cognitiveservices/voices/list.
+    // Butuh region; pakai env AZURE_SPEECH_REGION atau default southeastasia.
     try {
-      const res = await fetch(`https://api.ttsmaker.com/v2/get-token-status?api_key=${encodeURIComponent(key)}`, {
-        headers: { Accept: 'application/json' },
+      const region = String(process.env.AZURE_SPEECH_REGION || 'southeastasia').trim();
+      const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`, {
+        headers: { Accept: 'application/json', 'Ocp-Apim-Subscription-Key': key },
         signal: controller,
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && (data?.error_code === undefined || data?.error_code === 0)) {
-        const st = data?.data || data?.account_status || data;
-        const quota = Number(st?.quota_characters ?? st?.total_quota ?? 0);
-        const used = Number(st?.characters_used ?? 0);
-        const left = Number(st?.available_quota ?? Math.max(0, quota - used));
-        const note = left
-          ? `Kunci valid — sisa ${left.toLocaleString('id-ID')} karakter.`
-          : 'Kunci valid.';
-        return { ok: true, status: res.status, note };
+      if (res.ok && Array.isArray(data)) {
+        const id = data.filter((v) => String(v?.Locale || '').startsWith('id-ID')).length;
+        return { ok: true, status: res.status, note: id ? `Kunci valid — ${id} voice Indonesia tersedia.` : 'Kunci valid.' };
       }
-      const msg = data?.error_summary || data?.msg || `ttsmaker error (${res.status})`;
+      const msg = data?.message || data?.error?.message || `azure error (${res.status})`;
       return { ok: false, status: res.status, error: msg };
     } catch (error) {
       if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
-      return { ok: true, status: 0, note: 'Validasi format saja — kunci TTSMaker teruji saat synthesize pertama.' };
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci Azure Speech teruji saat synthesize pertama.' };
+    }
+  }
+  if (provider === 'elevenlabs') {
+    // D-278: ElevenLabs — endpoint resmi GET /v1/voices (header xi-api-key).
+    try {
+      const res = await fetch('https://api.elevenlabs.io/v1/voices', {
+        headers: { Accept: 'application/json', 'xi-api-key': key },
+        signal: controller,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const count = Array.isArray(data?.voices) ? data.voices.length : 0;
+        return { ok: true, status: res.status, note: count ? `Kunci valid — ${count} voice tersedia.` : 'Kunci valid.' };
+      }
+      const detail = data?.detail;
+      const msg = String((Array.isArray(detail) && detail[0]?.msg) || (typeof detail === 'string' ? detail : '') || `elevenlabs error (${res.status})`);
+      return { ok: false, status: res.status, error: msg };
+    } catch (error) {
+      if (error.name === 'TimeoutError') return { ok: false, error: 'Probe timeout (20s).' };
+      return { ok: true, status: 0, note: 'Validasi format saja — kunci ElevenLabs teruji saat synthesize pertama.' };
     }
   }
   try {

@@ -274,9 +274,13 @@
   let videoTimer = null;
   // D-249: template Motion Graphics (dari server) + task render yang jalan.
   let motionTemplates = [];      // daftar template dari /api/studio/motion-graphics/templates
-  // D-276: daftar suara TTS (Gemini + cadangan TTSMaker bahasa Indonesia).
+  // D-276 / D-278: daftar suara TTS (Gemini + cadangan bahasa Indonesia:
+  // Azure Speech → ElevenLabs; keduanya free tier tanpa subscription).
   let ttsVoices = [];
-  let ttsProviders = {ttsmaker: {configured: false, quota: null}};
+  let ttsProviders = {
+    azure: {configured: false},
+    elevenlabs: {configured: false},
+  };
   let ttsVoicesLoaded = false;
   let motionAvailable = false;   // renderer siap di server?
   let motionStatus = 'idle';     // idle | ready | installing | missing | failed
@@ -1614,11 +1618,12 @@
     }
   }
   /**
-   * D-276: muat daftar suara TTS.
+   * D-276 / D-278: muat daftar suara TTS.
    *
-   * Server mengembalikan suara Gemini (default) + suara cadangan TTSMaker
-   * (native Indonesia & Sunda). Kalau kuota Gemini habis, server otomatis
-   * memakai suara cadangan — jadi user tidak perlu memilih.
+   * Server mengembalikan suara Gemini (default) + suara cadangan bahasa
+   * Indonesia: Azure Speech (free F0) → ElevenLabs (free).
+   * Kalau kuota Gemini habis, server otomatis memakai suara cadangan —
+   * jadi user tidak perlu memilih.
    */
   async function loadTtsVoices() {
     try {
@@ -1626,56 +1631,58 @@
       if (!r.ok) return;
       const d = await r.json();
       if (Array.isArray(d?.voices)) ttsVoices = d.voices;
-      if (d?.ttsmaker) ttsProviders.ttsmaker = d.ttsmaker;
+      for (const p of ['azure', 'elevenlabs']) {
+        if (d?.[p]) ttsProviders[p] = d[p];
+      }
       ttsVoicesLoaded = true;
       renderMotionBar();
     } catch { /* diamkan — kolom suara tetap kosong */ }
   }
 
   /**
-   * D-276: opsi suara TTS untuk dropdown.
-   * Dikelompokkan per provider: Gemini (default) lalu TTSMaker (cadangan
-   * bahasa Indonesia + Sunda).
+   * D-276 / D-278: opsi suara TTS untuk dropdown.
+   * Dikelompokkan per provider: Gemini (default) lalu cadangan bahasa Indonesia
+   * (Azure Speech → ElevenLabs).
    */
   function ttsVoiceOptions() {
     const gemini = ttsVoices.filter((v) => v.provider === 'gemini');
-    const ttsmaker = ttsVoices.filter((v) => v.provider === 'ttsmaker');
     const out = [];
     if (gemini.length) {
       out.push({value: '', label: '— Gemini (bawaan) —'});
       for (const v of gemini) out.push({value: v.id, label: 'Gemini · ' + v.label});
     }
-    if (ttsmaker.length) {
-      out.push({value: '', label: '— TTSMaker (bahasa Indonesia) —'});
-      for (const v of ttsmaker) {
-        const tag = v.language === 'Bahasa Sunda' ? 'Sunda' : 'Indonesia';
-        out.push({value: String(v.id), label: 'TTSMaker · ' + v.label + ' (' + tag + ')'});
+    for (const provider of ['azure', 'elevenlabs']) {
+      const group = ttsVoices.filter((v) => v.provider === provider);
+      if (!group.length) continue;
+      const name = provider === 'azure' ? 'Azure Speech' : 'ElevenLabs';
+      out.push({value: '', label: '— ' + name + ' (bahasa Indonesia) —'});
+      for (const v of group) {
+        out.push({value: String(v.id), label: name + ' · ' + v.label});
       }
     }
     return out;
   }
 
   /**
-   * D-276: catatan status engine TTS.
-   * Kalau engine cadangan belum dikonfigurasi, user diberi tahu Supaya
+   * D-276 / D-278: catatan status engine TTS cadangan.
+   * Kalau engine cadangan belum dikonfigurasi, user diberi tahu supaya
    * suara tetap jalan saat kuota Gemini habis.
    */
   function ttsProviderNote() {
-    const cfg = ttsProviders?.ttsmaker;
-    if (!cfg?.configured) {
+    const ready = [];
+    for (const provider of ['azure', 'elevenlabs']) {
+      if (ttsProviders?.[provider]?.configured) ready.push(provider);
+    }
+    if (!ready.length) {
       return '<small class="st-motion-tts-note st-motion-tts-note-warn">'
         + icon('bell')
-        + ' <span>Engine cadangan TTSMaker belum aktif. Tambah key-nya di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
+        + ' <span>Engine cadangan TTS belum aktif. Tambahkan key <b>Azure Speech</b> (Utama) atau <b>ElevenLabs</b> di <b>Pengaturan → Provider &amp; API Key</b> supaya suara tetap jalan saat kuota Gemini habis.</span>'
         + '</small>';
     }
-    const q = cfg.quota;
-    if (q && q.left) {
-      return '<small class="st-motion-tts-note">' + icon('audio-lines')
-        + ' <span>Cadangan TTSMaker siap — sisa <b>' + Number(q.left).toLocaleString('id-ID') + '</b> karakter.</span>'
-        + '</small>';
-    }
+    const NAME = {azure: 'Azure Speech', elevenlabs: 'ElevenLabs'};
+    const list = ready.map((p) => NAME[p] || p).join(', ');
     return '<small class="st-motion-tts-note">' + icon('audio-lines')
-      + ' <span>Cadangan TTSMaker siap dipakai kalau kuota Gemini habis.</span>'
+      + ' <span>Cadangan TTS siap dipakai kalau kuota Gemini habis (<b>' + list + '</b>).</span>'
       + '</small>';
   }
 

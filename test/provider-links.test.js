@@ -92,3 +92,54 @@ test('D-270: kartu provider tidak melebar di HP (grid minmax(0,1fr))', () => {
   assert.ok(html.includes('.vault-model-row{flex-wrap:wrap}'),
     'baris model harus boleh wrap di HP');
 });
+
+// ===== D-277: provider cadangan TTS =====
+
+test('D-278: provider cadangan TTS punya link resmi + capability TTS', () => {
+  for (const p of ['azure', 'elevenlabs']) {
+    const info = PROVIDER_INFO[p];
+    assert.ok(info, `provider ${p} harus punya info`);
+    assert.ok(/^https:\/\//.test(info.keyUrl), `provider ${p} punya keyUrl https`);
+    assert.ok(/^https:\/\//.test(info.docsUrl), `provider ${p} punya docsUrl https`);
+  }
+  assert.ok(PROVIDER_INFO.azure.keyUrl.includes('portal.azure.com'));
+  assert.ok(PROVIDER_INFO.elevenlabs.keyUrl.includes('elevenlabs.io'));
+});
+
+test('D-278: provider cadangan TTS terdaftar di PROVIDERS & capability tts', () => {
+  for (const p of ['azure', 'elevenlabs']) {
+    assert.ok(PROVIDERS.includes(p), `provider ${p} harus terdaftar`);
+  }
+  assert.ok(clientJs.includes("'azure'"), 'client harus mengenali azure');
+  assert.ok(clientJs.includes("'elevenlabs'"), 'client harus mengenali elevenlabs');
+  assert.ok(clientJs.includes("azure: ['tts']"), 'capability fallback client harus punya azure: tts');
+  assert.ok(clientJs.includes("elevenlabs: ['tts']"), 'capability fallback client harus punya elevenlabs: tts');
+});
+
+test('D-278: provider yang wajib subscribe tidak lagi terdaftar', () => {
+  // TTSMaker/Soniox/Voicemaker dibuang — fallback TTS harus free tier.
+  for (const gone of ['ttsmaker', 'soniox', 'voicemaker']) {
+    assert.ok(!PROVIDERS.includes(gone), `${gone} tidak boleh terdaftar di PROVIDERS`);
+    assert.ok(!clientJs.includes(`'${gone}'`), `${gone} tidak boleh ada di client`);
+  }
+  assert.ok(
+    !/Pro\/Studio/i.test(clientJs),
+    'client tidak boleh lagi menampilkan catatan subscription TTSMaker',
+  );
+});
+
+test('D-278: hint provider menyebut free tier tanpa subscribe', () => {
+  assert.ok(
+    /gratis|500\.000/i.test(PROVIDER_INFO.azure.hint),
+    'hint Azure harus menyebut free tier F0',
+  );
+  assert.ok(
+    /gratis|10\.000/i.test(PROVIDER_INFO.elevenlabs.hint),
+    'hint ElevenLabs harus menyebut kuota gratis',
+  );
+  assert.ok(
+    /tanpa kartu kredit|tanpa info pembayaran/i.test(
+      PROVIDER_INFO.azure.hint + ' ' + PROVIDER_INFO.elevenlabs.hint),
+    'hint harus menyebut tidak perlu kartu kredit / info pembayaran',
+  );
+});

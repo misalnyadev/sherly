@@ -3,8 +3,9 @@
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  // D-276: ttsmaker = cadangan TTS bahasa Indonesia (native + Sunda).
-  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'ttsmaker'];
+  // D-278: azure + elevenlabs = cadangan TTS bahasa Indonesia dengan free tier
+  // tanpa subscription (TTSMaker/Soniox/Voicemaker dibuang — wajib bayar di awal).
+  const PROVIDERS = ['groq', 'gemini', 'openrouter', 'kie', 'azure', 'elevenlabs'];
   const PROVIDER_LABEL = { groq: 'Groq', gemini: 'Google Gemini', openrouter: 'OpenRouter', kie: 'Kie AI' };
   // D-270: tautan resmi untuk mendapatkan API key (server jadi sumber utama;
   // fallback di bawah supaya UI tetap hidup bila payload lama).
@@ -13,7 +14,8 @@
     gemini: { label: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey', docsUrl: 'https://ai.google.dev/gemini-api/docs', hint: 'Tier gratis tersedia di Google AI Studio.' },
     openrouter: { label: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', docsUrl: 'https://openrouter.ai/docs', hint: 'Model :free gratis; model lain pakai kredit.' },
     kie: { label: 'Kie AI', keyUrl: 'https://kie.ai', docsUrl: 'https://docs.kie.ai', hint: 'Pay-as-you-go (5.000 kredit gratis saat daftar).' },
-    ttsmaker: { label: 'TTSMaker', keyUrl: 'https://pro.ttsmaker.com/api-platform/api-key-list', docsUrl: 'https://ttsmaker.com/developer-api-docs', hint: 'Cadangan TTS bahasa Indonesia. Butuh paket Pro/Studio (API resmi tidak tersedia di Lite/Gratis).' },
+    azure: { label: 'Azure Speech', keyUrl: 'https://portal.azure.com/#view/Microsoft_Azure_Services/Speech', docsUrl: 'https://learn.microsoft.com/azure/ai-services/speech-service/language-support', hint: 'Cadangan TTS bahasa Indonesia. Paket F0 gratis 500.000 karakter/bulan tanpa info pembayaran. Voice native Indonesia.' },
+    elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', docsUrl: 'https://elevenlabs.io/docs/overview/capabilities/text-to-speech', hint: 'Cadangan terakhir. Gratis 10.000 kredit/bulan (~10 menit), API key tanpa kartu kredit. Paket gratis tanpa hak komersial — wajib atribusi.' },
   };
   let providerInfo = FALLBACK_PROVIDER_INFO;
   const infoOf = (p) => providerInfo[p] || FALLBACK_PROVIDER_INFO[p] || null;
@@ -31,7 +33,7 @@
     { id: 'video_gen', label: 'Text-to-Video', short: 'T2V', badge: 'clapperboard', description: 'Studio: generate video dari prompt (mis. kie.ai).' },
     { id: 'video_edit', label: 'Image-to-Video', short: 'I2V', badge: 'film', description: 'Studio: animasi/clip dari gambar (mis. kie.ai).' },
   ];
-  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], ttsmaker: ['tts'] };
+  const FALLBACK_PROVIDER_CAPS = { groq: ['chat', 'vision'], gemini: ['chat', 'vision', 'tts'], openrouter: ['chat', 'vision'], kie: ['image_gen', 'image_edit', 'video_gen', 'video_edit'], azure: ['tts'], elevenlabs: ['tts'] };
   let capabilityRegistry = FALLBACK_CAPABILITIES;
   let providerCapabilities = FALLBACK_PROVIDER_CAPS;
   let activeCapability = 'all';
