@@ -404,6 +404,38 @@ test('D-276: TTSMaker terdaftar sebagai provider di vault', () => {
   );
 });
 
+test('D-276: migrasi DB mengizinkan provider ttsmaker', () => {
+  // Tanpa constraint ini, simpan key TTSMaker gagal:
+  // "new row for relation ai_provider_keys violates check constraint".
+  const mig = readFileSync(
+    path.resolve('supabase/ai_provider_ttsmaker_constraint_migration.sql'),
+    'utf8',
+  );
+  assert.ok(
+    /ai_provider_keys_provider_check[\s\S]*'ttsmaker'/.test(mig),
+    'constraint ai_provider_keys harus menerima ttsmaker',
+  );
+  assert.ok(
+    /ai_provider_settings_provider_check[\s\S]*'ttsmaker'/.test(mig),
+    'constraint ai_provider_settings harus menerima ttsmaker',
+  );
+  // Bucket Bank Suara tetap PRIVATE (bukan publik) + RLS.
+  assert.ok(
+    /'tts-clips',\s*'tts-clips',\s*false/.test(mig),
+    'bucket tts-clips harus tetap private',
+  );
+  // TTSMaker mengembalikan MP3 -> MIME audio harus diizinkan.
+  assert.ok(
+    /audio\/mpeg/.test(mig),
+    'MIME audio/mpeg harus diizinkan untuk MP3 TTSMaker',
+  );
+  // ai_conversations TIDAK boleh ikut berubah (TTS bukan provider chat).
+  assert.ok(
+    !/ai_conversations_provider_check/.test(mig),
+    'ai_conversations tidak boleh diubah (TTS bukan provider chat)',
+  );
+});
+
 test('D-276: template beat-sequence ada di server motion-graphics', () => {
   assert.ok(
     serverMg.includes("id: 'beat-sequence'"),
