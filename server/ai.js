@@ -600,10 +600,24 @@ export async function pollKieVideoTask(auth = {}, taskId) {
   let lastError = null;
   for (const attempt of attempts) {
     try {
-      const qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + id, {
-        headers: { Authorization: 'Bearer ' + attempt.apiKey },
-        signal: AbortSignal.timeout(20000),
-      }).catch(() => null);
+      // D-288: RETRY saat jaringan ke Kie gagal.
+      //
+      // ⚠️ BUG YANG DIPERBAIKI: satu `fetch` yang gagal/timeout langsung
+      // membuat seluruh polling berhenti -> route balas 502 -> client
+      // berhenti poll -> task menggantung "queued"/"running" selamanya
+      // (user tidak pernah dapat video, tidak ada error pun).
+      //
+      // Kie SIBING sering balas "ConnectException: Operation timed out" saat
+      // MENARIK file potret/audio -> itu error sementara; job di sisi Kie
+      // tetap jalan. Jadi 3x percobaan (dengan jeda singkat) sebelum menyerah.
+      let qr = null;
+      for (let tries = 0; tries < 3 && !(qr && qr.ok); tries++) {
+        if (tries > 0) await new Promise((r) => setTimeout(r, 1200 * tries));
+        qr = await fetch(base + '/api/v1/jobs/recordInfo?taskId=' + id, {
+          headers: { Authorization: 'Bearer ' + attempt.apiKey },
+          signal: AbortSignal.timeout(20000),
+        }).catch(() => null);
+      }
       if (!qr || !qr.ok) { lastError = new Error('Gagal mengecek status task video.'); continue; }
       const qd = await qr.json().catch(() => ({}));
       const d = qd?.data || {};

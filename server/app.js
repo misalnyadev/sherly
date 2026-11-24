@@ -1689,8 +1689,29 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
     await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'running', progress });
     return res.json({ ok: true, status: 'running', progress });
   } catch (error) {
-    const status = Number.isInteger(error.status) ? error.status : 502;
-    res.status(status).json({ ok: false, error: error.message || 'Gagal mengecek status video.' });
+    // D-288: GAGAL POLLING BUKAN berarti task gagal.
+    //
+    // ⚠️ BUG YANG DIPERBAIKI: route balas HTTP 502 saat poll ke Kie
+    // timeout -> client (pollVideo) melihat `!r.ok` lalu BERHENTI polling ->
+    // task menggantung "queued"/"running" selamanya di server, tanpa error
+    // yang terlihat user.
+    //
+    // Perbaikan: balas 200 dengan status "running" + pesan singkat. Client
+    // akan retry sendiri (MAX_POLL_RETRIES). Task baru ditandai "fail" kalau
+    // Kie memang bilang gagal.
+    const msg = error.message || 'Gagal mengecek status video.';
+    try {
+      if (task && task.task_id && task.status !== 'fail') {
+        await updateVideoTask(req.supabase, req.user.id, task.id, {
+          status: 'running',
+          error: String(msg).slice(0, 300),
+        });
+      }
+    } catch { /* update gagal -> tetap balas 200 */ }
+    return res.json({
+      ok: true, status: 'running', progress: task?.progress || 0,
+      error: String(msg).slice(0, 300), retryable: true,
+    });
   }
 });
 
