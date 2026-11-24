@@ -57,6 +57,10 @@
 
   const CHAIN_KEY = 'sherly.studio.chain.v1';
   const MAX_CHARACTERS = 3;      // batas keras: maksimal 3 karakter per adegan
+  // D-288: berapa kali polling video/lipsync boleh gagal beruntun sebelum
+  // menyerah. Error jaringan ke Kie (timeout saat tarik file) bersifat
+  // sementara —-job di sisi Kie LANJUT jalan.
+  const MAX_POLL_RETRIES = 12;  // ~3 menit dengan backoff 3-15 detik
   const MAX_CHAIN = 6;           // maksimal frame adegan tersimpan lokal
   const ASPECTS = [['1:1', 'Persegi (1:1)'], ['4:5', 'Potret feed (4:5)'], ['9:16', 'Reels / story (9:16)'], ['16:9', 'Landscape (16:9)']];
   const VIDEO_ASPECTS = [['9:16', 'Vertikal (9:16)'], ['16:9', 'Landscape (16:9)']];
@@ -3859,14 +3863,61 @@
     const m = $('stMotionBtn');
     if (m) { m.disabled = false; m.innerHTML = icon('film') + ' Render'; }
   }
+  /**
+   * D-288: cari task video/lipsync yang belum selesai lalu lanjut poll.
+   *
+   * Dipanggil saat halaman dibuka. Tanpa ini, task yang selesai dibuat tapi
+   * browser ke-close akan menggantung selamanya di server.
+   */
+  async function resumeRunningVideoTask() {
+    if (videoTask) return;
+    try {
+      const r = await fetch('/api/ai/video', { headers: await authHeaders() });
+      if (!r.ok) return;
+      const d = await r.json();
+      const tasks = Array.isArray(d?.tasks) ? d.tasks : [];
+      const open = tasks.find((t) => t && (t.status === 'running' || t.status === 'queued')
+        && t.task_id && t.status !== 'fail');
+      if (!open) return;
+      videoTask = { id: open.id, progress: Number(open.progress) || 0, status: 'running' };
+      renderVideoProgress();
+      pollVideo();
+    } catch { /* diam-diam */ }
+  }
   async function pollVideo() {
     if (!videoTask) return;
     try {
       const r = await fetch('/api/ai/video/' + videoTask.id, { headers: await authHeaders() });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Gagal mengecek status video.');
+      // D-288: server balas 200 + status "running" + `retryable` kalau poll
+      // ke Kie sempat gagal. Itu BUKAN kegagalan task -> terus polling.
+      if (!r.ok) {
+        if (d && d.retryable) {
+          videoTask.pollErrors = (videoTask.pollErrors || 0) + 1;
+          if (videoTask.pollErrors <= MAX_POLL_RETRIES) {
+            const wait = Math.min(3000 * videoTask.pollErrors, 15000);
+            videoTask.error = d.error || 'Sambutan ke generator terputus sementara — mencoba lagi…';
+            renderVideoProgress();
+            videoTimer = setTimeout(pollVideo, wait);
+            return;
+          }
+        }
+        throw new Error(d.error || 'Gagal mengecek status video.');
+      }
       videoTask.progress = d.progress || videoTask.progress;
       videoTask.status = d.status || 'running';
+      // D-288: error sementara dari server (retryable) -> poll lagi.
+      if (d.retryable && d.error) {
+        videoTask.pollErrors = (videoTask.pollErrors || 0) + 1;
+        if (videoTask.pollErrors <= MAX_POLL_RETRIES) {
+          videoTask.error = d.error;
+          renderVideoProgress();
+          videoTimer = setTimeout(pollVideo, Math.min(3000 * videoTask.pollErrors, 15000));
+          return;
+        }
+      }
+      // Poll berhasil -> reset penghitung error.
+      videoTask.pollErrors = 0;
       if (d.status === 'success') {
         if (d.asset) { assets.unshift(d.asset); renderGallery(); }
         videoTask = null;
@@ -3886,10 +3937,31 @@
       renderVideoProgress();
       videoTimer = setTimeout(pollVideo, 3000);
     } catch (e) {
+      // D-288: SATU request gagal (timeout / network / 502 dari Kie) TIDAK
+      // boleh menghentikan polling.
+      //
+      // ⚠️ BUG YANG DIPERBAIKI: sebelumnya `catch` langsung membatalkan
+      // seluruh proses -> videoTask = null -> spinner hilang -> task Kie
+      // menggantung di server selamanya (status "queued"/"running" tanpa
+      // akhir). Padahal Kie sering balas "ConnectException: Operation timed
+      // out" saat MENARIK file potret/audio — itu error sementara, bukan
+      // tanda task gagal.
+      //
+      // Perbaikan: retry dengan backoff (3 dtk, 6 dtk, 9 dtk... maks 15 dtk)
+      // sampai MAX_POLL_RETRIES. Baru setelah itu menyerah dengan pesan.
+      videoTask.pollErrors = (videoTask.pollErrors || 0) + 1;
+      if (videoTask.pollErrors <= MAX_POLL_RETRIES) {
+        const wait = Math.min(3000 * videoTask.pollErrors, 15000);
+        videoTask.error = 'Sambutan ke generator terputus sementara — mencoba lagi…';
+        renderVideoProgress();
+        videoTimer = setTimeout(pollVideo, wait);
+        return;
+      }
+      const msg = e.message || 'Gagal mengecek status video.';
       videoTask = null;
       renderVideoProgress();
       resetGenerateButtons();
-      window.toast?.(e.message || 'Gagal mengecek status video.');
+      window.toast?.(msg);
     }
   }
 
@@ -4089,6 +4161,13 @@
     }).catch(() => {});
     // D-198: galeri aset dari server.
     loadAssets();
+    // D-288: LANJUTKAN polling task yang masih jalan.
+    //
+    // Kalau browser ke-close / halaman di-reload saat task Kie masih jalan,
+    // polling berhenti -> task menggantung "queued"/"running" selamanya di
+    // server. Sekarang, saat halaman dibuka, client cari task yang belum
+    // selesai lalu lanjut poll.
+    resumeRunningVideoTask();
     $('stEnginePill')?.addEventListener('click', () => { buildPop('engine'); togglePop('engine'); });
     $('stAspectPill')?.addEventListener('click', () => { buildPop('aspect'); togglePop('aspect'); });
     // D-213: 4 aksi prompt jadi SATU menu dropdown di dalam kotak composer.
