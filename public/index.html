@@ -965,6 +965,52 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   border:2px solid #24344e;border-top-color:#f044a8;animation:stMotionSpin .8s linear infinite}
 @keyframes stMotionSpin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.st-motion-spinner{animation:none;border-top-color:#f044a8}}
+/* D-287: ALUR 4 LANGKAH mode "Karakter Bicara".
+   1. Tulis naskah  2. Arahan adegan  3. Pilih karakter  4. Pilih gambar ref.
+   Semua field dalam satu container flex; urutannya dari ATAS. */
+.st-lip-flow{display:flex;flex-direction:column;gap:9px;margin-bottom:2px}
+.st-lip-flow.st-hidden{display:none}
+.st-lip-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.st-lip-field.st-hidden{display:none}
+/* D-287: header langkah — nomor bulat kecil + label. */
+.st-lip-head{display:flex;align-items:center;gap:6px}
+.st-lip-no{display:inline-flex;align-items:center;justify-content:center;
+  width:15px;height:15px;border-radius:50%;flex:none;
+  background:#24142a;border:1px solid #f044a8;color:#ffd0ec;
+  font-size:9px;font-weight:700;line-height:1}
+.st-lip-head label{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.01em}
+.st-lip-field textarea{width:100%;background:#0f1828;color:#fff;border:1px solid #24344e;
+  border-radius:10px;padding:8px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:40px}
+.st-lip-field textarea::placeholder{color:#5d6f88}
+.st-lip-field textarea:focus{outline:none;border-color:#f044a8}
+/* D-287: tombol pemilih (karakter / gambar).
+   Compact, satu baris, TIDAK terlihat seperti kotak error — border netral,
+   WAJIB ada thumbnail + nama, dan placeholder "Pilih ..." pakai muted. */
+.st-lip-pick{position:relative}
+.st-lip-pick-btn{display:flex;align-items:center;gap:8px;width:100%;
+  background:#0f1828;border:1px solid #24344e;border-radius:10px;
+  padding:6px 9px;color:#f4f5fb;font:inherit;font-size:12.5px;
+  cursor:pointer;text-align:left;min-height:38px;transition:border-color .18s}
+.st-lip-pick-btn:hover{border-color:#f044a8}
+.st-lip-pick-btn:focus-visible{outline:2px solid #f044a8;outline-offset:1px}
+.st-lip-pick-btn b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-weight:600}
+.st-lip-pick-btn svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
+.st-lip-pick-thumb{width:26px;height:26px;border-radius:7px;flex:none;overflow:hidden;
+  border:1px solid #24344e;background:#160f20;display:flex;align-items:center;
+  justify-content:center}
+.st-lip-pick-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.st-lip-pick-thumb svg{width:13px;height:13px;stroke:#5d6f88;fill:none;stroke-width:2}
+.st-lip-pick-thumb.is-empty{border-style:dashed}
+/* D-287: item dropdown gambar (thumbnail + nama). */
+.st-lip-img-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;
+  border:0;border-radius:9px;background:transparent;color:#cfd6e4;font:inherit;
+  font-size:12px;cursor:pointer;text-align:left}
+.st-lip-img-item:hover,.st-lip-img-item.on{background:#24142a;color:#ffd0ec}
+.st-lip-img-thumb{width:30px;height:30px;border-radius:7px;flex:none;overflow:hidden;
+  border:1px solid #24344e;background:#160f20;display:block}
+.st-lip-img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.st-lip-img-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* D-244: input "Arahan adegan" (lokasi/kamera/aksi) untuk mode Karakter Bicara. */
 .st-scene-hint{margin-top:8px}
 .st-scene-hint label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}

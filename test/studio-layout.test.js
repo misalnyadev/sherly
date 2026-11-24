@@ -2167,8 +2167,8 @@ test('D-242: mode Karakter Bicara punya tombol, bar karakter & tombol buat video
   assert.ok(bar, 'bar karakter harus ada');
   assert.ok(!bar.classList.contains('st-hidden'), 'bar karakter harus tampil di mode lipsync');
   // Placeholder composer = naskah.
-  const ta = doc.getElementById('stPrompt');
-  assert.match(ta.placeholder, /Naskah/i);
+  const ta = doc.getElementById('stLipScript');
+  assert.match(ta.placeholder, /selamat datang/i);
 });
 
 test('D-242: bar karakter hanya tampil di mode lipsync', async () => {
@@ -2228,7 +2228,7 @@ test('D-242: generate lipsync mengirim characterId, script, model, resolusi & as
   assert.ok(ch, 'pilihan karakter tidak dirender');
   click(ch);
   // Tulis naskah lalu klik Buat Video Bicara.
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo, aku Sherly.';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   click(doc.getElementById('stLipsyncBtn'));
@@ -2252,7 +2252,7 @@ test('D-242: generate lipsync menolak tanpa karakter (tidak kirim request)', asy
   await new Promise((r) => setTimeout(r, 80));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await pickTypeWithPanel(win, doc, 'lipsync');
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo.';
   click(doc.getElementById('stLipsyncBtn'));
   await new Promise((r) => setTimeout(r, 120));
@@ -2294,7 +2294,7 @@ test('D-243: durasi lipsync otomatis dari panjang naskah (bukan diset di awal)',
   // Tanpa naskah -> hanya info batas.
   assert.match(meta.textContent, /maks 15/i, 'meta harus menyebut batas 15 detik');
   // Naskah pendek -> estimasi detik muncul.
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo, aku Sherly.';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   assert.match(meta.textContent, /±\d+ dtk/i, 'estimasi durasi harus tampil: ' + meta.textContent);
@@ -2326,24 +2326,27 @@ test('D-244: mode Karakter Bicara punya input "Arahan adegan" terpisah dari nask
   await new Promise((r) => setTimeout(r, 50));
   const click = (el) => el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   // Box arahan adegan tersembunyi di mode foto.
-  assert.ok(doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus hidden di mode foto');
+  // D-287: seluruh alur 4 langkah disembunyikan di mode foto (satu container).
+  assert.ok(doc.getElementById('stLipFlow').classList.contains('st-hidden'), 'alur 4 langkah harus hidden di mode foto');
   // Masuk mode lipsync.
   await pickTypeWithPanel(win, doc, 'lipsync');
-  assert.ok(!doc.getElementById('stSceneHintBox').classList.contains('st-hidden'), 'box arahan harus tampil di mode lipsync');
+  assert.ok(!doc.getElementById('stLipFieldHint').classList.contains('st-hidden'), 'field arahan harus tampil di mode lipsync');
   assert.ok(doc.getElementById('stSceneHint'), 'textarea arahan adegan harus ada');
   assert.ok(doc.getElementById('stSceneHint').getAttribute('maxlength'), 'textarea arahan adegan punya batas panjang');
-  // D-285: di mode Karakter Bicara, composer = NASKAH MURNI (bukan prompt).
-  // Gambar dipilih di kolom "Gambar karakter di lokasi ini" (ada @ sendiri).
-  assert.match(doc.getElementById('stPrompt').placeholder, /naskah/i,
-    'composer harus berisi naskah yang dibacakan');
-  assert.ok(doc.getElementById('stPromptLabel'), 'harus ada label composer');
+  // D-287: alur 4 langkah — naskah (1), arahan (2), karakter (3), gambar (4).
+  assert.ok(doc.getElementById('stLipScript'), 'textarea naskah harus ada');
+  assert.match(doc.getElementById('stLipScript').placeholder, /selamat datang/i,
+    'placeholder naskah berisi contoh');
+  assert.ok(doc.getElementById('stPromptLabel'), 'harus ada label langkah 1');
   assert.match(doc.getElementById('stPromptLabel').textContent, /naskah/i,
-    'label composer harus menyebut naskah');
-  // Kolom gambar karakter ada dan punya @mention sendiri.
-  assert.ok(doc.getElementById('stLipImage'), 'kolom gambar karakter harus ada');
-  assert.ok(doc.getElementById('stMentionListLip'), 'dropdown mention kolom gambar harus ada');
-  assert.match(doc.getElementById('stLipImage').placeholder, /@/,
-    'kolom gambar harus menyuruh ketik @');
+    'label langkah 1 harus menyebut naskah');
+  // Composer prompt disembunyikan di mode Bicara (naskahnya di langkah 1).
+  assert.ok(doc.getElementById('stComposerBox').classList.contains('st-hidden'),
+    'composer prompt harus hidden di mode lipsync');
+  // Langkah 3 & 4 = dropdown (bukan textarea).
+  assert.ok(doc.getElementById('stLipsyncCharBtn'), 'dropdown karakter harus ada');
+  assert.ok(doc.getElementById('stLipImageBtn'), 'dropdown gambar harus ada');
+  assert.ok(doc.getElementById('stPop-lipsyncimg'), 'dropdown gambar harus ada');
 });
 
 test('D-244: request lipsync mengirim arahan adegan sebagai prompt', async () => {
@@ -2381,7 +2384,7 @@ test('D-244: request lipsync mengirim arahan adegan sebagai prompt', async () =>
   const sh = doc.getElementById('stSceneHint');
   sh.value = 'di studio podcast, kamera close-up';
   sh.dispatchEvent(new win.Event('input', { bubbles: true }));
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo, aku Sherly.';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   click(doc.getElementById('stLipsyncBtn'));
@@ -2556,7 +2559,7 @@ test('D-245: request lipsync mengirim provider & resolusi terpilih', async () =>
   click(doc.getElementById('stLipsyncCharBtn'));
   await new Promise((r) => setTimeout(r, 40));
   click(doc.getElementById('stPop-lipsyncchar').querySelector('[data-lip-char]'));
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo, aku Sherly.';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   click(doc.getElementById('stLipsyncBtn'));
@@ -2633,7 +2636,7 @@ test('D-246: request lipsync OmniHuman 2.0 mengirim model & resolusi 720p', asyn
   click(doc.getElementById('stLipsyncCharBtn'));
   await new Promise((r) => setTimeout(r, 40));
   click(doc.getElementById('stPop-lipsyncchar').querySelector('[data-lip-char]'));
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   ta.value = 'Halo, aku Sherly. Ini perkenalan singkat hari ini.';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   click(doc.getElementById('stLipsyncBtn'));

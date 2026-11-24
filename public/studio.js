@@ -253,6 +253,8 @@
     videoModel: 'veo-3-1', audio: true,
     // D-242: mode "Karakter Bicara" (lipsync) — model, karakter, resolusi.
     lipsyncModel: 'infinitalk/from-audio', lipsyncCharacterId: '', lipsyncResolution: '720p',
+    // D-287: aset gambar yang dipilih di langkah 4 (dropdown).
+    lipsyncAssetId: '',
     // D-203: model gambar (Kie) + jenis konten (satu kotak pilihan).
     imageModel: 'nano-banana-2', imageResolution: '2K', contentType: 'photo',
     // D-249: mode Motion Graphics — template render + durasi + isi per field.
@@ -452,10 +454,10 @@
     if (main) out.push(main);
     const hint = $('stSceneHint')?.value || '';
     if (hint) out.push(hint);
-    // D-285: kolom "Gambar karakter di lokasi ini" — tempat paling logis
-    // untuk mention gambar di mode "Karakter Bicara".
-    const img = $('stLipImage')?.value || '';
-    if (img) out.push(img);
+    // D-287: textarea naskah (langkah 1) — di mode "Karakter Bicara" naskah
+    // ada di field sendiri, bukan di composer prompt.
+    const script = $('stLipScript')?.value || '';
+    if (script) out.push(script);
     return out;
   }
   /** Daftar karakter yang disebut di prompt (unik, urut kemunculan, maks 3). */
@@ -1553,15 +1555,16 @@
   }
   /**
    * D-285: kotak dropdown mention untuk target tertentu.
-   * Composer utama -> "stMentionList"; kolom gambar -> "stMentionListLip".
+   * Composer utama -> "stMentionList"; textarea naskah -> "stMentionListScript".
    */
   function mentionBoxId() {
-    return mentionTarget === 'stLipImage' ? 'stMentionListLip' : 'stMentionList';
+    // D-287: naskah punya dropdown sendiri (#stMentionListScript).
+    return mentionTarget === 'stLipScript' ? 'stMentionListScript' : 'stMentionList';
   }
   function closeMention() {
     mentionOpen = false; mentionAt = -1; mentionQuery = '';
     // Bersihkan KEDUA dropdown (target bisa saja baru saja berubah).
-    for (const id of ['stMentionList', 'stMentionListLip']) {
+    for (const id of ['stMentionList', 'stMentionListScript']) {
       const b = $(id); if (b) { b.innerHTML = ''; b.classList.remove('open'); }
     }
   }
@@ -1950,7 +1953,9 @@
     // D-285: label composer utama ikut berubah supaya form JELAS.
     // "Prompt" (umum) -> "Naskah yang dibacakan" (mode Karakter Bicara).
     const pl = $('stPromptLabel');
-    if (pl) pl.textContent = isLip ? 'Naskah yang dibacakan karakter' : 'Prompt';
+    if (pl) pl.textContent = 'Naskah yang dibacakan karakter';
+    const cl = $('stComposerLabel');
+    if (cl) cl.textContent = 'Prompt';
     $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
@@ -1985,6 +1990,11 @@
     document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip || isMotion);
     // D-244: input "Arahan adegan" hanya untuk mode Karakter Bicara.
     $('stSceneHintBox')?.classList.toggle('st-hidden', !isLip);
+    // D-287: alur 4 langkah (naskah -> arahan -> karakter -> gambar) hanya
+    // di mode "Karakter Bicara". Di mode lain, composer prompt biasa yang
+    // dipakai (composer ini disembunyikan agar tidak ada 2 textarea aktif).
+    $('stLipFlow')?.classList.toggle('st-hidden', !isLip);
+    $('stComposerBox')?.classList.toggle('st-hidden', isLip);
     renderLipsyncBar();
     renderMotionBar();
     updatePillLabels();
@@ -3571,18 +3581,38 @@
     const ch = lipsyncCharacterById(state.lipsyncCharacterId);
     const nameEl = $('stLipsyncCharName');
     if (nameEl) nameEl.textContent = ch ? ch.name : 'Pilih karakter';
+    // D-287: thumbnail karakter di tombol dropdown (bukan cuma teks).
+    const charThumb = $('stLipsyncCharThumb');
+    if (charThumb) {
+      charThumb.innerHTML = ch ? characterThumb(ch) : icon('user');
+      charThumb.classList.toggle('is-empty', !ch);
+    }
+    // D-287: nama + thumbnail gambar referensi yang dipilih (langkah 4).
+    const imgName = $('stLipImageName');
+    const imgThumb = $('stLipImageThumb');
+    const selAsset = assets.find((a) => a && a.id === state.lipsyncAssetId);
+    if (imgName) {
+      imgName.textContent = selAsset
+        ? String(selAsset.file_name || 'Aset').replace(/\.[a-z0-9]+$/i, '').slice(0, 30)
+        : 'Pilih gambar dari aset';
+    }
+    if (imgThumb) {
+      imgThumb.innerHTML = selAsset ? mentionAssetThumb(selAsset) : icon('image');
+      imgThumb.classList.toggle('is-empty', !selAsset);
+    }
     const meta = $('stLipsyncMeta');
     if (meta) {
       const model = lipsyncModel();
       const max = model?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
       // D-285: estimasi durasi pakai NASKAH BERSIH (token @ tidak dihitung,
       // karena token itu bukan yang dibacakan).
-      const est = estimateLipsyncSeconds(cleanScriptForTts(($('stPrompt') || {}).value));
+      // D-287: naskah ada di textarea terpisah (#stLipScript) — langkah 1.
+      const est = estimateLipsyncSeconds(cleanScriptForTts(($('stLipScript') || {}).value));
       // D-244: sumber gambar utama = mention gambar (karakter di lokasi
       // tertentu) atau potret karakter sebagai cadangan.
       // D-285: sumber gambar — "gambar dipilih" (kolom gambar) lebih jelas
       // daripada "gambar mention".
-      const src = sceneRefs.length ? 'gambar dipilih'
+      const src = selAsset ? 'gambar dipilih'
         : (lipsyncCharacterHasPortrait() ? 'potret karakter' : 'belum ada gambar');
       // D-245/D-246: info provider + model ikut ditampilkan (ringkas, 2 baris).
       const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
@@ -3604,10 +3634,11 @@
         const hasImg = sceneRefs.length > 0;
         // D-285: cek kedua field (composer + arahan adegan).
         const unknown = unknownMentionTokens();
+        // D-287: urutan panduan mengikuti alur 4 langkah yang diminta user.
         let html = [
-          (hasChar ? '<b class="ok">1. Karakter</b>' : '<b class="todo">1. Pilih karakter</b>'),
-          (hasImg ? '<b class="ok">2. Gambar</b>' : '<b class="todo">2. Pilih gambar (kolom Gambar karakter)</b>'),
-          (est ? '<b class="ok">3. Naskah</b>' : '<b class="todo">3. Tulis naskah</b>'),
+          (est ? '<b class="ok">1. Naskah</b>' : '<b class="todo">1. Tulis naskah</b>'),
+          (hasChar ? '<b class="ok">2. Karakter</b>' : '<b class="todo">2. Pilih karakter</b>'),
+          (hasImg ? '<b class="ok">3. Gambar</b>' : '<b class="todo">3. Pilih gambar</b>'),
         ].join(' · ');
         // D-284: token @ tak dikenal -> beri tahu (gambarnya TIDAK terkirim).
         if (unknown.length) {
@@ -3620,6 +3651,68 @@
       // D-285: preview gambar terpilih ikut disegarkan.
       renderLipPreview();
     }
+  }
+  /**
+   * D-287: dropdown ASET untuk langkah 4 "Gambar referensi".
+   *
+   * User minta: "pilih gambar referensi (dropdown) dari aset" — jadi bukan
+   * lagi Mention @ di textarea, tapi DROPDOWN langsung dari daftar aset
+   * miliknya (dengan thumbnail).
+   */
+  function buildLipsyncImgPop() {
+    const pop = $('stPop-lipsyncimg'); if (!pop) return;
+    const list = assets.filter((a) => a && a.url);
+    if (!list.length) {
+      pop.innerHTML = '<div class="st-pop-empty">Belum ada aset gambar. '
+        + 'Generate atau unggah gambar dulu di Galeri.</div>';
+      return;
+    }
+    pop.innerHTML = list.map((a) => {
+      const on = state.lipsyncAssetId === a.id ? ' on' : '';
+      const label = String(a.file_name || 'Aset').replace(/\.[a-z0-9]+$/i, '');
+      return '<button type="button" data-lip-img="' + esc(a.id) + '" class="st-lip-img-item' + on + '">'
+        + '<span class="st-lip-img-thumb">' + mentionAssetThumb(a) + '</span>'
+        + '<span class="st-lip-img-name">' + esc(label) + '</span>'
+        + '</button>';
+    }).join('');
+    pop.querySelectorAll('[data-lip-img]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.lipsyncAssetId = b.dataset.lipImg;
+      // Muat gambar jadi referensi (sceneRefs) -> dipakai sebagai image_url.
+      syncLipsyncAssetRef();
+      renderLipsyncBar();
+      buildLipsyncImgPop();
+      pop.classList.remove('open');
+      popOpen = null;
+      syncBackdrop();
+    }));
+  }
+  /**
+   * D-287: muat aset yang dipilih di langkah 4 jadi sceneRefs (image_url).
+   * Kalau aset dihapus / diganti, referensi lama dilepas.
+   */
+  async function syncLipsyncAssetRef() {
+    const wanted = state.lipsyncAssetId;
+    const cur = sceneRefs.find((r) => r.fromId === wanted);
+    if (wanted && cur) return;
+    // Buang referensi lama milik lipsync (bukan milik chain/header biasa).
+    sceneRefs = sceneRefs.filter((r) => r.fromId !== state.lipsyncAssetId);
+    if (!wanted) {
+      const a = assets.find((x) => x.id === state.lipsyncAssetId);
+      syncSceneRef(); renderAssetHeader(); renderLipPreview();
+      return;
+    }
+    const a = assets.find((x) => x.id === wanted);
+    if (!a) return;
+    try {
+      const res = await fetch(a.url);
+      const blob = await res.blob();
+      const mime = blob.type || 'image/png';
+      const dataUrl = await blobToDataUrl(blob);
+      if (!dataUrl) return;
+      sceneRefs.push({ mime, data: dataUrl, label: String(a.file_name || 'Aset').slice(0, 28), fromId: a.id });
+      syncSceneRef(); renderAssetHeader(); renderLipPreview();
+    } catch { /* gagal muat -> lewati */ }
   }
   function buildLipsyncCharPop() {
     const pop = $('stPop-lipsyncchar'); if (!pop) return;
@@ -3642,7 +3735,9 @@
     }));
   }
   async function generateLipsync() {
-    const ta = $('stPrompt');
+    // D-287: naskah ada di langkah 1 (#stLipScript), terpisah dari composer
+    // prompt biasa.
+    const ta = $('stLipScript');
     // D-284: token @mention (aset/karakter) DIBUANG dari naskah — kalau tidak,
     // TTS akan membacakan "@aset-gambarreferensi" dengan suara robotik.
     const rawScript = (ta?.value || '').trim();
@@ -3687,7 +3782,7 @@
     if (!sceneRefs.length && !lipsyncCharacterHasPortrait()) {
       window.toast?.('Pilih gambar karakter dulu (kolom "Gambar karakter di lokasi ini"), '
         + 'atau upload potret karakter.');
-      $('stLipImage')?.focus();
+      $('stLipImageBtn')?.focus();
       return;
     }
     // D-284/D-285: token @ tak dikenal (mis. "@gambar referensi" diketik manual)
@@ -3848,40 +3943,70 @@
       + '</div>'
       + '</div>'
       + '</div>'
+      // D-287: ALUR 4 LANGKAH mode "Karakter Bicara".
+      //
+      // Semua field (naskah, arahan, karakter, gambar) berada dalam satu
+      // container flex `.st-lip-flow`. Di mode biasa container ini
+      // disembunyikan kecuali composer; di mode Karakter Bicara semua field
+      // tampil dengan urutan dari ATAS:
+      //   1. Tulis naskah        (composer utama, #stPrompt)
+      //   2. Arahan adegan       (#stSceneHint)
+      //   3. Pilih karakter      (dropdown, #stLipsyncCharBtn)
+      //   4. Pilih gambar ref.   (dropdown aset, #stLipImageBtn)
+      + '<div class="st-lip-flow" id="stLipFlow">'
+      // --- Langkah 1: naskah (composer utama) ---
+      + '<div class="st-lip-field st-lip-f-script" id="stLipFieldScript">'
+      + '<div class="st-lip-head"><span class="st-lip-no">1</span>'
+      + '<label for="stLipScript" id="stPromptLabel">Naskah yang dibacakan</label></div>'
       + '<div class="st-mention-box">'
-      // D-285: di mode "Karakter Bicara" composer = NASKAH yang dibacakan.
-      // Label eksplisit supaya user tidak salah-filled.
-      + '<div class="st-field-label" id="stPromptLabel">Prompt</div>'
+      + '<textarea id="stLipScript" rows="2" maxlength="1200" placeholder="mis. selamat datang di Sherly Studio"></textarea>'
+      + '<div class="st-mention-list" id="stMentionListScript"></div>'
+      + '</div>'
+      + '</div>'
+      // --- Langkah 2: arahan adegan ---
+      + '<div class="st-lip-field st-lip-f-hint" id="stLipFieldHint">'
+      + '<div class="st-lip-head"><span class="st-lip-no">2</span>'
+      + '<label for="stSceneHint">Arahan adegan (untuk video)</label></div>'
+      + '<textarea id="stSceneHint" rows="2" maxlength="1000" placeholder="mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan"></textarea>'
+      + '</div>'
+      // --- Langkah 3: karakter (dropdown) ---
+      + '<div class="st-lip-field st-lip-f-char" id="stLipFieldChar">'
+      + '<div class="st-lip-head"><span class="st-lip-no">3</span>'
+      + '<label for="stLipsyncCharBtn">Karakter yang bicara</label></div>'
+      + '<div class="st-lip-pick">'
+      + '<button type="button" class="st-lip-pick-btn" id="stLipsyncCharBtn">'
+      + '<span class="st-lip-pick-thumb" id="stLipsyncCharThumb"></span>'
+      + '<b id="stLipsyncCharName">Pilih karakter</b>' + icon('chevron-down')
+      + '</button>'
+      + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
+      + '</div>'
+      + '</div>'
+      // --- Langkah 4: gambar referensi (dropdown aset) ---
+      + '<div class="st-lip-field st-lip-f-img" id="stLipFieldImg">'
+      + '<div class="st-lip-head"><span class="st-lip-no">4</span>'
+      + '<label for="stLipImageBtn">Gambar referensi</label></div>'
+      + '<div class="st-lip-pick">'
+      + '<button type="button" class="st-lip-pick-btn" id="stLipImageBtn">'
+      + '<span class="st-lip-pick-thumb" id="stLipImageThumb"></span>'
+      + '<b id="stLipImageName">Pilih gambar dari aset</b>' + icon('chevron-down')
+      + '</button>'
+      + '<div class="st-pop" id="stPop-lipsyncimg"></div>'
+      + '</div>'
+      + '</div>'
+      + '</div>'
+      // Composer untuk mode biasa (Foto/Video/Motion) — disembunyikan di
+      // mode Karakter Bicara karena naskahnya ada di langkah 1.
+      + '<div class="st-mention-box st-composer" id="stComposerBox">'
+      + '<div class="st-field-label" id="stComposerLabel">Prompt</div>'
       + '<textarea id="stPrompt" rows="1" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
-      // D-244: mode "Karakter Bicara" — arahan adegan (lokasi/kamera/aksi)
-      // terpisah dari naskah yang dibacakan TTS.
-      // D-285: ditambah kolom "Gambar karakter" dengan @mention sendiri,
-      // karena user bingung "@ cuma bisa di tempat naskah".
-      + '<div class="st-scene-hint st-hidden" id="stSceneHintBox">'
-      + '<label for="stSceneHint">Arahan adegan (untuk video, bukan yang dibacakan)</label>'
-      + '<textarea id="stSceneHint" rows="2" maxlength="1000" placeholder="mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan"></textarea>'
-      + '<label for="stLipImage">Gambar karakter di lokasi ini</label>'
-      + '<div class="st-mention-box st-mention-box-alt">'
-      + '<textarea id="stLipImage" rows="1" maxlength="600" placeholder="ketik @ lalu pilih gambar yang dipakai…"></textarea>'
-      + '<div class="st-mention-list" id="stMentionListLip"></div>'
-      + '</div>'
-      // Preview gambar yang dipilih — user langsung lihat gambar mana yang dipakai.
-      + '<div class="st-lip-preview" id="stLipPreview"></div>'
-      + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
-      // D-242: panel mode "Karakter Bicara" — pilih karakter yg akan bicara.
+      // D-242: bar info mode "Karakter Bicara".
       + '<div class="st-lipsync-bar st-hidden" id="stLipsyncBar">'
-      + '<button type="button" class="st-lipsync-char" id="stLipsyncCharBtn">'
-      + icon('user') + ' <b id="stLipsyncCharName">Pilih karakter</b>' + icon('chevron-down')
-      + '</button>'
-      + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
       + '<div class="st-lipsync-meta"><span id="stLipsyncMeta">Maks 15 detik</span></div>'
-      // D-284: panduan 3 langkah (karakter -> gambar -> naskah).
       + '<div class="st-lipsync-tip" id="stLipsyncTip"></div>'
       + '</div>'
-      // D-249: mode Motion Graphics — baris template + isi yang akan dirender.
       + '<div class="st-motion-bar st-hidden" id="stMotionBar"></div>'
       + '<div class="st-controls">'
       // D-221: di HP semua pengaturan konten jadi SATU panel dropdown.
@@ -4125,15 +4250,17 @@
     });
     ta?.addEventListener('keyup', (e) => { syncMentionFromText(); scheduleCaretScroll(); });
     ta?.addEventListener('click', () => { syncMentionFromText(); scheduleCaretScroll(); });
-    // D-285: kolom "Gambar karakter di lokasi ini" punya @mention sendiri.
-    const lipTa = $('stLipImage');
-    lipTa?.addEventListener('input', () => {
-      renderLipsyncBar(); syncMentionFromText('stLipImage');
+    // D-287: textarea naskah (langkah 1) — estimasi durasi ikut berubah
+    // saat naskah diketik (D-243).
+    const lipScript = $('stLipScript');
+    lipScript?.addEventListener('input', () => {
+      renderLipsyncBar();
+      syncMentionFromText('stLipScript');
       syncMentionedAssetRefs();
     });
-    lipTa?.addEventListener('keyup', () => { syncMentionFromText('stLipImage'); });
-    lipTa?.addEventListener('click', () => { syncMentionFromText('stLipImage'); });
-    lipTa?.addEventListener('focus', () => { syncMentionFromText('stLipImage'); });
+    lipScript?.addEventListener('keyup', () => { syncMentionFromText('stLipScript'); });
+    lipScript?.addEventListener('click', () => { syncMentionFromText('stLipScript'); });
+    lipScript?.addEventListener('focus', () => { syncMentionFromText('stLipScript'); });
     ta?.addEventListener('focus', scheduleCaretScroll);
     ta?.addEventListener('select', scheduleCaretScroll);
     // D-218: saat caret berpindah (klik, panah, pilih) kursor harus tetap pas
@@ -4163,8 +4290,8 @@
     };
     ta?.addEventListener('keydown', mentionKeydown);
     ta?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
-    lipTa?.addEventListener('keydown', mentionKeydown);
-    lipTa?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
+    lipScript?.addEventListener('keydown', mentionKeydown);
+    lipScript?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
     $('stGenBtn')?.addEventListener('click', generate);
     $('stVideoBtn')?.addEventListener('click', generateVideo);
     // D-242: mode "Karakter Bicara" (lipsync).
@@ -4175,6 +4302,12 @@
       e.stopPropagation();
       buildLipsyncCharPop();
       togglePop('lipsyncchar');
+    });
+    // D-287: langkah 4 — dropdown gambar referensi dari aset.
+    $('stLipImageBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      buildLipsyncImgPop();
+      togglePop('lipsyncimg');
     });
     $('stUploadBtn')?.addEventListener('click', () => $('stUploadInput')?.click());
     $('stUploadInput')?.addEventListener('change', (e) => {

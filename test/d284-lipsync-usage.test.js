@@ -79,18 +79,20 @@ test('D-284: UI memberi panduan 3 langkah (karakter -> gambar -> naskah)', () =>
   assert.ok(studio.includes('id="stLipsyncTip"'), 'harus ada elemen tip');
   assert.ok(html.includes('.st-lipsync-tip{'), 'harus ada CSS tip');
   // Isi tip: 3 langkah.
-  assert.ok(studio.includes('1. Pilih karakter'), 'langkah 1 = pilih karakter');
-  // D-285: langkah 2 kini menunjuk kolom gambar yang eksplisit.
-  assert.ok(studio.includes('2. Pilih gambar (kolom Gambar karakter)'), 'langkah 2 = pilih gambar');
-  assert.ok(studio.includes('3. Tulis naskah'), 'langkah 3 = tulis naskah');
+  assert.ok(studio.includes('2. Pilih karakter'), 'langkah 2 = pilih karakter');
+  // D-287: urutan panduan = naskah -> karakter -> gambar.
+  assert.ok(studio.includes('1. Tulis naskah'), 'langkah 1 = naskah');
+  assert.ok(studio.includes('2. Pilih karakter'), 'langkah 2 = karakter');
+  assert.ok(studio.includes('3. Pilih gambar'), 'langkah 3 = gambar');
+  assert.ok(studio.includes('3. Pilih gambar'), 'langkah 3 = pilih gambar');
   // Ada penanda selesai (ok) vs belum (todo).
   assert.ok(studio.includes("'<b class=\"ok\">"), 'langkah selesai ditandai ok');
   assert.ok(studio.includes("'<b class=\"todo\">"), 'langkah belum ditandai todo');
 });
 
 test('D-284: bar info lipsync tetap menampilkan sumber gambar & durasi', () => {
-  // D-285: label sumber gambar diperjelas jadi "gambar dipilih".
-  assert.ok(studio.includes('const src = sceneRefs.length ? \'gambar dipilih\''),
+  // D-287: sumber gambar mengikuti aset yang dipilih di langkah 4.
+  assert.ok(studio.includes('const src = selAsset ? \'gambar dipilih\''),
     'info harus menyebut sumber gambar (gambar dipilih vs potret karakter)');
   assert.ok(studio.includes('±\' + est + \' dtk (maks \' + max + \')'),
     'info harus menampilkan estimasi durasi');

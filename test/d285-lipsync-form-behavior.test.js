@@ -133,100 +133,71 @@ async function enterLipsync(win, doc) {
   await new Promise((r) => setTimeout(r, 80));
 }
 
-test('D-285: kolom "Gambar karakter" membuka dropdown mention sendiri', async () => {
+test('D-287: langkah 4 "Gambar referensi" adalah DROPDOWN dari aset', async () => {
   const { win, doc } = buildStudio(makeFetch());
   await enterLipsync(win, doc);
 
-  const lipImage = doc.getElementById('stLipImage');
-  assert.ok(lipImage, 'kolom gambar harus ada di mode Karakter Bicara');
+  const btn = doc.getElementById('stLipImageBtn');
+  assert.ok(btn, 'tombol pilih gambar harus ada di mode Karakter Bicara');
+  const pop = doc.getElementById('stPop-lipsyncimg');
+  assert.ok(pop, 'dropdown gambar harus ada');
+  assert.match(doc.getElementById('stLipImageName').textContent, /pilih gambar/i,
+    'label harus menyebut "pilih gambar"');
 
-  const listLip = doc.getElementById('stMentionListLip');
-  const listMain = doc.getElementById('stMentionList');
-  assert.ok(listLip, 'dropdown kolom gambar harus ada');
-  assert.ok(listMain, 'dropdown composer harus ada');
-  assert.ok(!listLip.classList.contains('open'), 'dropdown kolom gambar belum terbuka');
-
-  // User ketik "@" di kolom gambar.
-  lipImage.value = '@';
-  lipImage.setSelectionRange(1, 1);
-  lipImage.dispatchEvent(new win.Event('keyup', { bubbles: true }));
+  // Klik tombol -> dropdown berisi aset dari galeri.
+  btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 60));
-
-  assert.ok(listLip.classList.contains('open'),
-    'dropdown kolom gambar HARUS terbuka (dulu tidak bisa @ di sini)');
-  assert.ok(!listMain.classList.contains('open'),
-    'dropdown composer TIDAK boleh ikut terbuka (tidak bercampur)');
-  // Daftar harus menampilkan aset dari galeri.
-  const txt = listLip.textContent || '';
+  const txt = pop.textContent || '';
   assert.match(txt, /gambar referensi/i, 'aset harus muncul di dropdown');
   assert.match(txt, /studio podcast/i, 'semua aset harus muncul');
 });
 
-test('D-285: aset yang dipilih dari kolom gambar MASUK jadi referensi (image_url)', async () => {
+test('D-287: aset yang dipilih dari dropdown gambar MASUK jadi referensi (image_url)', async () => {
   const { win, doc } = buildStudio(makeFetch());
   await enterLipsync(win, doc);
 
-  const lipImage = doc.getElementById('stLipImage');
-  lipImage.value = '@';
-  lipImage.setSelectionRange(1, 1);
-  lipImage.dispatchEvent(new win.Event('keyup', { bubbles: true }));
+  doc.getElementById('stLipImageBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 60));
-
-  const listLip = doc.getElementById('stMentionListLip');
-  const item = [...listLip.querySelectorAll('[data-mention-pick]')]
+  const pop = doc.getElementById('stPop-lipsyncimg');
+  const item = [...pop.querySelectorAll('[data-lip-img]')]
     .find((b) => /gambar referensi/i.test(b.textContent || ''));
   assert.ok(item, 'item aset harus ada di dropdown');
 
-  // Klik aset -> token ditulis ke kolom gambar (BUKAN ke composer).
-  item.dispatchEvent(new win.MouseEvent('mousedown', { bubbles: true }));
-  await new Promise((r) => setTimeout(r, 120));
+  item.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 150));
 
-  assert.match(lipImage.value, /^@aset-/,
-    'token harus ditulis ke kolom gambar, diawali "aset-"');
-  assert.equal(doc.getElementById('stPrompt').value, '',
-    'composer (naskah) harus tetap kosong');
-
-  // Preview gambar terpilih harus tampil.
-  const prev = doc.getElementById('stLipPreview');
-  assert.ok(prev && !prev.classList.contains('st-hidden'),
-    'preview gambar terpilih harus tampil');
-  assert.ok(prev.querySelector('img'), 'preview harus berisi gambar');
+  // Nama aset terpilih tampil di tombol.
+  assert.match(doc.getElementById('stLipImageName').textContent, /gambar referensi/i,
+    'nama aset terpilih harus tampil di tombol');
+  // Thumbnail terisi.
+  const thumb = doc.getElementById('stLipImageThumb');
+  assert.ok(thumb && !thumb.classList.contains('is-empty'),
+    'thumbnail gambar terpilih harus terisi');
+  assert.ok(thumb.querySelector('img'), 'thumbnail harus berisi gambar');
 });
 
-test('D-285: composer dan kolom gambar punya dropdown terpisah', async () => {
+test('D-287: naskah (langkah 1) punya dropdown mention sendiri', async () => {
   const { win, doc } = buildStudio(makeFetch());
   await enterLipsync(win, doc);
 
-  // Ketik "@" di composer -> dropdown composer yang terbuka.
-  const ta = doc.getElementById('stPrompt');
-  ta.value = '@';
-  ta.setSelectionRange(1, 1);
-  ta.dispatchEvent(new win.Event('keyup', { bubbles: true }));
+  const script = doc.getElementById('stLipScript');
+  assert.ok(script, 'textarea naskah harus ada di langkah 1');
+  script.value = '@';
+  script.setSelectionRange(1, 1);
+  script.dispatchEvent(new win.Event('keyup', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 60));
 
-  assert.ok(doc.getElementById('stMentionList').classList.contains('open'),
-    'dropdown composer harus terbuka');
-  assert.ok(!doc.getElementById('stMentionListLip').classList.contains('open'),
-    'dropdown kolom gambar TIDAK boleh ikut terbuka');
-
-  // Sekarang ketik "@" di kolom gambar -> yang terbuka HANYA kolom gambar.
-  const lipImage = doc.getElementById('stLipImage');
-  lipImage.value = '@';
-  lipImage.setSelectionRange(1, 1);
-  lipImage.dispatchEvent(new win.Event('keyup', { bubbles: true }));
-  await new Promise((r) => setTimeout(r, 60));
-
-  assert.ok(doc.getElementById('stMentionListLip').classList.contains('open'),
-    'dropdown kolom gambar harus terbuka');
+  assert.ok(doc.getElementById('stMentionListScript').classList.contains('open'),
+    'dropdown naskah harus terbuka');
   assert.ok(!doc.getElementById('stMentionList').classList.contains('open'),
-    'dropdown composer harus tertutup (tidak bercampur)');
+    'dropdown composer TIDAK boleh ikut terbuka');
 });
 
 test('D-285: naskah di composer dan arahan di kotak arahan tetap terpisah', async () => {
   const { win, doc } = buildStudio(makeFetch());
   await enterLipsync(win, doc);
 
-  const ta = doc.getElementById('stPrompt');
+  const ta = doc.getElementById('stLipScript');
   const hint = doc.getElementById('stSceneHint');
   ta.value = 'selamat datang di sherly studio';
   ta.dispatchEvent(new win.Event('input', { bubbles: true }));
@@ -238,23 +209,45 @@ test('D-285: naskah di composer dan arahan di kotak arahan tetap terpisah', asyn
   assert.equal(ta.value, 'selamat datang di sherly studio', 'naskah terpisah');
   assert.equal(hint.value, 'di studio sedang podcast, tersenyum menghadap kamera',
     'arahan terpisah');
+  // Composer prompt biasa harus TERSEMBUNYI di mode Bicara (tidak ada 2 textarea aktif).
+  assert.ok(doc.getElementById('stComposerBox').classList.contains('st-hidden'),
+    'composer prompt harus hidden di mode Karakter Bicara');
 
   // Bar info harus menyebut sumber gambar + durasi.
   const meta = doc.getElementById('stLipsyncMeta');
   assert.match(meta.textContent, /dtk/i, 'durasi harus tampil');
 });
 
-test('D-285: label composer berubah jadi "Naskah yang dibacakan karakter"', async () => {
+test('D-287: alur 4 langkah tampil dari atas di mode Karakter Bicara', async () => {
   const { win, doc } = buildStudio(makeFetch());
   await win.renderStudio();
   await new Promise((r) => setTimeout(r, 80));
 
-  // Di mode foto: label generic.
-  const label = doc.getElementById('stPromptLabel');
-  assert.ok(label, 'label composer harus ada');
-  assert.equal(label.textContent, 'Prompt', 'mode foto = Prompt');
+  // Di mode foto: alur 4 langkah disembunyikan, composer prompt tampil.
+  assert.ok(doc.getElementById('stLipFlow').classList.contains('st-hidden'),
+    'alur 4 langkah harus hidden di mode foto');
+  assert.ok(!doc.getElementById('stComposerBox').classList.contains('st-hidden'),
+    'composer prompt harus tampil di mode foto');
+  assert.equal(doc.getElementById('stComposerLabel').textContent, 'Prompt',
+    'mode foto = Prompt');
 
   await enterLipsync(win, doc);
-  assert.equal(doc.getElementById('stPromptLabel').textContent,
-    'Naskah yang dibacakan karakter', 'mode Karakter Bicara = Naskah yang dibacakan');
+  assert.ok(!doc.getElementById('stLipFlow').classList.contains('st-hidden'),
+    'alur 4 langkah harus tampil di mode Karakter Bicara');
+  assert.ok(doc.getElementById('stComposerBox').classList.contains('st-hidden'),
+    'composer prompt harus hidden di mode Karakter Bicara');
+
+  // Urutan field di markup: naskah (1) -> arahan (2) -> karakter (3) -> gambar (4).
+  const html = doc.getElementById('stLipFlow').innerHTML;
+  const iScript = html.indexOf('stLipFieldScript');
+  const iHint = html.indexOf('stLipFieldHint');
+  const iChar = html.indexOf('stLipFieldChar');
+  const iImg = html.indexOf('stLipFieldImg');
+  assert.ok(iScript >= 0 && iHint > iScript && iChar > iHint && iImg > iChar,
+    'urutan harus: naskah -> arahan -> karakter -> gambar');
+  // Nomor langkah 1..4.
+  assert.equal(doc.getElementById('stLipFieldScript').querySelector('.st-lip-no').textContent, '1');
+  assert.equal(doc.getElementById('stLipFieldHint').querySelector('.st-lip-no').textContent, '2');
+  assert.equal(doc.getElementById('stLipFieldChar').querySelector('.st-lip-no').textContent, '3');
+  assert.equal(doc.getElementById('stLipFieldImg').querySelector('.st-lip-no').textContent, '4');
 });

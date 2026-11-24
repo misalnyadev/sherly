@@ -1,20 +1,13 @@
-// D-285 · Form "Karakter Bicara" yang JELAS.
+// D-285 / D-287 · Form "Karakter Bicara" — struktur & wiring.
 //
-// User: *"gak ngerti aku, buat yg jelas formnya. di kotak arahan itu gak bisa @
-// gak muncul aset yg mau di pilih, @ cuma bisa di tempat naskah coba benerin
-// formnya"*
+// D-285: form dibuat jelas (composer = naskah, kolom @mention terpisah).
+// D-287: ALUR 4 LANGKAH sesuai permintaan user, dari ATAS:
+//   1. Tulis naskah        (#stLipScript)
+//   2. Arahan adegan       (#stSceneHint)
+//   3. Pilih karakter      (dropdown #stLipsyncCharBtn)
+//   4. Pilih gambar ref.   (dropdown #stLipImageBtn dari daftar aset)
 //
-// Dua masalah yang diperbaiki:
-//
-// 1. **@mention HANYA bisa di composer utama.** Di mode "Karakter Bicara" ada
-//    DUA tempat relevan: naskah (composer) dan arahan adegan. User butuh
-//    memilih gambar dari kotak arahan. Perbaikan: kolom "Gambar karakter di
-//    lokasi ini" (`#stLipImage`) dengan dropdown mention SENDIRI
-//    (`#stMentionListLip`).
-//
-// 2. **Form tidak jelas.** Perbaikan: label eksplisit "Naskah yang dibacakan
-//    karakter" di composer, preview gambar terpilih, dan panduan 3 langkah
-//    yang menyebut kolom gambarnya.
+// Plus: tombol pemilih harus COMPACT dan TIDAK terlihat seperti kotak error.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -22,130 +15,135 @@ import { readFileSync } from 'node:fs';
 const studio = readFileSync('public/studio.js', 'utf8');
 const html = readFileSync('public/index.html', 'utf8');
 
-// ===== 1) Kolom gambar terpisah dengan @mention sendiri =====
+// ===== 1) Struktur 4 langkah =====
 
-test('D-285: ada kolom "Gambar karakter di lokasi ini" dengan @mention sendiri', () => {
-  assert.ok(studio.includes('id="stLipImage"'), 'kolom gambar harus ada');
-  assert.ok(studio.includes('id="stMentionListLip"'), 'dropdown mention terpisah harus ada');
-  assert.ok(studio.includes('for="stLipImage"'), 'ada label untuk kolom gambar');
-  assert.ok(studio.includes('Gambar karakter di lokasi ini'), 'label kolom gambar harus jelas');
-  // Placeholder mengarahkan user ke @.
-  assert.ok(studio.includes('ketik @ lalu pilih gambar'), 'placeholder harus menyebut @');
+test('D-287: ada container alur 4 langkah', () => {
+  assert.ok(studio.includes('id="stLipFlow"'), 'container alur harus ada');
+  assert.ok(studio.includes('id="stLipFieldScript"'), 'field naskah harus ada');
+  assert.ok(studio.includes('id="stLipFieldHint"'), 'field arahan harus ada');
+  assert.ok(studio.includes('id="stLipFieldChar"'), 'field karakter harus ada');
+  assert.ok(studio.includes('id="stLipFieldImg"'), 'field gambar harus ada');
 });
 
-test('D-285: dropdown mention milik kolom gambar membuka ke BAWAH', () => {
-  // Kolom gambar ada di bawah composer -> dropdown ke-atas akan tertutup.
-  assert.ok(html.includes('.st-mention-box-alt .st-mention-list{'), 'harus ada style khusus');
-  assert.ok(html.includes('bottom:auto;top:100%'), 'dropdown harus ke bawah');
+test('D-287: urutan field di markup: naskah -> arahan -> karakter -> gambar', () => {
+  const iScript = studio.indexOf('stLipFieldScript');
+  const iHint = studio.indexOf('stLipFieldHint');
+  const iChar = studio.indexOf('stLipFieldChar');
+  const iImg = studio.indexOf('stLipFieldImg');
+  assert.ok(iScript > 0 && iHint > iScript && iChar > iHint && iImg > iChar,
+    'urutan harus naskah -> arahan -> karakter -> gambar');
 });
 
-test('D-285: mention bisa dipicu dari kedua textarea', () => {
-  // Target mention disimpan, bukan hardcode ke stPrompt.
+test('D-287: tiap langkah punya nomor 1..4', () => {
+  assert.ok(studio.includes('class="st-lip-no">1<'), 'nomor 1');
+  assert.ok(studio.includes('class="st-lip-no">2<'), 'nomor 2');
+  assert.ok(studio.includes('class="st-lip-no">3<'), 'nomor 3');
+  assert.ok(studio.includes('class="st-lip-no">4<'), 'nomor 4');
+  assert.ok(html.includes('.st-lip-no{'), 'CSS nomor langkah harus ada');
+});
+
+test('D-287: langkah 4 "Gambar referensi" = DROPDOWN dari aset', () => {
+  assert.ok(studio.includes('id="stLipImageBtn"'), 'tombol pilih gambar harus ada');
+  assert.ok(studio.includes('id="stPop-lipsyncimg"'), 'dropdown gambar harus ada');
+  assert.ok(studio.includes('for="stLipImageBtn"'), 'ada label untuk tombol gambar');
+  assert.ok(studio.includes('Gambar referensi'), 'label langkah 4 harus jelas');
+  assert.ok(studio.includes('function buildLipsyncImgPop()'), 'ada builder dropdown gambar');
+  assert.ok(studio.includes('assets.filter((a) => a && a.url)'),
+    'dropdown harus berisi aset gambar');
+  assert.ok(studio.includes('data-lip-img='), 'item dropdown harus punya data-lip-img');
+});
+
+test('D-287: tombol pemilih compact & TIDAK seperti kotak error', () => {
+  assert.ok(html.includes('.st-lip-pick-btn{'), 'harus ada style tombol pemilih');
+  assert.ok(html.includes('.st-lip-img-item{'), 'harus ada style item dropdown gambar');
+  const at = html.indexOf('.st-lip-pick-btn{');
+  const btn = html.slice(at, at + 420);
+  // Border netral — BUKAN merah/kotak error.
+  assert.match(btn, /border:1px solid #24344e/, 'border harus netral (bukan merah/err)');
+  // Compact.
+  assert.match(btn, /min-height:38px/, 'tinggi tombol harus compact');
+  // WAJIB ada thumbnail + nama.
+  assert.ok(html.includes('.st-lip-pick-thumb{'), 'harus ada thumbnail di tombol');
+  assert.ok(studio.includes('id="stLipsyncCharThumb"'), 'thumbnail karakter harus ada');
+  assert.ok(studio.includes('id="stLipImageThumb"'), 'thumbnail gambar harus ada');
+});
+
+test('D-287: composer prompt & textarea naskah terpisah', () => {
+  assert.ok(studio.includes('id="stLipScript"'), 'textarea naskah harus ada');
+  assert.ok(studio.includes('id="stPrompt"'), 'composer prompt harus tetap ada');
+  // Mode Bicara: composer disembunyikan, flow tampil.
+  assert.ok(studio.includes("$('stLipFlow')?.classList.toggle('st-hidden', !isLip)"),
+    'flow hanya tampil di mode Bicara');
+  assert.ok(studio.includes("$('stComposerBox')?.classList.toggle('st-hidden', isLip)"),
+    'composer disembunyikan di mode Bicara');
+});
+
+test('D-287: naskah dibaca dari #stLipScript di semua tempat', () => {
+  // Estimasi durasi.
+  assert.ok(studio.includes("cleanScriptForTts(($('stLipScript') || {}).value)"),
+    'estimasi durasi pakai naskah');
+  // Generate.
+  const g = studio.indexOf('async function generateLipsync()');
+  assert.ok(studio.slice(g, g + 600).includes("const ta = $('stLipScript')"),
+    'generateLipsync baca dari #stLipScript');
+  // Mention.
+  assert.ok(studio.includes("const script = $('stLipScript')?.value || ''"),
+    'mentionSourceTexts ikut naskah');
+});
+
+test('D-287: mention punya dropdown sendiri untuk naskah', () => {
   assert.ok(studio.includes("let mentionTarget = 'stPrompt'"), 'ada state mentionTarget');
   assert.ok(studio.includes('function mentionTargetEl()'), 'ada helper target');
-  // syncMentionFromText menerima targetId.
   assert.ok(studio.includes('function syncMentionFromText(targetId)'), 'fungsi menerima target');
-  // pickMention menulis ke target yang benar.
   assert.ok(studio.includes('const ta = mentionTargetEl();'), 'pickMention pakai target');
-  // Listener untuk kolom gambar.
-  assert.ok(studio.includes("syncMentionFromText('stLipImage')"), 'kolom gambar memicu mention');
-  // Keyboard (Enter/panah) untuk kedua textarea.
-  assert.ok(studio.includes('const mentionKeydown = (e) =>'), 'handler keyboard diekstrak');
-  assert.ok(studio.includes('lipTa?.addEventListener(\'keydown\', mentionKeydown)'),
-    'kolom gambar punya handler keyboard');
-});
-
-test('D-285: renderMention menulis ke dropdown yang sesuai target', () => {
-  assert.ok(studio.includes('function mentionBoxId()'), 'ada pemetaan target -> box');
-  assert.ok(studio.includes("mentionTarget === 'stLipImage' ? 'stMentionListLip' : 'stMentionList'"),
-    'dropdown composer dan kolom gambar harus terpisah');
-  // closeMention membersihkan keduanya.
-  assert.ok(studio.includes("for (const id of ['stMentionList', 'stMentionListLip'])"),
+  assert.ok(studio.includes("mentionTarget === 'stLipScript' ? 'stMentionListScript' : 'stMentionList'"),
+    'dropdown naskah terpisah dari composer');
+  assert.ok(studio.includes("for (const id of ['stMentionList', 'stMentionListScript'])"),
     'closeMention bersihkan kedua dropdown');
+  assert.ok(studio.includes("syncMentionFromText('stLipScript')"), 'naskah memicu mention');
+  assert.ok(studio.includes("lipScript?.addEventListener('keydown', mentionKeydown)"),
+    'naskah punya handler keyboard');
 });
 
-// ===== 2) Mention aset dibaca dari semua field =====
-
-test('D-285: mention aset/karakter dibaca dari SEMUA field', () => {
-  assert.ok(studio.includes('function mentionSourceTexts()'), 'ada helper sumber teks');
-  // Composer + arahan adegan + kolom gambar.
-  assert.ok(studio.includes("const main = $('stPrompt')?.value || ''"), 'composer ikut');
-  assert.ok(studio.includes("const hint = $('stSceneHint')?.value || ''"), 'arahan ikut');
-  assert.ok(studio.includes("const img = $('stLipImage')?.value || ''"), 'kolom gambar ikut');
-  // mentionedCharacters & mentionedAssetIds memakainya.
-  assert.ok(studio.includes('const text = mentionSourceTexts().join(\'\\n\');'),
-    'mention dibaca dari gabungan field');
+test('D-287: aset yang dipilih jadi referensi (image_url)', () => {
+  assert.ok(studio.includes('state.lipsyncAssetId'), 'state aset lipsync dipakai');
+  assert.ok(studio.includes('async function syncLipsyncAssetRef()'), 'ada sinkron aset');
+  const s = studio.indexOf('async function syncLipsyncAssetRef()');
+  const body = studio.slice(s, s + 1600);
+  assert.ok(body.includes('sceneRefs.push('), 'aset masuk sceneRefs');
+  // Step 4 dipakai sebagai image_url di generateLipsync.
+  const g = studio.indexOf('async function generateLipsync()');
+  const ge = studio.indexOf('async function generateMotionGraphics()', g);
+  assert.ok(studio.slice(g, ge).includes('sceneRefs.find('), 'image_url dari sceneRefs');
 });
 
-test('D-285: gambar yang dipilih di kolom gambar dipakai sebagai image_url', () => {
-  // mentionedAssetIds() -> syncMentionedAssetRefs() -> sceneRefs -> refImg.
-  const start = studio.indexOf('function mentionedAssetIds()');
-  const body = studio.slice(start, start + 700);
-  assert.ok(body.includes('mentionSourceTexts()'), 'mentionedAssetIds wajib dari gabungan field');
-  // syncMentionedAssetRefs memakai mentionedAssetIds.
-  const s2 = studio.indexOf('async function syncMentionedAssetRefs()');
-  const b2 = studio.slice(s2, s2 + 400);
-  assert.ok(b2.includes('const wanted = mentionedAssetIds();'), 'sinkron dari mentionedAssetIds');
-  // generateLipsync memakai sceneRefs untuk image_url.
-  const s3 = studio.indexOf('async function generateLipsync()');
-  const e3 = studio.indexOf('async function generateMotionGraphics()', s3);
-  const b3 = studio.slice(s3, e3 > s3 ? e3 : s3 + 6000);
-  assert.ok(b3.includes('sceneRefs.find('), 'image_url diambil dari sceneRefs');
+test('D-287: dropdown gambar & karakter terpasang ke tombolnya', () => {
+  assert.ok(studio.includes("$('stLipImageBtn')?.addEventListener('click'"),
+    'tombol gambar punya listener');
+  assert.ok(studio.includes("togglePop('lipsyncimg')"), 'dropdown gambar pakai togglePop');
+  assert.ok(studio.includes("$('stLipsyncCharBtn')?.addEventListener('click'"),
+    'tombol karakter punya listener');
 });
 
-// ===== 3) Form yang jelas =====
-
-test('D-285: label composer jadi "Naskah yang dibacakan karakter" di mode Bicara', () => {
-  assert.ok(studio.includes('id="stPromptLabel"'), 'ada elemen label');
-  assert.ok(studio.includes("pl.textContent = isLip ? 'Naskah yang dibacán karakter'".replace('dibacán', 'dibacakan')),
-    'label berubah di mode Bicara');
-  // Placeholder composer di mode Bicara = naskah murni (bukan prompt).
-  assert.ok(studio.includes("isLip ? 'Naskah yang dibacakan karakter…'"), 'placeholder naskah');
+test('D-287: panduan langkah mengikuti alur naskah -> karakter -> gambar', () => {
+  assert.ok(studio.includes('1. Tulis naskah'), 'langkah 1 = naskah');
+  assert.ok(studio.includes('2. Pilih karakter'), 'langkah 2 = karakter');
+  assert.ok(studio.includes('3. Pilih gambar'), 'langkah 3 = gambar');
 });
 
-test('D-285: preview gambar terpilih tampil di kolom gambar', () => {
-  assert.ok(studio.includes('id="stLipPreview"'), 'ada elemen preview');
-  assert.ok(studio.includes('function renderLipPreview()'), 'ada fungsi render');
-  assert.ok(html.includes('.st-lip-preview{'), 'ada CSS preview');
-  // Dipanggil saat referensi berubah.
-  const s = studio.indexOf('async function syncMentionedAssetRefs()');
-  const e = studio.indexOf('function removeSceneRef(', s);
-  assert.ok(studio.slice(s, e > s ? e : s + 2000).includes('renderLipPreview()'),
-    'dipanggil saat sinkron');
-});
-
-test('D-285: panduan 3 langkah menyebut kolom gambar', () => {
-  assert.ok(studio.includes('2. Pilih gambar (kolom Gambar karakter)'),
-    'langkah 2 harus menyebut kolom gambar');
-  assert.ok(studio.includes('1. Pilih karakter'), 'langkah 1');
-  assert.ok(studio.includes('3. Tulis naskah'), 'langkah 3');
-});
-
-test('D-285: pesan error mengarah ke kolom yang tepat', () => {
-  const s = studio.indexOf('async function generateLipsync()');
-  const body = studio.slice(s, s + 3500);
-  // Error gambar -> fokus kolom gambar (bukan composer).
-  assert.ok(body.includes("Pilih gambar karakter dulu"), 'pesan error gambar jelas');
-  assert.ok(body.includes("$('stLipImage')?.focus()"), 'fokus ke kolom gambar');
-  // Error naskah -> fokus composer.
+test('D-287: pesan error mengarah ke field yang tepat', () => {
+  const g = studio.indexOf('async function generateLipsync()');
+  const body = studio.slice(g, g + 3600);
+  assert.ok(body.includes('Pilih gambar karakter dulu'), 'pesan error gambar jelas');
+  assert.ok(body.includes("$('stLipImageBtn')?.focus()"), 'fokus ke tombol gambar');
   assert.ok(body.includes('Tulis naskah yang mau dibacakan karakter.'), 'pesan naskah');
 });
 
-test('D-285: naskah composer dibersihkan, kolom gambar tidak ikut jadi naskah', () => {
-  const s = studio.indexOf('async function generateLipsync()');
-  const e = studio.indexOf('async function generateMotionGraphics()', s);
-  const body = studio.slice(s, e > s ? e : s + 6000);
-  // Naskah tetap dari stPrompt saja, dibersihkan.
-  assert.ok(body.includes('const rawScript = (ta?.value || \'\').trim();'), 'naskah dari composer');
-  assert.ok(body.includes('const script = cleanScriptForTts(rawScript);'), 'naskah dibersihkan');
-  // Arahan adegan terpisah (prompt ke Kie).
-  assert.ok(body.includes("const sceneHint = ($('stSceneHint')?.value || '').trim();"),
-    'arahan adegan terpisah dari naskah');
-});
-
-test('D-285: token @ tak dikenal dicek di semua field', () => {
-  const s = studio.indexOf('async function generateLipsync()');
-  const body = studio.slice(s, s + 3500);
-  // Tanpa argumen -> otomatis semua field.
-  assert.ok(body.includes('const unknown = unknownMentionTokens();'), 'cek semua field');
+test('D-287: bar info tetap menampilkan durasi & sumber gambar', () => {
+  assert.ok(studio.includes("const src = selAsset ? 'gambar dipilih'"),
+    'info harus menyebut sumber gambar');
+  assert.ok(studio.includes('±\' + est + \' dtk (maks \' + max + \')'),
+    'info harus menampilkan estimasi durasi');
+  assert.ok(studio.includes('terlalu panjang, pendekkan naskah'),
+    'info harus memperingatkan naskah kepanjangan');
 });

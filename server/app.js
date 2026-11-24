@@ -759,7 +759,18 @@ app.get('/api/ai/image/:id', requireUser, requireAdmin, async (req, res) => {
     }
     if (state === 'fail' || state === 'failed' || state === 'error') {
       const message = info.error || 'Generator gambar gagal.';
-      await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
+      // D-287: simpan diagnostik Kie ke meta task — state mentah + kunci
+      // resultJson. Tanpa ini, error "tidak mengembalikan URL" tidak bisa
+      // dipetakan ke penyebabnya saat dianalisis ulang.
+      const diag = {
+        ...(taskMeta && typeof taskMeta === 'object' ? taskMeta : {}),
+        kieRawState: info.rawState || '',
+        kieResultKeys: info.rawKeys || '',
+        kieHasResultJson: !!info.hasResultJson,
+      };
+      await updateVideoTask(req.supabase, req.user.id, task.id, {
+        status: 'fail', progress, error: String(message).slice(0, 300), meta: diag,
+      });
       return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
     }
     await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'running', progress });

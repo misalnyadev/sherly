@@ -258,7 +258,8 @@ export async function createVideoTask(supabase, userId, patch = {}) {
 
 /** Update status/progres task (pemilik saja). */
 export async function updateVideoTask(supabase, userId, id, patch = {}) {
-  const allowed = ['status', 'progress', 'task_id', 'asset_id', 'error'];
+  // D-287: `meta` boleh di-update (dipakai untuk diagnostik Kie saat gagal).
+  const allowed = ['status', 'progress', 'task_id', 'asset_id', 'error', 'meta'];
   const clean = {};
   for (const k of allowed) if (k in patch) clean[k] = patch[k];
   clean.updated_at = new Date().toISOString();
