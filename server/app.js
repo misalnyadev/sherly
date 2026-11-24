@@ -1643,13 +1643,26 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
     const info = await pollKieVideoTask(auth, task.task_id);
     const state = String(info.state || '').toLowerCase();
     const progress = Math.max(Number(info.progress) || 0, task.progress || 0);
+    // D-289: meta task dipakai di JALUR FAIL juga (lihat blok di bawah).
+    //
+    // ⚠️ BUG YANG DIPERBAIKI: `taskMeta` sebelumnya hanya dideklarasi di
+    // dalam blok `if (state === 'success')`. Di jalur FAIL (baris ~1679)
+    // variabel itu TIDAK ADA -> `ReferenceError: taskMeta is not defined`
+    // -> Throwable ditangkap `catch` di bawah -> route membalas
+    // `{ status:'running', retryable:true }` -> client polling terus
+    // (12x) -> baru akhirnya tampil pesan generik.
+    //
+    // Akibatnya pesan error ASLI dari Kie (`failMsg` / `failCode`, mis.
+    // "ConnectException: Operation timed out" atau "invalid image url")
+    // PERNAH TIDAK sampai ke user — user cuma lihat "tidak selesai dalam
+    // 20 menit" padahal Kie sudah gagal dengan alasan yang jelas.
+    const taskMeta = task.meta && typeof task.meta === 'object' ? task.meta : {};
     if ((state === 'success' || state === 'completed') && info.resultUrls.length) {
       // Unduh video -> simpan sebagai aset -> tautkan ke task.
       const videoRes = await fetch(info.resultUrls[0], { signal: AbortSignal.timeout(120000) });
       if (!videoRes.ok) throw new Error('Gagal mengunduh hasil video (' + videoRes.status + ').');
       const buffer = Buffer.from(await videoRes.arrayBuffer());
       const mime = (videoRes.headers.get('content-type') || 'video/mp4').split(';')[0];
-      const taskMeta = task.meta && typeof task.meta === 'object' ? task.meta : {};
       const durationSec = Number(taskMeta.duration) || 8;
       // D-257: dimensi video hasil generate (Kie) HARUS dicatat, kalau tidak
       // asetnya jatuh ke fallback 9:16 -> video horizontal tampil vertikal.
@@ -1676,13 +1689,19 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
       // D-283: task LIPSYNC & VIDEO pakai penerjemah error yang sama supaya
       // user tidak lagi lihat "ConnectException: Operation timed out" tanpa
       // tahu harus melakukan apa.
+      //
+      // D-289: pesan dari Kie WAJIB dipertahankan. `failMsg`/`failCode` dari
+      // Kie adalah satu-satunya sumber kebenaran kenapa task ditolak — tanpa
+      // itu user cuma lihat "gagal" tanpa petunjuk dan mengulang generate
+      // yang sama berulang kali.
       const isLipsync = taskMeta.kind === 'lipsync';
+      const kieReason = String(info.error || '').trim();
       const message = isLipsync
-        ? lipsyncErrorMessage(info.error || 'Generator karakter bicara gagal.', {
+        ? lipsyncErrorMessage(kieReason || 'Generator karakter bicara gagal.', {
           model: taskMeta.modelLabel || 'InfiniteTalk',
           maxSeconds: Number(taskMeta.maxSeconds) || LIPSYNC_MAX_SECONDS,
         })
-        : (info.error || 'Generator video gagal.');
+        : (kieReason || 'Generator video gagal.');
       await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
       return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
     }

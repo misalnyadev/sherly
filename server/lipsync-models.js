@@ -168,18 +168,72 @@ export function normalizeLipsyncParams({ model, resolution, aspect, fps, duratio
 }
 
 /**
+ * D-289: bersihkan URL media agar bebas karakter jejas.
+ *
+ * ⚠️ MASALAH YANG DIPERBAIKI: payload Kie yang diterima di produksi
+ * pernah punya:
+ *   image_url = "[https://tempfile.redpandaai.co/.../lipsync-xxx.jpg"
+ *               ^ ada "[" nyasar di depan
+ *
+ * URLirus itu berarti Kie GAGAL menarik file gambar -> task berstatus
+ * "fail" (atau menggantung) tanpa pesan jelas. Karakter "[" / "]" bisa
+ * masuk dari copy-paste (Kie dashboard menampilkan URL sebagai markdown
+ * link `[url](url)`) atau dari wrapper API.
+ *
+ * Fungsi ini dipakai sebagai "defense in depth": dipanggil di DALAM
+ * buildLipsyncInput() sehingga semua jalur (upload base64, URL aset,
+ * hasil Stored) aman — bukan cuma jalur upload.
+ */
+export function cleanMediaUrl(value) {
+  let u = String(value == null ? '' : value).trim();
+  if (!u) return '';
+  // Buang karakter jejas: kurung siku, kurung kurawal, backtick, quote,
+  // dan semua whitespace (URL tidak boleh punya spasi).
+  u = u.replace(/[\[\]{}`"'\s]/g, '');
+  // Buang pembungkus yang bisa nyangkut di ujung: "<", "(", ">", ")".
+  u = u.replace(/^[<(]+/, '').replace(/[>)]+$/, '');
+  return u;
+}
+
+/**
+ * D-289: bersihkan prompt lipsync.
+ *
+ * Prompt bisa saja berisi sisa karakter jejas ("[", "]") atau URL nyasar
+ * yang ikut ter-copy dari dashboard Kie. Karakter itu tidak menambah
+ *arti apa pun bagi model, dan bisa membuat Kie menolak payload.
+ * @mention yang tak dikenal juga dibuang (hanya untuk prompt — naskah
+ * yang dibacakan TTS punya sanitasi sendiri di app.js).
+ */
+export function cleanLipsyncPrompt(value) {
+  let p = String(value == null ? '' : value);
+  // Buang markdown link sisa: "teks](https://...)" -> "teks".
+  p = p.replace(/\]\(\s*https?:\/\/[^\s)]*/gi, '');
+  p = p.replace(/\[\s*https?:\/\/[^\s)]*/gi, '');
+  // Buang karakter jejas kurung siku (bukan kurung kurawal).
+  p = p.replace(/[\[\]]/g, '');
+  // Buang token @mention yang tersisa (mis. "@aset-gambarreferensi").
+  p = p.replace(/@[a-z0-9][a-z0-9_-]{0,59}/gi, ' ');
+  // Rapikan spasi ganda.
+  p = p.replace(/[ \t]{2,}/g, ' ').trim();
+  return p;
+}
+
+/**
  * Susun `input` request Kie untuk InfiniteTalk.
  * imageUrl : URL publik potret karakter
  * audioUrl : URL publik audio (TTS / rekaman)
  */
 export function buildLipsyncInput(schema, params, imageUrl, audioUrl) {
   const { prompt, resolution, aspect, seed, fps, duration } = params;
+  // D-289: URL & prompt dibersihkan DI DALAM builder -> semua jalur aman.
+  const safeImage = cleanMediaUrl(imageUrl);
+  const safeAudio = cleanMediaUrl(audioUrl);
   const input = {
-    prompt: String(prompt || '').slice(0, 5000),
+    prompt: cleanLipsyncPrompt(prompt).slice(0, 5000),
     resolution,
   };
-  if (imageUrl) input.image_url = imageUrl;
-  if (audioUrl) input.audio_url = audioUrl;
+  if (safeImage) input.image_url = safeImage;
+  if (safeAudio) input.audio_url = safeAudio;
   // D-245: seed punya rentang berbeda per model.
   //  InfiniteTalk : 10000..1000000
   //  LTX 2.5 A2V : 0..2147483647
@@ -200,7 +254,7 @@ export function buildLipsyncInput(schema, params, imageUrl, audioUrl) {
       input.duration = Number(duration);
     }
     // Rasio aspek hanya relevan bila TIDAK ada gambar (output mengikuti gambar).
-    if (!imageUrl && aspect) input.aspect_ratio = aspect;
+    if (!safeImage && aspect) input.aspect_ratio = aspect;
   }
   // D-246: OmniHuman 1.5 — digital human full-body.
   //  - image_url : potret (satu)
@@ -224,7 +278,7 @@ export function buildLipsyncInput(schema, params, imageUrl, audioUrl) {
   //  - prompt     : maks 300 karakter
   //  - enable_watermark : opsional
   if (schema === 'omnihuman20') {
-    if (imageUrl) input.image_urls = [imageUrl];
+    if (safeImage) input.image_urls = [safeImage];
     delete input.image_url;
     delete input.resolution;
     input.prompt = String(input.prompt || '').slice(0, 300);

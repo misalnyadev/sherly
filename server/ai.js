@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
 import { findImageModel, buildImageInput, DEFAULT_IMAGE_MODEL } from './image-models.js';
-import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL } from './lipsync-models.js';
+import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL, cleanMediaUrl } from './lipsync-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -274,15 +274,9 @@ export async function kieUploadBase64(apiKey, mime, data, { uploadPath = 'images
  * dan "%" di-encode).
  */
 export function sanitizeMediaUrl(value) {
-  let u = String(value == null ? '' : value).trim();
-  if (!u) return '';
-  // Buang karakter jejas: kurung siku, kurung kurawal, backtick, quote,
-  // dan semua whitespace (URL tidak boleh punya spasi).
-  u = u.replace(/[\[\]{}`\"'\s]/g, '');
-  // Buang pembungkus yang bisa nyangkut di ujung: "<", "(", ">", ")".
-  // Kurung di TENGAH URL tetap boleh (sah sebagai bagian path).
-  u = u.replace(/^[<(]+/, '').replace(/[>)]+$/, '');
-  return u;
+  // D-289: implementasi dipindah ke `cleanMediaUrl()` (server/lipsync-models.js)
+  // supaya SEMUA jalur (upload Kie, aset, Stored) memakai aturan yang sama.
+  return cleanMediaUrl(value);
 }
 
 /**
@@ -554,6 +548,47 @@ export function kieResultUrls(rj, d = {}) {
 }
 
 /**
+ * D-289: ambil pesan kegagalan dari respons Kie.
+ *
+ * ⚠️ MASALAH YANG DIPERBAIKI: sebelumnya error Kie hanya dibaca dari
+ * `d.failMsg` / `d.failCode`. Padahal Kie (terbukti di dokumentasi resminya
+ * & data produksi) bisa menaruh alasannya di beberapa tempat berbeda:
+ *
+ *   data.failMsg / data.failCode      -> alasan utama
+ *   data.error / data.errorMessage     -> beberapa versi endpoint
+ *   data.resultJson.failMsg            -> sebagian model menaruh di sini
+ *   data.msg                           -> pesan envelope teratas
+ *
+ * Kalau tidak salah satu yang kena, `error` jadi null -> route pakai pesan
+ * generik -> user tidak pernah tahu kenapa Kie menolak task-nya.
+ *
+ * @param {object} d objek `data` dari recordInfo
+ * @returns {string} pesan kegagalan (string kosong kalau tidak ada)
+ */
+export function kieFailReason(d = {}) {
+  if (!d || typeof d !== 'object') return '';
+  const candidates = [
+    d.failMsg, d.failCode,
+    d.errorMessage, d.error_message,
+    d.error, d.msg, d.message,
+  ];
+  for (const c of candidates) {
+    const v = String(c == null ? '' : c).trim();
+    if (v) return v;
+  }
+  // Sebagian model menaruh alasan di dalam resultJson.
+  let rj = d.resultJson || d.result;
+  if (typeof rj === 'string') { try { rj = JSON.parse(rj); } catch { rj = null; } }
+  if (rj && typeof rj === 'object') {
+    for (const c of [rj.failMsg, rj.failCode, rj.errorMessage, rj.error, rj.msg]) {
+      const v = String(c == null ? '' : c).trim();
+      if (v) return v;
+    }
+  }
+  return '';
+}
+
+/**
  * D-286: normalisasi state Kie.
  *
  * Kie documented states: waiting | queuing | generating | success | fail.
@@ -568,25 +603,34 @@ export function kieNormalizeState(state, list, d = {}) {
   const FAIL_STATES = ['fail', 'failed', 'failure', 'error', 'cancelled', 'canceled', 'timeout'];
   // State in-flight -> tetap "running" (client lanjut polling).
   const RUNNING_STATES = ['waiting', 'queuing', 'queued', 'generating', 'processing', 'pending', 'running', 'in_progress', 'created'];
+  // D-289: alasan kegagalan diambil dari SEMUA kemungkinan field Kie.
+  const reason = kieFailReason(d);
   if (SUCCESS_STATES.includes(s)) {
     // Sukses tapi TIDAK ada URL hasil -> task tidak bisa diunduh.
     if (!list.length) {
       return {
         state: 'fail',
-        error: d.failMsg || d.failCode
+        error: reason
           || 'Kie menandai task selesai tapi tidak mengembalikan URL video. '
             + 'Coba ulang dengan naskah lebih pendek atau resolusi 480p.',
       };
     }
-    return { state: 'success', error: d.failMsg || d.failCode || null };
+    return { state: 'success', error: reason || null };
   }
   if (FAIL_STATES.includes(s)) {
-    return { state: 'fail', error: d.failMsg || d.failCode || null };
+    // D-289: JANGAN sampai null. Kalau Kie memang tidak mengirim alasan,
+    // tetap beri pesan yang benar (bukan "tidak selesai dalam 20 menit").
+    return {
+      state: 'fail',
+      error: reason
+        || 'Kie menolak task ini (kode ' + (String(d.failCode || d.code || '?') ) + '). '
+          + 'Coba ulang dengan naskah lebih pendek atau resolusi 480p.',
+    };
   }
   if (RUNNING_STATES.includes(s)) {
-    return { state: 'running', error: d.failMsg || d.failCode || null };
+    return { state: 'running', error: reason || null };
   }
-  return { state: s || 'running', error: d.failMsg || d.failCode || null };
+  return { state: s || 'running', error: reason || null };
 }
 
 export async function pollKieVideoTask(auth = {}, taskId) {
