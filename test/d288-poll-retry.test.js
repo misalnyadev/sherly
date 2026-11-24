@@ -62,7 +62,9 @@ test('D-288: server retry fetch recordInfo ke Kie (3x) sebelum menyerah', () => 
 test('D-288: route /api/ai/video/:id balas 200 + retryable saat poll gagal', () => {
   const start = appJs.indexOf("app.get('/api/ai/video/:id'");
   assert.ok(start > 0, 'route harus ada');
-  const body = appJs.slice(start, start + 6000);
+  // D-289: slice diperlebar — blok `taskMeta` (dipindah ke luar blok success)
+  // menambah beberapa baris sebelum blok catch.
+  const body = appJs.slice(start, start + 9000);
   // Harus ada retryable.
   assert.ok(body.includes('retryable: true'), 'harus menandai response sebagai retryable');
   assert.ok(body.includes("status: 'running'"), 'status harus running (bukan gagal)');

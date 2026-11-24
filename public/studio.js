@@ -2065,7 +2065,13 @@
     if (perSec == null) perSec = Object.values(row)[0];
     // Durasi audio baru diketahui setelah TTS jadi naskah -> perkiraan
     // (~2,5 kata/detik untuk bahasa Indonesia), dibatasi durasi maks model.
-    const script = ($('stPrompt')?.value || '').trim();
+    //
+    // D-289: sejak D-287 naskah Karakter Bicara ada di textarea TERSISA
+    // (#stLipScript), bukan di composer utama (#stPrompt). Sebelumnya
+    // badge selalu membaca #stPrompt yang kosong -> durasi selalu 1 dtk
+    // -> badge tidak pernah berubah (mis. OmniHuman 2.0 stuck di "14"
+    // padahal tarifnya 14 kredit/DETIK -> harus ikut durasi).
+    const script = (($('stLipScript')?.value || '') || ($('stPrompt')?.value || '')).trim();
     const words = script ? script.split(/\s+/).filter(Boolean).length : 0;
     const maxSec = Number(m.maxSeconds) || 15;
     const sec = Math.min(maxSec, Math.max(1, Math.round(words / 2.5) || 1));
@@ -4336,6 +4342,9 @@
       renderLipsyncBar();
       syncMentionFromText('stLipScript');
       syncMentionedAssetRefs();
+      // D-289: badge kredit ikut berubah saat naskah diketik
+      // (durasi audio = perkiraan dari jumlah kata).
+      updateCreditBadge();
     });
     lipScript?.addEventListener('keyup', () => { syncMentionFromText('stLipScript'); });
     lipScript?.addEventListener('click', () => { syncMentionFromText('stLipScript'); });
