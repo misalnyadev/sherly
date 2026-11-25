@@ -67,7 +67,6 @@ function makeFetch(payload = TTS_VOICES_PAYLOAD) {
     if (u.includes('/api/studio/assets')) return {ok: true, json: async () => ({ok: true, assets: []})};
     if (u.includes('/api/ai/image/models')) return {ok: true, json: async () => ({ok: true, models: []})};
     if (u.includes('/api/ai/video/models')) return {ok: true, json: async () => ({ok: true, models: []})};
-    if (u.includes('/api/ai/lipsync/models')) return {ok: true, json: async () => ({ok: true, models: []})};
     if (u.includes('/api/characters')) return {ok: true, json: async () => ({characters: []})};
     if (u.includes('/api/custom-providers')) return {ok: true, json: async () => ({providers: []})};
     if (u.includes('/api/prompt-bank')) return {ok: true, json: async () => ({ok: true, entries: [], blocks: []})};

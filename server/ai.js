@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { findVideoModel, buildVideoInput, DEFAULT_VIDEO_MODEL } from './video-models.js';
 import { findImageModel, buildImageInput, DEFAULT_IMAGE_MODEL } from './image-models.js';
-import { findLipsyncModel, buildLipsyncInput, DEFAULT_LIPSYNC_MODEL, cleanMediaUrl } from './lipsync-models.js';
 import { getUsableKeys, recordSuccess, recordFailure, AUTO_ORDER, getProviderModel, saveProviderModel, pickReplacementModel, isModelNotFoundError } from './provider-keys.js';
 
 const chatSchema = z.object({
@@ -274,9 +273,18 @@ export async function kieUploadBase64(apiKey, mime, data, { uploadPath = 'images
  * dan "%" di-encode).
  */
 export function sanitizeMediaUrl(value) {
-  // D-289: implementasi dipindah ke `cleanMediaUrl()` (server/lipsync-models.js)
-  // supaya SEMUA jalur (upload Kie, aset, Stored) memakai aturan yang sama.
-  return cleanMediaUrl(value);
+  // D-290: implementasi dipindah ke sini (server/lipsync-models.js dihapus
+  // bersama fitur Karakter Bicara) supaya SEMUA jalur (upload Kie, aset,
+  // Stored) memakai aturan yang sama.
+  let u = String(value == null ? '' : value).trim();
+  if (!u) return '';
+  // Buang karakter jejas: kurung siku, kurung kurawal, backtick, quote,
+  // dan semua whitespace (URL tidak boleh punya spasi).
+  u = u.replace(/[\[\]{}`\"'\s]/g, '');
+  // Buang pembungkus yang bisa nyangkut di ujung: "<", "(", ">", ")".
+  // Kurung di TENGAH URL tetap boleh (sah sebagai bagian path).
+  u = u.replace(/^[<(]+/, '').replace(/[>)]+$/, '');
+  return u;
 }
 
 /**
@@ -434,65 +442,6 @@ export async function generateVideoWithKie(prompt, auth = {}, opts = {}) {
     } catch (error) { lastError = error; }
   }
   throw Object.assign(lastError || new Error('Generator video gagal membuat task.'), { status: 502 });
-}
-
-/**
- * D-242: buat task LIPSYNC di Kie (potret + audio -> video karakter bicara).
- *
- * Berbeda dari generateVideoWithKie, di sini input BUKAN teks:
- *  - imageUrl : URL publik potret karakter (sudah diupload ke Kie)
- *  - audioUrl : URL publik audio (TTS / rekaman, maks 15 detik)
- * jadi pemanggil yang menyiapkan URL-nya; fungsi ini hanya merakit payload
- * dan membuat task (tanpa poll, sama seperti video).
- *
- * opts: { model, prompt, resolution, aspect, seed, imageUrl, audioUrl }
- * Return { taskId, model, provider }.
- */
-export async function generateLipsyncWithKie(auth = {}, opts = {}) {
-  const attempts = await kieAttempts(auth);
-  if (!attempts.length) {
-    throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY di Vercel.'), { status: 503 });
-  }
-  const { base } = kieConfig();
-  const spec = findLipsyncModel(opts.model) || findLipsyncModel(DEFAULT_LIPSYNC_MODEL);
-  if (!opts.imageUrl || !opts.audioUrl) {
-    // D-246: batas durasi mengikuti model (InfiniteTalk 15 dtk, OmniHuman 2.0 300 dtk).
-    throw Object.assign(new Error('Lipsync butuh potret karakter dan audio (durasi maksimal ' + spec.maxSeconds + ' detik untuk ' + spec.label + ').'), { status: 400 });
-  }
-  const params = {
-    // D-246: prompt dibatasi 300 karakter untuk OmniHuman (5000 untuk model lain).
-    prompt: String(opts.prompt || '').slice(0, spec.promptMax || 5000),
-    resolution: opts.resolution || spec.defaultResolution,
-    aspect: opts.aspect || spec.defaultAspect,
-    seed: Number.isInteger(opts.seed) ? opts.seed : undefined,
-    // D-245: LTX 2.5 A2V punya fps & durasi opsional.
-    fps: Number.isInteger(opts.fps) ? opts.fps : undefined,
-    duration: Number.isFinite(Number(opts.duration)) ? Number(opts.duration) : undefined,
-  };
-  const input = buildLipsyncInput(spec.schema, params, opts.imageUrl, opts.audioUrl);
-  let lastError = null;
-  for (const attempt of attempts) {
-    try {
-      const res = await fetch(base + '/api/v1/jobs/createTask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + attempt.apiKey },
-        body: JSON.stringify({ model: spec.id, input }),
-        signal: AbortSignal.timeout(30000),
-      }).catch(() => null);
-      if (!res || !res.ok) {
-        const t = res ? String(await res.text()).slice(0, 200) : 'tidak terjangkau';
-        throw new Error('Kie API error' + (res ? ' (' + res.status + ')' : '') + ' — ' + t);
-      }
-      const data = await res.json().catch(() => ({}));
-      if (Number(data?.code) && Number(data.code) !== 200) {
-        throw new Error('Kie menolak task lipsync: ' + String(data?.msg || ('kode ' + data.code)));
-      }
-      const taskId = data?.data?.taskId || data?.taskId;
-      if (!taskId) throw new Error(data?.msg || 'Kie tidak membuat task lipsync.');
-      return { taskId: String(taskId), model: spec.id, provider: 'kie' };
-    } catch (error) { lastError = error; }
-  }
-  throw Object.assign(lastError || new Error('Generator lipsync gagal membuat task.'), { status: 502 });
 }
 
 /**

@@ -18,14 +18,11 @@ import { readFileSync } from 'node:fs';
 import {
   IMAGE_CREDITS,
   VIDEO_CREDITS,
-  LIPSYNC_CREDITS,
   estimateImageCredits,
   estimateVideoCredits,
-  estimateLipsyncCredits,
 } from '../server/kie-credits.js';
 import { imageCatalog } from '../server/image-models.js';
 import { videoCatalog } from '../server/video-models.js';
-import { lipsyncCatalog } from '../server/lipsync-models.js';
 
 const studio = readFileSync('public/studio.js', 'utf8');
 const html = readFileSync('public/index.html', 'utf8');
@@ -62,13 +59,6 @@ test('D-274: tarif kredit video mengikuti tier + resolusi + durasi', () => {
   assert.equal(estimateVideoCredits('model-hantu', 'standard', 8, '720p'), 0);
 });
 
-test('D-274: tarif kredit lipsync per detik', () => {
-  assert.equal(estimateLipsyncCredits('infinitalk/from-audio', 10, '480p'), 30);
-  assert.equal(estimateLipsyncCredits('infinitalk/from-audio', 10, '720p'), 120);
-  assert.equal(estimateLipsyncCredits('omnihuman-2-0', 10, '720p'), 140);
-  assert.equal(estimateLipsyncCredits('model-hantu', 10, '720p'), 0);
-});
-
 test('D-274: katalog model bawa tarif kredit ke frontend', () => {
   for (const m of imageCatalog().models) {
     assert.ok(m.credits && typeof m.credits === 'object',
@@ -80,19 +70,12 @@ test('D-274: katalog model bawa tarif kredit ke frontend', () => {
     assert.ok(m.credits && typeof m.credits === 'object',
       'model video ' + m.id + ' harus punya tarif kredit');
   }
-  for (const m of lipsyncCatalog().models) {
-    assert.ok(m.credits && typeof m.credits === 'object',
-      'model lipsync ' + m.id + ' harus punya tarif kredit');
-  }
   // Tiap model di katalog WAJIB punya entri tarif (bukan model yang tak dihargai).
   for (const m of imageCatalog().models) {
     assert.ok(IMAGE_CREDITS[m.id], 'model foto ' + m.id + ' butuh entri IMAGE_CREDITS');
   }
   for (const m of videoCatalog().models) {
     assert.ok(VIDEO_CREDITS[m.id], 'model video ' + m.id + ' butuh entri VIDEO_CREDITS');
-  }
-  for (const m of lipsyncCatalog().models) {
-    assert.ok(LIPSYNC_CREDITS[m.id], 'model lipsync ' + m.id + ' butuh entri LIPSYNC_CREDITS');
   }
 });
 
@@ -123,7 +106,6 @@ test('D-274: badge kredit tampil di samping jenis konten, angka saja', () => {
 test('D-274: estimasi frontend mengikuti model + opsi generate aktif', () => {
   assert.ok(studio.includes('function imageCreditEstimate'), 'perlu fungsi estimasi foto');
   assert.ok(studio.includes('function videoCreditEstimate'), 'perlu fungsi estimasi video');
-  assert.ok(studio.includes('function lipsyncCreditEstimate'), 'perlu fungsi estimasi lipsync');
   // Badge ikut ke model gambar + resolusi gambar.
   const imgIdx = studio.indexOf('function imageCreditEstimate');
   const img = studio.slice(imgIdx, imgIdx + 900);
@@ -164,13 +146,6 @@ test('D-274: katalog fallback frontend juga punya tarif kredit', () => {
     const idx = studio.indexOf(`id: '${m.id}'`);
     assert.ok(idx > 0, 'fallback frontend harus punya ' + m.id);
     const block = studio.slice(idx, idx + 1400);
-    assert.ok(block.includes('credits:'),
-      'fallback model ' + m.id + ' harus punya tarif kredit');
-  }
-  for (const m of lipsyncCatalog().models) {
-    const idx = studio.indexOf(`id: '${m.id}'`);
-    assert.ok(idx > 0, 'fallback frontend harus punya ' + m.id);
-    const block = studio.slice(idx, idx + 900);
     assert.ok(block.includes('credits:'),
       'fallback model ' + m.id + ' harus punya tarif kredit');
   }
