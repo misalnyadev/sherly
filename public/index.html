@@ -909,26 +909,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-mention-empty{padding:11px;font-size:12px;color:var(--muted)}
 /* D-196: Rantai adegan (lokal) */
 .st-chain{margin-top:12px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:10px}
-/* D-242: bar mode "Karakter Bicara" (lipsync) — pilih karakter + info durasi. */
-.st-lipsync-bar{display:flex;align-items:center;gap:8px;margin-top:10px;
-  border-radius:12px;border:1px solid #24344e;background:#0c1422;padding:8px 9px;position:relative}
-.st-lipsync-char{display:flex;align-items:center;gap:7px;flex:1;min-width:0;
-  background:#0f1828;border:1px solid #24344e;border-radius:9px;padding:8px 10px;
-  color:#f4f5fb;font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
-.st-lipsync-char b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
-.st-lipsync-char svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
-.st-lipsync-char:hover{border-color:#f044a8;color:#ffd0ec}
-.st-lipsync-meta{font-size:10.5px;color:#5d6f88;flex:none;text-align:right;line-height:1.35;max-width:52%}
-/* D-243: estimasi durasi naskah melebihi batas 15 detik -> beri peringatan. */
-.st-lipsync-meta-warn{color:#ff9bdc;font-weight:600}
-/* D-284: panduan 3 langkah di mode "Karakter Bicara"
-   (1 pilih karakter -> 2 mention gambar -> 3 tulis naskah).
-   Membantu user yang bingung "naskahnya di mana, gambarnya dari mana". */
-.st-lipsync-tip{flex:0 0 100%;margin-top:6px;font-size:10px;line-height:1.45;color:#5d6f88}
-.st-lipsync-tip b{font-weight:600;color:#91a2b9}
-.st-lipsync-tip b.ok{color:#ff9bdc}
-.st-lipsync-tip b.todo{color:#ffd0ec}
-.st-lipsync-tip-warn b.todo{color:#ff9bdc}
+/* D-290: label field composer utama ("Prompt"). */
+.st-field-label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}
+.st-field-label.st-hidden{display:none}
 /* D-249: mode "Motion Graphics" — baris template + isi yang akan dirender. */
 .st-motion-bar{margin-top:10px;border-radius:13px;border:1px solid #24344e;background:#0c1422;padding:10px 11px}
 .st-motion-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
@@ -965,84 +948,6 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
   border:2px solid #24344e;border-top-color:#f044a8;animation:stMotionSpin .8s linear infinite}
 @keyframes stMotionSpin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.st-motion-spinner{animation:none;border-top-color:#f044a8}}
-/* D-287: ALUR 4 LANGKAH mode "Karakter Bicara".
-   1. Tulis naskah  2. Arahan adegan  3. Pilih karakter  4. Pilih gambar ref.
-   Semua field dalam satu container flex; urutannya dari ATAS. */
-.st-lip-flow{display:flex;flex-direction:column;gap:9px;margin-bottom:2px}
-.st-lip-flow.st-hidden{display:none}
-.st-lip-field{display:flex;flex-direction:column;gap:4px;min-width:0}
-.st-lip-field.st-hidden{display:none}
-/* D-287: header langkah — nomor bulat kecil + label. */
-.st-lip-head{display:flex;align-items:center;gap:6px}
-.st-lip-no{display:inline-flex;align-items:center;justify-content:center;
-  width:15px;height:15px;border-radius:50%;flex:none;
-  background:#24142a;border:1px solid #f044a8;color:#ffd0ec;
-  font-size:9px;font-weight:700;line-height:1}
-.st-lip-head label{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.01em}
-.st-lip-field textarea{width:100%;background:#0f1828;color:#fff;border:1px solid #24344e;
-  border-radius:10px;padding:8px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:40px}
-.st-lip-field textarea::placeholder{color:#5d6f88}
-.st-lip-field textarea:focus{outline:none;border-color:#f044a8}
-/* D-287: tombol pemilih (karakter / gambar).
-   Compact, satu baris, TIDAK terlihat seperti kotak error — border netral,
-   WAJIB ada thumbnail + nama, dan placeholder "Pilih ..." pakai muted. */
-.st-lip-pick{position:relative}
-.st-lip-pick-btn{display:flex;align-items:center;gap:8px;width:100%;
-  background:#0f1828;border:1px solid #24344e;border-radius:10px;
-  padding:6px 9px;color:#f4f5fb;font:inherit;font-size:12.5px;
-  cursor:pointer;text-align:left;min-height:38px;transition:border-color .18s}
-.st-lip-pick-btn:hover{border-color:#f044a8}
-.st-lip-pick-btn:focus-visible{outline:2px solid #f044a8;outline-offset:1px}
-.st-lip-pick-btn b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;font-weight:600}
-.st-lip-pick-btn svg{width:14px;height:14px;stroke:#91a2b9;fill:none;stroke-width:2;flex:none}
-.st-lip-pick-thumb{width:26px;height:26px;border-radius:7px;flex:none;overflow:hidden;
-  border:1px solid #24344e;background:#160f20;display:flex;align-items:center;
-  justify-content:center}
-.st-lip-pick-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.st-lip-pick-thumb svg{width:13px;height:13px;stroke:#5d6f88;fill:none;stroke-width:2}
-.st-lip-pick-thumb.is-empty{border-style:dashed}
-/* D-287: item dropdown gambar (thumbnail + nama). */
-.st-lip-img-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;
-  border:0;border-radius:9px;background:transparent;color:#cfd6e4;font:inherit;
-  font-size:12px;cursor:pointer;text-align:left}
-.st-lip-img-item:hover,.st-lip-img-item.on{background:#24142a;color:#ffd0ec}
-.st-lip-img-thumb{width:30px;height:30px;border-radius:7px;flex:none;overflow:hidden;
-  border:1px solid #24344e;background:#160f20;display:block}
-.st-lip-img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.st-lip-img-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* D-244: input "Arahan adegan" (lokasi/kamera/aksi) untuk mode Karakter Bicara. */
-.st-scene-hint{margin-top:8px}
-.st-scene-hint label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}
-.st-scene-hint textarea{width:100%;background:#0f1828;color:#fff;border:1px solid #24344e;
-  border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:44px}
-.st-scene-hint textarea::placeholder{color:#5d6f88}
-.st-scene-hint textarea:focus{outline:none;border-color:#f044a8}
-/* D-285: label field composer utama ("Prompt" / "Naskah yang dibacakan"). */
-.st-field-label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px}
-.st-field-label.st-hidden{display:none}
-/* D-285: kolom "Gambar karakter di lokasi ini" — punya dropdown mention sendiri. */
-.st-mention-box-alt{margin-top:2px}
-.st-mention-box-alt textarea{width:100%;background:#0f1828;color:#fff;border:1px solid #24344e;
-  border-radius:10px;padding:9px 10px;font:inherit;font-size:12.5px;resize:vertical;min-height:44px}
-.st-mention-box-alt textarea::placeholder{color:#5d6f88}
-.st-mention-box-alt textarea:focus{outline:none;border-color:#f044a8}
-/* D-285: jarak antar sub-field di dalam kotak arahan supaya jelas tidak menyatu. */
-.st-scene-hint label.st-sub{margin-top:10px}
-/* D-285: dropdown mention di kolom "Gambar karakter" — muncul ke BAWAH
-   (kolom ini ada di bawah composer, jadi dropdown ke-atas akan tertutup
-   oleh isi panel). */
-.st-mention-box-alt .st-mention-list{bottom:auto;top:100%;margin-bottom:0;margin-top:-4px;
-  box-shadow:0 18px 50px #000c}
-/* D-285: preview gambar yang dipilih di kolom "Gambar karakter di lokasi ini". */
-.st-lip-preview{display:none;align-items:center;gap:8px;margin-top:7px;
-  padding:6px;border-radius:10px;border:1px solid #24344e;background:#0c1422}
-.st-lip-preview:not(.st-hidden){display:flex}
-.st-lip-preview img{width:38px;height:38px;object-fit:cover;border-radius:7px;
-  border:1px solid #24344e;flex:none;background:#0f1828}
-.st-lip-preview span{font-size:10.5px;color:var(--muted);line-height:1.35;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.st-pop-lipsyncchar{max-height:220px;overflow:auto}
 .st-chain-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfd6e4;margin-bottom:9px}
 .st-chain-head svg{width:15px;height:15px;stroke:#ff72c5}
 .st-chain-head b{color:#fff;font-weight:600}

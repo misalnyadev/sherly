@@ -65,7 +65,6 @@ function makeFetch(opts = {}) {
     if (u.includes('/api/studio/assets')) return { ok: true, json: async () => ({ ok: true, assets: [] }) };
     if (u.includes('/api/ai/image/models')) return { ok: true, json: async () => ({ ok: true, models: [] }) };
     if (u.includes('/api/ai/video/models')) return { ok: true, json: async () => ({ ok: true, models: [] }) };
-    if (u.includes('/api/ai/lipsync/models')) return { ok: true, json: async () => ({ ok: true, models: [] }) };
     if (u.includes('/api/characters')) return { ok: true, json: async () => ({ characters: [] }) };
     if (u.includes('/api/custom-providers')) return { ok: true, json: async () => ({ providers: [] }) };
     if (u.includes('/api/prompt-bank')) return { ok: true, json: async () => ({ ok: true, entries: [], blocks: [] }) };
@@ -175,7 +174,6 @@ test('D-249: pilih Motion Graphics -> bar template tampil + tombol Render muncul
   // Tombol generate lain harus disembunyikan.
   assert.ok(doc.getElementById('stGenBtn').classList.contains('st-hidden'));
   assert.ok(doc.getElementById('stVideoBtn').classList.contains('st-hidden'));
-  assert.ok(doc.getElementById('stLipsyncBtn').classList.contains('st-hidden'));
 });
 
 test('D-249: panel Pengaturan mode Motion Graphics = Template + Durasi saja', async () => {

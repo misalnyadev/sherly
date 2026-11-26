@@ -11,7 +11,6 @@ import { supabaseConfigured, createPublicClient, createUserClient } from './supa
 import { vaultConfigured, vaultSelfTest, encryptSecret, decryptSecret } from './vault.js';
 import { listKeyGroups, createKey, updateKey, rotateKey, deleteKey, deleteGroup, testKey, envFallbackStatus, AUTO_ORDER, PROVIDERS, PROVIDER_INFO, getAllProviderModels, saveProviderModel, getUsableKeys, fetchProviderModels, probeProviderKey, CAPABILITIES, PROVIDER_CAPABILITIES, recordSuccess, recordFailure, listPersonalKeys, savePersonalKey, deletePersonalKey, setDefaultPersonalKey, PERSONAL_PROVIDERS, assertSafeBaseUrl } from './provider-keys.js';
 import { synthesizeSpeech, ttsClipHash, TTS_MODEL_CANDIDATES, DEFAULT_VOICE, GEMINI_TTS_VOICE_IDS, GEMINI_TTS_VOICES, sanitizeStyleHint, audioDurationFromBase64 } from './tts.js';
-import { lipsyncErrorMessage } from './lipsync-errors.js';
 // D-276 / D-277 / D-278 / D-280: cadangan TTS bahasa Indonesia (dipakai kalau
 // kuota Gemini habis). Hanya provider dengan free tier tanpa subscription
 // DAN tanpa kartu kredit:
@@ -33,9 +32,8 @@ import {
   createVideoTask, updateVideoTask, getVideoTask, listVideoTasks, ASSET_MIME, MAX_ASSET_BYTES,
   STUDIO_BUCKET, createAssetUploadTicket, registerUploadedAsset,
 } from './studio-assets.js';
-import { generateVideoWithKie, pollKieVideoTask, generateLipsyncWithKie, kieUploadBase64, createKieImageTask, pollKieImageTask } from './ai.js';
+import { generateVideoWithKie, pollKieVideoTask, kieUploadBase64, createKieImageTask, pollKieImageTask } from './ai.js';
 import { normalizeVideoParams, videoCatalog } from './video-models.js';
-import { normalizeLipsyncParams, lipsyncCatalog, LIPSYNC_MAX_SECONDS } from './lipsync-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 import { fetchKieCredits, IMAGE_CREDITS, VIDEO_CREDITS } from './kie-credits.js';
 import { detectDimensions } from './media-dimensions.js';
@@ -1381,250 +1379,6 @@ app.post('/api/ai/video', requireUser, requireAdmin, async (req, res) => {
   }
 });
 
-// ===== D-242: LIPSYNC — potret karakter + audio -> video karakter bicara =====
-
-app.get('/api/ai/lipsync/models', requireUser, requireAdmin, (req, res) => {
-  try { res.json({ ok: true, ...lipsyncCatalog() }); }
-  catch (error) { res.status(500).json({ ok: false, error: error.message || 'Gagal memuat katalog lipsync.' }); }
-});
-
-/**
- * Buat task lipsync.
- * body: { characterId, script, prompt, model, resolution, aspect, voice, style }
- *  - characterId : karakter yang jadi "\u00e1dam video (potret + profil suara)
- *  - script      : teks yang dibacakan (TTS) ATAU audioUrl (rekaman user)
- * Alur: potret karakter -> upload Kie; audio (TTS/rekaman) -> upload Kie;
- * lalu createTask InfiniteTalk.
- */
-/**
- * D-284: buang token @mention dari naskah sebelum dikirim ke TTS.
- *
- * Di mode "Karakter Bicara", composer berisi naskah YANG DICHAKADAKAN +
- * token @mention gambar (mis. "selamat datang di sherly studio
- * @aset-gambarreferensi"). Script mentah akan dibaca TTS apa adanya ->
- * karakter membacakan "@aset-gambarreferensi" dengan suara robotik.
- *
- * Server melakukan pembersihan yang sama sebagai client (belt & braces):
- * client lama / panggilan API langsung tetap aman.
- */
-function cleanScriptForTts(raw) {
-  return String(raw || '')
-    .replace(/@[a-z0-9][a-z0-9_-]{0,59}/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;!?])/g, '$1')
-    .trim();
-}
-
-app.post('/api/ai/lipsync', requireUser, requireAdmin, async (req, res) => {
-  try {
-    const {
-      characterId: rawCharId, script: rawScript, prompt: rawPrompt,
-      model: rawModel, resolution: rawResolution, aspect: rawAspect,
-      voice: rawVoice, style: rawStyle, audioUrl: rawAudioUrl,
-      referenceImage: rawRefImage,
-      provider: rawProvider, fps: rawFps, duration: rawDuration,
-    } = req.body || {};
-    // D-284: token @mention (aset/karakter) dibuang dari naskah — kalau tidak,
-    // TTS akan membacakan "@aset-gambarreferensi" dengan suara robotik.
-    const script = cleanScriptForTts(typeof rawScript === 'string' ? rawScript.trim() : '');
-    const prompt = typeof rawPrompt === 'string' ? rawPrompt.trim() : '';
-
-    // --- 1) Validasi parameter model ---
-    // D-245: provider lipsync (saat ini Kie AI untuk semua model).
-    const lipsyncProvider = String(rawProvider || 'kie').toLowerCase();
-    if (lipsyncProvider !== 'kie') {
-      return res.status(400).json({ ok: false, error: 'Provider lipsync saat ini hanya Kie AI.' });
-    }
-    const spec = normalizeLipsyncParams({
-      model: rawModel, resolution: rawResolution, aspect: rawAspect,
-      fps: rawFps, duration: rawDuration,
-    });
-    if (!spec.ok) return res.status(400).json({ ok: false, error: spec.error });
-    const { model: lipsyncModel, resolution, aspect } = spec;
-
-    // --- 2) Karakter (profil suara + nama untuk prompt) ---
-    // D-244: karakter TIDAK wajib punya potret — di mode Karakter Bicara
-    // gambar utama datang dari @mention (gambar karakter di lokasi tertentu).
-    // Karakter tetap dipakai untuk profil suara (TTS) + nama di prompt.
-    if (!validUuid(rawCharId)) return res.status(400).json({ ok: false, error: 'Pilih karakter yang akan dibuat bicara.' });
-    const { data: character } = await req.supabase
-      .from('characters').select('id,name,voice,reference_image_path,board_path,user_id')
-      .eq('id', rawCharId).maybeSingle();
-    if (!character || character.user_id !== req.user.id) {
-      return res.status(404).json({ ok: false, error: 'Karakter tidak ditemukan.' });
-    }
-
-    // --- 3) Audio: rekaman user (audioUrl) ATAU TTS dari script ---
-    let audioBase64 = null;
-    let audioMime = null;
-    let audioSource = 'tts';
-    if (typeof rawAudioUrl === 'string' && rawAudioUrl.startsWith('data:audio/')) {
-      // Audio inline dari client (rekaman/rekaman user).
-      const m = /^data:([^;]+);base64,(.+)$/s.exec(rawAudioUrl);
-      if (!m) return res.status(400).json({ ok: false, error: 'Format audio tidak valid.' });
-      audioMime = m[1];
-      audioBase64 = m[2];
-      audioSource = 'upload';
-    } else {
-      if (!script) return res.status(400).json({ ok: false, error: 'Tulis naskah yang akan dibacakan karakter.' });
-      // D-246: batas naskah mengikuti model (TTS Gemini maksimal 1.500 karakter).
-      const scriptMax = 1500;
-      if (script.length > scriptMax) return res.status(400).json({ ok: false, error: 'Naskah terlalu panjang untuk ' + lipsyncModel.label + ' (maks ' + scriptMax.toLocaleString('id-ID') + ' karakter).' });
-      const voiceCfg = character.voice && typeof character.voice === 'object' ? character.voice : {};
-      const voiceName = GEMINI_TTS_VOICE_IDS.has(rawVoice) ? rawVoice
-        : (GEMINI_TTS_VOICE_IDS.has(voiceCfg.name) ? voiceCfg.name : DEFAULT_VOICE);
-      const styleHint = sanitizeStyleHint(rawStyle || voiceCfg.style || '');
-      // Kumpulkan key Gemini (vault -> env).
-      const attempts = [];
-      if (vaultConfigured()) {
-        const usable = await getUsableKeys(req.supabase, 'gemini').catch(() => []);
-        for (const vk of usable) attempts.push({ apiKey: vk.apiKey });
-      }
-      if (!attempts.length && process.env.GEMINI_API_KEY) attempts.push({ apiKey: process.env.GEMINI_API_KEY });
-      if (!attempts.length) {
-        throw Object.assign(new Error('Kunci Gemini belum tersedia untuk membuat suara. Simpan kunci Gemini di vault (Pengaturan).'), { status: 503 });
-      }
-      let speech = null; let lastErr = null;
-      for (const a of attempts) {
-        try { speech = await synthesizeSpeech({ apiKey: a.apiKey, text: script, voiceName, style: styleHint }); break; }
-        catch (e) { lastErr = e; }
-      }
-      if (!speech) throw Object.assign(lastErr || new Error('Gagal membuat suara karakter.'), { status: 502 });
-      audioBase64 = speech.wav.toString('base64');
-      audioMime = 'audio/wav';
-      audioSource = 'tts:' + speech.model;
-    }
-    if (!audioBase64) return res.status(400).json({ ok: false, error: 'Audio tidak tersedia.' });
-    // Batas durasi audio InfiniteTalk = 15 detik.
-    // D-283: durasi dibaca PERSIS dari header WAV._estimasi lama
-    // (base64*0.75/16000) menganggap PCM 16 kHz, padahal Gemini TTS
-    // menghasilkan WAV 24 kHz -> durasi dihitung ~3x lebih besar ->
-    // naskah 4-5 detik dianggap 12-15 detik -> DITOLAK "terlalu panjang"
-    // sebelum pernah sampai ke Kie.
-    const approxSeconds = audioDurationFromBase64(audioBase64);
-    // D-245: batas durasi audio mengikuti model (InfiniteTalk 15 dtk, LTX 2.5 A2V 20 dtk).
-    const maxSeconds = lipsyncModel.maxSeconds || LIPSYNC_MAX_SECONDS;
-    if (approxSeconds > maxSeconds + 3) {
-      // D-283: sebut durasi ASLI supaya user tahu Persis harus memangkas berapa.
-      return res.status(400).json({
-        ok: false,
-        error: 'Naskah terlalu panjang untuk ' + lipsyncModel.label + ' — durasi suara '
-          + approxSeconds + ' detik, maksimal ' + maxSeconds + ' detik. '
-          + 'Pendekkan naskah jadi ±' + Math.max(3, Math.floor(maxSeconds * 13 / 10))
-          + ' karakter.',
-      });
-    }
-    // D-246: sebagian model butuh durasi minimum (OmniHuman 2.0 >= 4 detik).
-    const minSeconds = lipsyncModel.minSeconds || 1;
-    if (minSeconds > 1 && approxSeconds < minSeconds) {
-      return res.status(400).json({ ok: false, error: 'Audio terlalu pendek untuk ' + lipsyncModel.label + ' (minimal ' + minSeconds + ' detik).' });
-    }
-
-    // --- 4) Upload potret + audio ke Kie -> URL publik ---
-    const kieKeys = [];
-    if (vaultConfigured()) {
-      const usable = await getUsableKeys(req.supabase, 'kie').catch(() => []);
-      for (const vk of usable) kieKeys.push(vk.apiKey);
-    }
-    if (process.env.KIE_API_KEY) kieKeys.push(process.env.KIE_API_KEY);
-    if (!kieKeys.length) {
-      throw Object.assign(new Error('Kunci Kie AI belum tersedia. Simpan kunci Kie di vault (Pengaturan) atau set KIE_API_KEY.'), { status: 503 });
-    }
-    const kieKey = kieKeys[0];
-    // D-244: gambar utama = gambar @mention (karakter di lokasi tertentu).
-    // Kalau tidak ada mention -> pakai potret karakter sebagai cadangan.
-    let imageMime = 'image/jpeg';
-    let imageBase64 = '';
-    let imageLabel = 'potret karakter';
-    let imageFrom = 'character';
-    const refImg = rawRefImage && typeof rawRefImage === 'object' ? rawRefImage : null;
-    if (refImg && typeof refImg.data === 'string' && refImg.data.length > 8) {
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(refImg.mime)) {
-        return res.status(400).json({ ok: false, error: 'Gambar referensi harus JPG, PNG, atau WebP.' });
-      }
-      if (refImg.data.length > 3_500_000) {
-        return res.status(400).json({ ok: false, error: 'Gambar referensi terlalu besar (maks ±2.5 MB setelah dikompres).' });
-      }
-      imageMime = refImg.mime;
-      imageBase64 = refImg.data;
-      imageLabel = 'gambar referensi';
-      imageFrom = 'mention';
-    } else if (character.reference_image_path) {
-      const { data: potretBlob, error: potretErr } = await req.supabase.storage.from(bucket).download(character.reference_image_path);
-      if (potretErr || !potretBlob) {
-        return res.status(400).json({ ok: false, error: 'Gagal membaca foto potret karakter: ' + (potretErr?.message || 'file tidak ditemukan.') });
-      }
-      const potretBuf = Buffer.from(await potretBlob.arrayBuffer());
-      imageMime = /\.jpe?g$/i.test(character.reference_image_path) ? 'image/jpeg'
-        : /\.webp$/i.test(character.reference_image_path) ? 'image/webp' : 'image/png';
-      imageBase64 = potretBuf.toString('base64');
-    } else {
-      return res.status(400).json({ ok: false, error: 'Belum ada gambar untuk karakter bicara. Mention gambar (karakter di lokasi tertentu) atau upload potret karakter dulu.' });
-    }
-    const imageUrl = await kieUploadBase64(kieKey, imageMime, imageBase64, {
-      uploadPath: 'images/base64',
-      fileName: 'lipsync-' + Date.now() + '.jpg',
-      label: imageLabel,
-    });
-    const audioUrl = await kieUploadBase64(kieKey, audioMime, audioBase64, {
-      uploadPath: 'audio/base64',
-      fileName: 'lipsync-' + Date.now() + '.wav',
-      label: 'audio karakter',
-    });
-
-    // --- 5) Prompt: arahan adegan user (lokasi/kamera/aksi) + default ---
-    // D-244: prompt = arahan adegan user digabung dengan default qualities.
-    // Contoh arahan: "di studio podcast, kamera close-up, dia tersenyum dan gestur".
-    const sceneHint = prompt
-      ? prompt.replace(/\s+/g, ' ').trim().slice(0, 2000)
-      : '';
-    // D-246: OmniHuman membatasi prompt 300 karakter ("Character Tendency"),
-    // sedangkan InfiniteTalk/LTX menerima 5.000 karakter.
-    const promptMax = lipsyncModel.promptMax || 5000;
-    const lipPrompt = [
-      character.name + ' berbicara natural',
-      sceneHint,
-      'ekspresi wajah dan gerak kepala mengikuti nada suara, '
-      + 'bibir ter-sync dengan audio, pencahayaan studio lembut, kualitas tinggi.',
-    ].filter(Boolean).join('. ').slice(0, promptMax);
-
-    const auth = { supabase: req.supabase, accessToken: req.accessToken };
-    const created = await generateLipsyncWithKie(auth, {
-      model: lipsyncModel.id, prompt: lipPrompt, resolution, aspect,
-      imageUrl, audioUrl, fps: spec.fps, duration: spec.duration,
-    });
-    const task = await createVideoTask(req.supabase, req.user.id, {
-      provider: created.provider, model: created.model, taskId: created.taskId, prompt: lipPrompt,
-      meta: {
-        kind: 'lipsync', aspect, resolution, modelLabel: lipsyncModel.label,
-        providerLabel: 'Kie AI', fps: spec.fps || null,
-        characterId: character.id, characterName: character.name, audioSource,
-        imageFrom, sceneHint,
-        duration: Math.min(approxSeconds, maxSeconds),
-        // D-283: simpan batas & durasi asli supaya pesan error bisa menyebut
-        // angka yang tepat (mis. "maksimal 15 detik").
-        maxSeconds,
-        audioSeconds: approxSeconds,
-      },
-    });
-    res.status(202).json({
-      ok: true, id: task.id, task_id: created.taskId, model: created.model,
-      resolution, aspect, character: { id: character.id, name: character.name },
-      audioSource,
-    });
-  } catch (error) {
-    const status = Number.isInteger(error.status) ? error.status : 502;
-    // D-283: error lipsync diterjemahkan jadi pesan yang bisa ditindaklanjuti.
-    res.status(status).json({
-      ok: false,
-      error: lipsyncErrorMessage(error, {
-        model: (typeof lipsyncModel === 'object' && lipsyncModel?.label) || 'InfiniteTalk',
-        maxSeconds,
-      }),
-    });
-  }
-});
-
 app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  try {
     const task = await getVideoTask(req.supabase, req.user.id, req.params.id);
     if (!task) return res.status(404).json({ ok: false, error: 'Task video tidak ditemukan.' });
@@ -1686,22 +1440,15 @@ app.get('/api/ai/video/:id', requireUser, requireAdmin, async (req, res) => {  t
       return res.json({ ok: true, status: 'success', progress: 100, asset: signed });
     }
     if (state === 'fail' || state === 'failed' || state === 'error') {
-      // D-283: task LIPSYNC & VIDEO pakai penerjemah error yang sama supaya
-      // user tidak lagi lihat "ConnectException: Operation timed out" tanpa
-      // tahu harus melakukan apa.
-      //
       // D-289: pesan dari Kie WAJIB dipertahankan. `failMsg`/`failCode` dari
       // Kie adalah satu-satunya sumber kebenaran kenapa task ditolak — tanpa
       // itu user cuma lihat "gagal" tanpa petunjuk dan mengulang generate
       // yang sama berulang kali.
-      const isLipsync = taskMeta.kind === 'lipsync';
+      //
+      // D-290: fitur Karakter Bicara (lipsync) DIHAPUS, jadi penerjemah error
+      // khusus lipsync ikut dihapus. Alasan Kie apa adanya tetap ditampilkan.
       const kieReason = String(info.error || '').trim();
-      const message = isLipsync
-        ? lipsyncErrorMessage(kieReason || 'Generator karakter bicara gagal.', {
-          model: taskMeta.modelLabel || 'InfiniteTalk',
-          maxSeconds: Number(taskMeta.maxSeconds) || LIPSYNC_MAX_SECONDS,
-        })
-        : (kieReason || 'Generator video gagal.');
+      const message = kieReason || 'Generator video gagal.';
       await updateVideoTask(req.supabase, req.user.id, task.id, { status: 'fail', progress, error: String(message).slice(0, 300) });
       return res.json({ ok: true, status: 'fail', progress, error: String(message).slice(0, 300) });
     }

@@ -57,7 +57,7 @@
 
   const CHAIN_KEY = 'sherly.studio.chain.v1';
   const MAX_CHARACTERS = 3;      // batas keras: maksimal 3 karakter per adegan
-  // D-288: berapa kali polling video/lipsync boleh gagal beruntun sebelum
+  // D-288: berapa kali polling video boleh gagal beruntun sebelum
   // menyerah. Error jaringan ke Kie (timeout saat tarik file) bersifat
   // sementara —-job di sisi Kie LANJUT jalan.
   const MAX_POLL_RETRIES = 12;  // ~3 menit dengan backoff 3-15 detik
@@ -171,35 +171,6 @@
   const imageResolutionOptions = () => (imageModel()?.resolutions || ['1K', '2K', '4K']).map((r) => [r, r]);
   let videoCatalog = { defaultModel: 'veo-3-1', models: FALLBACK_VIDEO_MODELS };
   const videoModel = () => videoCatalog.models.find((m) => m.id === state.videoModel) || videoCatalog.models[0] || null;
-  // D-242: katalog model lipsync (potret + audio -> video karakter bicara).
-  const FALLBACK_LIPSYNC_MODELS = [
-    { id: 'infinitalk/from-audio', provider: 'kie', label: 'InfiniteTalk', maker: 'MeiGen-AI',
-      resolutions: ['480p', '720p'], aspects: ['16:9', '9:16', '1:1'], maxSeconds: 15,
-      note: 'MeiGen-AI InfiniteTalk — potret + audio jadi karakter bicara (lip-sync akurat).',
-      defaultResolution: '720p', defaultAspect: '9:16', credits: { '480p': 3, '720p': 12 } },
-    { id: 'ltx/2-5-fast-audio-to-video', provider: 'kie', label: 'LTX 2.5 Fast A2V', maker: 'Lightricks',
-      resolutions: ['720p', '1080p', '1440p'], aspects: ['16:9', '9:16', '1:1', '3:2', '2:3'], maxSeconds: 20,
-      note: 'Lightricks LTX 2.5 Fast — durasi mengikuti audio (s/d 20 dtk), sampai 1440p.',
-      defaultResolution: '1080p', defaultAspect: '9:16', credits: { '720p': 10.8, '1080p': 15.6, '1440p': 22.8 } },
-    { id: 'omnihuman-1-5', provider: 'kie', label: 'OmniHuman 1.5', maker: 'ByteDance',
-      resolutions: ['720P', '1080P'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 60,
-      note: 'ByteDance OmniHuman 1.5 — digital human full-body, ekspresi & gestur ikut emosi, sampai 1080p.',
-      defaultResolution: '1080P', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 1,
-      credits: { '720p': 27, '720P': 27, '1080p': 27, '1080P': 27 } },
-    { id: 'omnihuman-2-0', provider: 'kie', label: 'OmniHuman 2.0', maker: 'ByteDance',
-      resolutions: ['720p'], aspects: ['16:9', '9:16', '1:1', '4:5', '3:4'], maxSeconds: 300,
-      note: 'ByteDance OmniHuman 2.0 — digital human + multi-person, durasi s/d 5 menit.',
-      defaultResolution: '720p', defaultAspect: '9:16', promptMax: 300, fullBody: true, minSeconds: 4,
-      credits: { '720p': 14, '720P': 14 } },
-  ];
-  const FALLBACK_LIPSYNC_PROVIDERS = [
-    { id: 'kie', label: 'Kie AI', note: 'Semua model lipsync via satu kunci Kie' },
-  ];
-  let lipsyncCatalog = {
-    defaultModel: 'infinitalk/from-audio', maxSeconds: 15,
-    providers: FALLBACK_LIPSYNC_PROVIDERS, models: FALLBACK_LIPSYNC_MODELS,
-  };
-  const lipsyncModel = () => lipsyncCatalog.models.find((m) => m.id === state.lipsyncModel) || lipsyncCatalog.models[0] || null;
   // D-231: ctx opsional -> pakai draft pengaturan (panel) bila diberikan.
   const videoModelOf = (ctx) => videoCatalog.models.find((m) => m.id === (ctx || state).videoModel) || videoCatalog.models[0] || null;
   const durationOptions = (ctx) => (videoModelOf(ctx)?.durations || [4, 6, 8]).map((d) => [String(d), d + ' detik']);
@@ -255,10 +226,6 @@
     resolution: '720p', engine: 'auto',
     // D-200: provider + model video (dipilih lewat pill "Model").
     videoModel: 'veo-3-1', audio: true,
-    // D-242: mode "Karakter Bicara" (lipsync) — model, karakter, resolusi.
-    lipsyncModel: 'infinitalk/from-audio', lipsyncCharacterId: '', lipsyncResolution: '720p',
-    // D-287: aset gambar yang dipilih di langkah 4 (dropdown).
-    lipsyncAssetId: '',
     // D-203: model gambar (Kie) + jenis konten (satu kotak pilihan).
     imageModel: 'nano-banana-2', imageResolution: '2K', contentType: 'photo',
     // D-249: mode Motion Graphics — template render + durasi + isi per field.
@@ -456,12 +423,6 @@
     const out = [];
     const main = $('stPrompt')?.value || '';
     if (main) out.push(main);
-    const hint = $('stSceneHint')?.value || '';
-    if (hint) out.push(hint);
-    // D-287: textarea naskah (langkah 1) — di mode "Karakter Bicara" naskah
-    // ada di field sendiri, bukan di composer prompt.
-    const script = $('stLipScript')?.value || '';
-    if (script) out.push(script);
     return out;
   }
   /** Daftar karakter yang disebut di prompt (unik, urut kemunculan, maks 3). */
@@ -550,10 +511,6 @@
     if (sceneRefs.length > 4) { sceneRefs = sceneRefs.slice(sceneRefs.length - 4); changed = true; }
     if (changed) {
       syncSceneRef(); renderAssetHeader();
-      // D-244: bar karakter menampilkan sumber gambar utama lipsync.
-      renderLipsyncBar();
-      // D-285: preview gambar di kolom "Gambar karakter di lokasi ini".
-      renderLipPreview();
     }
   }
 
@@ -1532,21 +1489,7 @@
   function syncSceneRef() {
     sceneRef = sceneRefs.length ? { mime: sceneRefs[0].mime, data: sceneRefs[0].data, label: sceneRefs[0].label, fromId: sceneRefs[0].fromId } : null;
   }
-  /**
-   * D-285: preview gambar yang dipilih di kolom "Gambar karakter di lokasi ini".
-   *
-   * User perlu lihat gambar MANA yang akan dipakai — tanpa ini dia hanya
-   * melihat token "@aset-xxx" yang tidak ada artinya baginya.
-   */
-  function renderLipPreview() {
-    const box = $('stLipPreview'); if (!box) return;
-    const ref = sceneRefs.find((r) => r && r.mime && r.data) || null;
-    if (!ref) { box.innerHTML = ''; box.classList.add('st-hidden'); return; }
-    box.classList.remove('st-hidden');
-    box.innerHTML = '<img src="data:' + esc(ref.mime || 'image/png') + ';base64,' + esc(ref.data)
-      + '" alt="Gambar karakter yang dipilih" loading="lazy">'
-      + '<span>' + esc(String(ref.label || 'Gambar')) + '</span>';
-  }
+  /** D-285: textarea target mention (composer atau kotak arahan adegan). */
   /** D-285: textarea target mention (composer atau kotak arahan adegan). */
   function mentionTargetEl() {
     const el = $(mentionTarget) || $('stPrompt');
@@ -1562,8 +1505,7 @@
    * Composer utama -> "stMentionList"; textarea naskah -> "stMentionListScript".
    */
   function mentionBoxId() {
-    // D-287: naskah punya dropdown sendiri (#stMentionListScript).
-    return mentionTarget === 'stLipScript' ? 'stMentionListScript' : 'stMentionList';
+    return 'stMentionList';
   }
   function closeMention() {
     mentionOpen = false; mentionAt = -1; mentionQuery = '';
@@ -1902,8 +1844,6 @@
   const CONTENT_TYPES = [
     ['photo', 'Foto', 'image-plus'],
     ['video', 'Video', 'video'],
-    // D-242: mode lipsync — karakter bicara (potret + naskah -> video).
-    ['lipsync', 'Karakter Bicara', 'mic'],
     // D-249: mode Motion Graphics — render video programatik (Remotion, lokal).
     ['motion', 'Motion Graphics', 'film'],
   ];
@@ -1918,24 +1858,17 @@
     return CONTENT_TYPES.slice();
   }
   function setMode(m) {
-    // D-242: tiga mode konten — foto, video, dan karakter bicara (lipsync).
-    // D-249: ditambah mode Motion Graphics (render video programatik).
-    const mode = m === 'video' ? 'video' : m === 'lipsync' ? 'lipsync'
-      : m === 'motion' ? 'motion' : 'photo';
+    // D-249: mode Motion Graphics (render video programatik).
+    const mode = m === 'video' ? 'video' : m === 'motion' ? 'motion' : 'photo';
     state.mode = mode;
     state.contentType = mode;
     const isVideo = mode === 'video';
-    const isLip = mode === 'lipsync';
     // D-249: mode Motion Graphics — render video programatik (template + isi).
     const isMotion = mode === 'motion';
     // Rasio aspek video mengikuti kapabilitas model terpilih.
     if (isVideo) {
       const aspects = videoModel()?.aspects || ['16:9', '9:16'];
       if (!aspects.includes(state.aspect)) state.aspect = aspects.includes('9:16') ? '9:16' : aspects[0];
-    } else if (isLip) {
-      // Lipsync: rasio mengikuti model lipsync (16:9 / 9:16 / 1:1).
-      const asp = lipsyncModel()?.aspects || ['9:16'];
-      if (!asp.includes(state.aspect)) state.aspect = asp.includes('9:16') ? '9:16' : asp[0];
     } else if (isMotion) {
       // D-249: rasio mengikuti template Motion Graphics terpilih.
       const asp = motionTemplate()?.aspects || ['9:16'];
@@ -1945,33 +1878,22 @@
     const ta = $('stPrompt');
     if (ta) {
       ta.placeholder = isVideo ? 'Prompt video… mention @ karakter/aset dll.'
-        // D-285: di mode Karakter Bicara, composer = NASKAH MURNI.
-        // Gambar pilih di kolom "Gambar karakter di lokasi ini" (punya @ sendiri).
-        : isLip ? 'Naskah yang dibacakan karakter…'
         // D-249: di mode Motion Graphics, isi = teks yang akan dirender.
         // Kolom pertama template punya input sendiri di bar Motion Graphics,
         // jadi composer cukup generik (bukan mengulang placeholder yg sama).
         : isMotion ? 'Isi tambahan… (opsional)'
         : 'Prompt… mention @ karakter/aset dll.';
     }
-    // D-285: label composer utama ikut berubah supaya form JELAS.
-    // "Prompt" (umum) -> "Naskah yang dibacakan" (mode Karakter Bicara).
-    const pl = $('stPromptLabel');
-    if (pl) pl.textContent = 'Naskah yang dibacakan karakter';
     const cl = $('stComposerLabel');
     if (cl) cl.textContent = 'Prompt';
     $('stModelPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stDurPill')?.classList.toggle('st-hidden', !isVideo);
     $('stTierPillWrap')?.classList.toggle('st-hidden', !isVideo);
     $('stResPillWrap')?.classList.toggle('st-hidden', !isVideo);
-    // D-245: pill resolusi lipsync hanya di mode Karakter Bicara.
-    $('stLipResPillWrap')?.classList.toggle('st-hidden', !isLip);
-    // D-245: mode Karakter Bicara — Provider & Resolusi ditampilkan
-    // (semua model lipsync ada di Kie AI).
     $('stEnginePillWrap')?.classList.toggle('st-hidden', isVideo);
     // D-208: pill Style dihapus — semua gaya jadi template transparan di Bank Prompt.
     // Bank prompt mengikuti jenis konten (foto <-> video) supaya tidak salah pilih.
-    // mode konten di Studio: 'photo' | 'video' | 'lipsync' | 'motion'
+    // mode konten di Studio: 'photo' | 'video' | 'motion'
     //   ->  mode prompt: 'foto' | 'video'
     const pbMode = mode === 'video' ? 'video' : 'foto';
     if (promptBankMode !== pbMode) {
@@ -1981,25 +1903,15 @@
     }
     // D-203: pill model gambar hanya saat foto & mesin memakai Kie.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || isLip || isMotion || !kieEngine);
-    $('stGenBtn')?.classList.toggle('st-hidden', isVideo || isLip || isMotion);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', isVideo || isMotion || !kieEngine);
+    $('stGenBtn')?.classList.toggle('st-hidden', isVideo || isMotion);
     $('stVideoBtn')?.classList.toggle('st-hidden', !isVideo);
-    // D-242: tombol khusus lipsync.
-    $('stLipsyncBtn')?.classList.toggle('st-hidden', !isLip);
     // D-249: tombol khusus Motion Graphics (render video programatik).
     $('stMotionBtn')?.classList.toggle('st-hidden', !isMotion);
     // D-249: baris template Motion Graphics (dipilih di panel Pengaturan).
     $('stMotionBar')?.classList.toggle('st-hidden', !isMotion);
-    // D-242: Bank Prompt (template foto/video) tidak relevan untuk naskah lipsync.
-    document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isLip || isMotion);
-    // D-244: input "Arahan adegan" hanya untuk mode Karakter Bicara.
-    $('stSceneHintBox')?.classList.toggle('st-hidden', !isLip);
-    // D-287: alur 4 langkah (naskah -> arahan -> karakter -> gambar) hanya
-    // di mode "Karakter Bicara". Di mode lain, composer prompt biasa yang
-    // dipakai (composer ini disembunyikan agar tidak ada 2 textarea aktif).
-    $('stLipFlow')?.classList.toggle('st-hidden', !isLip);
-    $('stComposerBox')?.classList.toggle('st-hidden', isLip);
-    renderLipsyncBar();
+    // D-290: Bank Prompt (template foto/video) tidak relevan untuk Motion Graphics.
+    document.querySelector('.st-prompt-tools')?.classList.toggle('st-hidden', isMotion);
     renderMotionBar();
     updatePillLabels();
   }
@@ -2053,37 +1965,11 @@
     return 0;
   }
 
-  /** Kredit untuk satu generate LIPSYNC (mode "Karakter Bicara"). */
-  function lipsyncCreditEstimate(ctx) {
-    const c = ctx || state;
-    const m = lipsyncCatalog.models.find((x) => x.id === c.lipsyncModel) || lipsyncCatalog.models[0];
-    if (!m || !m.credits) return 0;
-    const row = m.credits;
-    const res = String(c.lipsyncResolution || m.defaultResolution || '');
-    let perSec = row[res];
-    if (perSec == null) perSec = row[res.toLowerCase()];
-    if (perSec == null) perSec = Object.values(row)[0];
-    // Durasi audio baru diketahui setelah TTS jadi naskah -> perkiraan
-    // (~2,5 kata/detik untuk bahasa Indonesia), dibatasi durasi maks model.
-    //
-    // D-289: sejak D-287 naskah Karakter Bicara ada di textarea TERSISA
-    // (#stLipScript), bukan di composer utama (#stPrompt). Sebelumnya
-    // badge selalu membaca #stPrompt yang kosong -> durasi selalu 1 dtk
-    // -> badge tidak pernah berubah (mis. OmniHuman 2.0 stuck di "14"
-    // padahal tarifnya 14 kredit/DETIK -> harus ikut durasi).
-    const script = (($('stLipScript')?.value || '') || ($('stPrompt')?.value || '')).trim();
-    const words = script ? script.split(/\s+/).filter(Boolean).length : 0;
-    const maxSec = Number(m.maxSeconds) || 15;
-    const sec = Math.min(maxSec, Math.max(1, Math.round(words / 2.5) || 1));
-    return creditRoundUp(Number(perSec || 0) * sec);
-  }
-
   /** Estimasi kredit sesuai mode konten yang aktif. */
   function currentCreditEstimate(ctx) {
     const c = ctx || settingCtx();
     const mode = c.mode || state.mode;
     if (mode === 'video') return videoCreditEstimate(c);
-    if (mode === 'lipsync') return lipsyncCreditEstimate(c);
     if (mode === 'motion') return 0;   // Motion Graphics dirender lokal (tanpa kredit).
     return imageCreditEstimate(c);
   }
@@ -2148,16 +2034,9 @@
     const tierLabel = tierOptions().find((x) => x[0] === state.tier);
     const t = $('stTierPill'); if (t) t.querySelector('b').textContent = tierLabel ? tierLabel[1] : state.tier;
     const r = $('stResPill'); if (r) r.querySelector('b').textContent = state.resolution;
-    // D-245: label resolusi lipsync + label engine/provider di mode lipsync.
-    const lr = $('stLipResPill'); if (lr) lr.querySelector('b').textContent = ctx.lipsyncResolution;
     const le = $('stEnginePill');
     if (le) {
-      if (ctx.mode === 'lipsync') {
-        const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
-        le.querySelector('b').textContent = prov ? prov.label : 'Kie AI';
-      } else {
-        le.querySelector('b').textContent = (engines.find((x) => x[0] === ctx.engine) || engines[0])[1];
-      }
+      le.querySelector('b').textContent = (engines.find((x) => x[0] === ctx.engine) || engines[0])[1];
     }
     // D-274: badge kredit ikut label pill (angka di samping jenis konten).
     updateCreditBadge();
@@ -2183,7 +2062,7 @@
   function syncBackdrop() { /* tidak ada backdrop — panel tengah suffice */ }
 
   function togglePop(which) {
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'imgres', 'prompt', 'actions', 'settings', 'lipsyncchar'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'imgres', 'prompt', 'actions', 'settings'].forEach((k) => { const el = $('stPop-' + k); if (el && k !== which) el.classList.remove('open'); });
     const el = $('stPop-' + which); if (el) el.classList.toggle('open');
     popOpen = el?.classList.contains('open') ? which : null;
     if (el?.classList.contains('open')) positionPop(el);
@@ -2239,13 +2118,7 @@
         gemini: 'Google Gemini',
         kie: 'Kie AI',
       };
-      // D-245: mode Karakter Bicara — semua model lipsync ada di Kie AI,
-      // jadi Provider yang tersedia hanya "Kie AI" (bukan Otomatis/Gemini).
-      const engineList = state.mode === 'lipsync'
-        ? (lipsyncCatalog.providers || [{ id: 'kie', label: 'Kie AI', note: '' }])
-            .map((p) => [p.id, p.label, p.note || ''])
-        : engines;
-      items = engineList.map(([v, l, note]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">'
+      items = engines.map(([v, l, note]) => '<button type="button" data-v="' + esc(v) + '" class="' + (state.engine === v ? 'on' : '') + '">'
         + '<span class="st-pop-model">' + esc(l) + (note || ENGINE_NOTES[v] ? '<small>' + esc(note || ENGINE_NOTES[v]) + '</small>' : '') + '</span></button>').join('');
     }
     else if (which === 'type') {
@@ -2270,12 +2143,6 @@
       items = imageResolutionOptions().map(([v, l]) => '<button type="button" data-v="' + esc(v) + '" class="'
         + (state.imageResolution === v ? 'on' : '') + '">' + esc(l) + '</button>').join('');
     }
-    // D-245: resolusi lipsync (model InfiniteTalk / LTX 2.5 A2V).
-    else if (which === 'lipres') {
-      const m = lipsyncModel();
-      items = (m?.resolutions || ['720p']).map((v) => '<button type="button" data-v="' + esc(v) + '" class="'
-        + (state.lipsyncResolution === v ? 'on' : '') + '">' + esc(v) + '</button>').join('');
-    }
     el.innerHTML = items;
     el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       if (which === 'aspect') state.aspect = b.dataset.v;
@@ -2288,11 +2155,6 @@
       }
       if (which === 'tier') state.tier = b.dataset.v;
       if (which === 'res') state.resolution = b.dataset.v;
-      // D-245: pilih resolusi lipsync.
-      if (which === 'lipres') {
-        state.lipsyncResolution = b.dataset.v;
-        updatePillLabels();
-      }
       if (which === 'type') {
         // D-203: pilih jenis konten -> pindah mode (pilihan jenis konten tunggal).
         const next = b.dataset.v;
@@ -2338,8 +2200,6 @@
       tier: state.tier, resolution: state.resolution, engine: state.engine,
       videoModel: state.videoModel, imageModel: state.imageModel,
       imageResolution: state.imageResolution,
-      // D-245: model & resolusi lipsync.
-      lipsyncModel: state.lipsyncModel, lipsyncResolution: state.lipsyncResolution,
       // D-249: template & durasi Motion Graphics.
       motionTemplateId: state.motionTemplateId, motionDuration: state.motionDuration,
       motionProps: Object.assign({}, state.motionProps),
@@ -2363,9 +2223,6 @@
     state.duration = d.duration;
     state.tier = d.tier;
     state.resolution = d.resolution;
-    // D-245: model & resolusi lipsync ikut tersimpan.
-    state.lipsyncModel = d.lipsyncModel;
-    state.lipsyncResolution = d.lipsyncResolution;
     // D-249: template, durasi, & isi Motion Graphics ikut tersimpan.
     state.motionTemplateId = d.motionTemplateId;
     state.motionDuration = d.motionDuration;
@@ -2375,19 +2232,6 @@
     if (state.mode === 'photo') {
       const im = imageCatalog.models.find((m) => m.id === state.imageModel);
       if (im && !im.aspects.includes(state.aspect)) state.aspect = im.defaultAspect || im.aspects[0];
-    } else if (state.mode === 'lipsync') {
-      // D-245: resolusi & rasio mengikuti model lipsync terpilih.
-      const lm = lipsyncCatalog.models.find((m) => m.id === state.lipsyncModel);
-      if (lm) {
-        if (!lm.resolutions.includes(state.lipsyncResolution)) {
-          state.lipsyncResolution = lm.defaultResolution && lm.resolutions.includes(lm.defaultResolution)
-            ? lm.defaultResolution : lm.resolutions[0];
-        }
-        if (!lm.aspects.includes(state.aspect)) {
-          state.aspect = lm.defaultAspect && lm.aspects.includes(lm.defaultAspect)
-            ? lm.defaultAspect : (lm.aspects.includes('9:16') ? '9:16' : lm.aspects[0]);
-        }
-      }
     } else if (state.mode === 'motion') {
       // D-249: rasio mengikuti template Motion Graphics (bukan model video).
       const tpl = motionTemplates.find((t) => t.id === state.motionTemplateId);
@@ -2405,10 +2249,8 @@
     }
     // Pill "Model gambar" (Kie) ikut mengikuti provider terpilih.
     const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || state.mode === 'motion' || !kieEngine);
+    $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'motion' || !kieEngine);
     updatePillLabels();
-    // D-245: bar karakter menampilkan model/provider lipsync terbaru.
-    renderLipsyncBar();
     // D-249: bar template Motion Graphics ikut diperbarui.
     renderMotionBar();
   }
@@ -2427,25 +2269,12 @@
         gemini: 'Google Gemini',
         kie: 'Kie AI',
       };
-      // D-245: mode Karakter Bicara — Provider hanya Kie AI.
-      if (ctx.mode === 'lipsync') {
-        return (lipsyncCatalog.providers || [{ id: 'kie', label: 'Kie AI', note: '' }])
-          .map((p) => ({ v: p.id, l: p.label, note: p.note || '' }));
-      }
       return engines.map(([v, l]) => ({ v, l, note: ENGINE_NOTES[v] || '' }));
     }
     if (which === 'imgmodel') return imageCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
     // D-274: resolusi foto (1K/2K/4K) -> menentukan jumlah kredit.
     if (which === 'imgres') return imageResolutionOptions().map(([v, l]) => ({ v, l }));
     if (which === 'model') return videoCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
-    // D-245: model & resolusi lipsync.
-    if (which === 'lipmodel') {
-      return lipsyncCatalog.models.map((m) => ({ v: m.id, l: m.label, note: m.maker }));
-    }
-    if (which === 'lipres') {
-      const m = lipsyncModel();
-      return (m?.resolutions || ['720p']).map((r) => ({ v: r, l: r }));
-    }
     // D-249: template & durasi render Motion Graphics.
     if (which === 'mgtpl') return motionTemplates.map((t) => ({ v: t.id, l: t.label, note: t.hint || '' }));
     if (which === 'mgdur') {
@@ -2472,9 +2301,6 @@
     // D-274: resolusi foto terpilih.
     if (which === 'imgres') return ctx.imageResolution;
     if (which === 'model') return ctx.videoModel;
-    // D-245: model & resolusi lipsync.
-    if (which === 'lipmodel') return ctx.lipsyncModel;
-    if (which === 'lipres') return ctx.lipsyncResolution;
     // D-249: template & durasi Motion Graphics.
     if (which === 'mgtpl') return ctx.motionTemplateId;
     if (which === 'mgdur') return String(ctx.motionDuration);
@@ -2486,7 +2312,6 @@
   function activeSettings() {
     const ctx = settingCtx();
     const isVideo = ctx.mode === 'video';
-    const isLip = ctx.mode === 'lipsync';
     // D-249: mode Motion Graphics.
     const isMotion = ctx.mode === 'motion';
     const kieEngine = ctx.engine === 'kie' || ctx.engine === 'auto' || ctx.engine.startsWith('custom:');
@@ -2499,10 +2324,6 @@
       list.push({ key: 'dur', label: 'Durasi', icon: 'clock' });
       list.push({ key: 'tier', label: 'Tier', icon: 'sliders' });
       list.push({ key: 'res', label: 'Resolusi', icon: 'sparkles' });
-    } else if (isLip) {
-      // D-245: mode Karakter Bicara — provider, model, dan resolusi.
-      list.push({ key: 'lipmodel', label: 'Model', icon: 'mic' });
-      list.push({ key: 'lipres', label: 'Resolusi', icon: 'sparkles' });
     } else if (isMotion) {
       // D-249: mode Motion Graphics — template render + durasi (tanpa provider).
       list.length = 0;
@@ -2528,10 +2349,9 @@
     if (which === 'engine') {
       target.engine = v;
       // D-245: mode Karakter Bicara -> provider selalu Kie AI.
-      if (settingCtx().mode === 'lipsync') target.engine = 'kie';
       if (!draftMode) {
         const kieEngine = state.engine === 'kie' || state.engine === 'auto' || state.engine.startsWith('custom:');
-        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || state.mode === 'lipsync' || !kieEngine);
+        $('stImgModelPillWrap')?.classList.toggle('st-hidden', state.mode === 'video' || !kieEngine);
       }
     }
     if (which === 'tier') target.tier = v;
@@ -2570,29 +2390,6 @@
         }
       }
     }
-    // D-245: model lipsync -> resolusi & rasio menyesuaikan kapabilitas model.
-    if (which === 'lipmodel') {
-      const prev = lipsyncCatalog.models.find((x) => x.id === target.lipsyncModel);
-      target.lipsyncModel = v;
-      const m = lipsyncCatalog.models.find((x) => x.id === v);
-      if (m) {
-        // Kalau resolusi sekarang masih sama dengan default model SEBELUM,
-        // ikut pindah ke default model baru (mis. InfiniteTalk 720p -> LTX 1080p).
-        // Kalau user sudah memilih sendiri, nilainya DIPERTAHANKAN (D-240).
-        const wasDefault = prev && target.lipsyncResolution === prev.defaultResolution;
-        if (wasDefault && m.defaultResolution && m.resolutions.includes(m.defaultResolution)) {
-          target.lipsyncResolution = m.defaultResolution;
-        } else if (!m.resolutions.includes(target.lipsyncResolution)) {
-          target.lipsyncResolution = m.defaultResolution && m.resolutions.includes(m.defaultResolution)
-            ? m.defaultResolution : m.resolutions[0];
-        }
-        if (!m.aspects.includes(target.aspect)) {
-          target.aspect = m.defaultAspect && m.aspects.includes(m.defaultAspect)
-            ? m.defaultAspect : (m.aspects.includes('9:16') ? '9:16' : m.aspects[0]);
-        }
-      }
-    }
-    if (which === 'lipres') target.lipsyncResolution = v;
     // D-249: template & durasi render Motion Graphics.
     if (which === 'mgtpl') {
       target.motionTemplateId = v;
@@ -2711,8 +2508,6 @@
       // D-231: tulis ke draft, panel TETAP terbuka.
       applySetting(key, b.dataset.setV);
       buildSettingsPanel();
-      // D-245: label pill ikut diperbarui saat draft berubah (mis. resolusi
-      // lipsync ikut model lipsync terpilih).
       updatePillLabels();
     }));
     $('stSetSave')?.addEventListener('click', () => {
@@ -2738,7 +2533,7 @@
     buildSettingsPanel();
     const el = $('stPop-settings');
     if (!el) return;
-    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'lipres', 'type', 'imgmodel', 'prompt', 'actions', 'lipsyncchar']
+    ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions']
       .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
     el.classList.add('open');
     // D-247: HP = modal tengah; PC = dropdown di atas pemicu (gaya flow).
@@ -3550,295 +3345,6 @@
     }
   }
 
-  // ===== D-242: mode "Karakter Bicara" (lipsync) =====
-  // Alur: pilih karakter -> tulis naskah -> server (TTS + upload Kie) ->
-  // task InfiniteTalk -> polling -> video tersimpan di galeri aset.
-  function lipsyncCharacters() {
-    return (characters || []).filter((c) => c && (c.reference_image_path || c.referenceImagePath));
-  }
-  function lipsyncCharacterById(id) {
-    return lipsyncCharacters().find((c) => c.id === id) || null;
-  }
-  // D-244: karakter punya potret (dipakai sebagai gambar cadangan).
-  function lipsyncCharacterHasPortrait() {
-    const c = lipsyncCharacterById(state.lipsyncCharacterId);
-    return !!(c && (c.reference_image_path || c.referenceImagePath));
-  }
-  // D-243: durasi lipsync TIDAK bisa diset di awal — dia mengikuti panjang naskah
-  // (TTS membacakan naskah, InfiniteTalk maksimal 15 detik audio).
-  // Estimasi kasar: ~13 karakter/detik untuk bahasa Indonesia (naskah 15 detik
-  // ≈ 195 karakter). Server juga membatasi naskah maksimal 1.500 karakter.
-  function estimateLipsyncSeconds(script) {
-    const chars = String(script || '').trim().length;
-    if (!chars) return 0;
-    return Math.max(1, Math.ceil(chars / 13));
-  }
-  function renderLipsyncBar() {
-    const bar = $('stLipsyncBar'); if (!bar) return;
-    const isLip = state.mode === 'lipsync';
-    bar.classList.toggle('st-hidden', !isLip);
-    if (!isLip) return;
-    // D-246: OmniHuman membatasi prompt 300 karakter.
-    const model0 = lipsyncModel();
-    const pmax = model0?.promptMax || 1000;
-    const sh0 = $('stSceneHint');
-    if (sh0) {
-      sh0.maxLength = pmax;
-      sh0.placeholder = pmax <= 300
-        ? 'mis. di studio podcast, kamera close-up, dia tersenyum'
-        : 'mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan';
-    }
-    const ch = lipsyncCharacterById(state.lipsyncCharacterId);
-    const nameEl = $('stLipsyncCharName');
-    if (nameEl) nameEl.textContent = ch ? ch.name : 'Pilih karakter';
-    // D-287: thumbnail karakter di tombol dropdown (bukan cuma teks).
-    const charThumb = $('stLipsyncCharThumb');
-    if (charThumb) {
-      charThumb.innerHTML = ch ? characterThumb(ch) : icon('user');
-      charThumb.classList.toggle('is-empty', !ch);
-    }
-    // D-287: nama + thumbnail gambar referensi yang dipilih (langkah 4).
-    const imgName = $('stLipImageName');
-    const imgThumb = $('stLipImageThumb');
-    const selAsset = assets.find((a) => a && a.id === state.lipsyncAssetId);
-    if (imgName) {
-      imgName.textContent = selAsset
-        ? String(selAsset.file_name || 'Aset').replace(/\.[a-z0-9]+$/i, '').slice(0, 30)
-        : 'Pilih gambar dari aset';
-    }
-    if (imgThumb) {
-      imgThumb.innerHTML = selAsset ? mentionAssetThumb(selAsset) : icon('image');
-      imgThumb.classList.toggle('is-empty', !selAsset);
-    }
-    const meta = $('stLipsyncMeta');
-    if (meta) {
-      const model = lipsyncModel();
-      const max = model?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
-      // D-285: estimasi durasi pakai NASKAH BERSIH (token @ tidak dihitung,
-      // karena token itu bukan yang dibacakan).
-      // D-287: naskah ada di textarea terpisah (#stLipScript) — langkah 1.
-      const est = estimateLipsyncSeconds(cleanScriptForTts(($('stLipScript') || {}).value));
-      // D-244: sumber gambar utama = mention gambar (karakter di lokasi
-      // tertentu) atau potret karakter sebagai cadangan.
-      // D-285: sumber gambar — "gambar dipilih" (kolom gambar) lebih jelas
-      // daripada "gambar mention".
-      const src = selAsset ? 'gambar dipilih'
-        : (lipsyncCharacterHasPortrait() ? 'potret karakter' : 'belum ada gambar');
-      // D-245/D-246: info provider + model ikut ditampilkan (ringkas, 2 baris).
-      const prov = (lipsyncCatalog.providers || []).find((p) => p.id === 'kie');
-      const provLabel = prov ? prov.label : 'Kie AI';
-      const modelLabel = model ? model.label : '';
-      // Durasi lipsync mengikuti naskah, bukan diset di awal.
-      // Baris 1: durasi (otomatis dari naskah). Baris 2: provider + model + sumber gambar.
-      // D-283: tandai kalau naskah sudah melebihi batas durasi model.
-      const overLimit = est > max + 3;
-      meta.textContent = (est ? '±' + est + ' dtk (maks ' + max + ')' : 'maks ' + max + ' dtk')
-        + (overLimit ? ' — terlalu panjang, pendekkan naskah' : '')
-        + '\n' + provLabel + ' · ' + modelLabel.replace(' Fast A2V', '') + ' · ' + src;
-      meta.classList.toggle('st-lipsync-meta-warn', est > max);
-      // D-284: PETUNJUNG LANGKAH. User sering bingung: "naskah di mana? gambar
-      // dari mana?".
-      const tip = $('stLipsyncTip');
-      if (tip) {
-        const hasChar = !!state.lipsyncCharacterId;
-        const hasImg = sceneRefs.length > 0;
-        // D-285: cek kedua field (composer + arahan adegan).
-        const unknown = unknownMentionTokens();
-        // D-287: urutan panduan mengikuti alur 4 langkah yang diminta user.
-        let html = [
-          (est ? '<b class="ok">1. Naskah</b>' : '<b class="todo">1. Tulis naskah</b>'),
-          (hasChar ? '<b class="ok">2. Karakter</b>' : '<b class="todo">2. Pilih karakter</b>'),
-          (hasImg ? '<b class="ok">3. Gambar</b>' : '<b class="todo">3. Pilih gambar</b>'),
-        ].join(' · ');
-        // D-284: token @ tak dikenal -> beri tahu (gambarnya TIDAK terkirim).
-        if (unknown.length) {
-          html += '<br><b class="todo">Token tak dikenal: ' + esc(unknown.join(', '))
-            + ' — pilih dari daftar saat ketik @ (token aset diawali "aset-")</b>';
-        }
-          tip.innerHTML = html;
-        tip.classList.toggle('st-lipsync-tip-warn', !hasChar || !hasImg || unknown.length > 0);
-      }
-      // D-285: preview gambar terpilih ikut disegarkan.
-      renderLipPreview();
-    }
-  }
-  /**
-   * D-287: dropdown ASET untuk langkah 4 "Gambar referensi".
-   *
-   * User minta: "pilih gambar referensi (dropdown) dari aset" — jadi bukan
-   * lagi Mention @ di textarea, tapi DROPDOWN langsung dari daftar aset
-   * miliknya (dengan thumbnail).
-   */
-  function buildLipsyncImgPop() {
-    const pop = $('stPop-lipsyncimg'); if (!pop) return;
-    const list = assets.filter((a) => a && a.url);
-    if (!list.length) {
-      pop.innerHTML = '<div class="st-pop-empty">Belum ada aset gambar. '
-        + 'Generate atau unggah gambar dulu di Galeri.</div>';
-      return;
-    }
-    pop.innerHTML = list.map((a) => {
-      const on = state.lipsyncAssetId === a.id ? ' on' : '';
-      const label = String(a.file_name || 'Aset').replace(/\.[a-z0-9]+$/i, '');
-      return '<button type="button" data-lip-img="' + esc(a.id) + '" class="st-lip-img-item' + on + '">'
-        + '<span class="st-lip-img-thumb">' + mentionAssetThumb(a) + '</span>'
-        + '<span class="st-lip-img-name">' + esc(label) + '</span>'
-        + '</button>';
-    }).join('');
-    pop.querySelectorAll('[data-lip-img]').forEach((b) => b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      state.lipsyncAssetId = b.dataset.lipImg;
-      // Muat gambar jadi referensi (sceneRefs) -> dipakai sebagai image_url.
-      syncLipsyncAssetRef();
-      renderLipsyncBar();
-      buildLipsyncImgPop();
-      pop.classList.remove('open');
-      popOpen = null;
-      syncBackdrop();
-    }));
-  }
-  /**
-   * D-287: muat aset yang dipilih di langkah 4 jadi sceneRefs (image_url).
-   * Kalau aset dihapus / diganti, referensi lama dilepas.
-   */
-  async function syncLipsyncAssetRef() {
-    const wanted = state.lipsyncAssetId;
-    const cur = sceneRefs.find((r) => r.fromId === wanted);
-    if (wanted && cur) return;
-    // Buang referensi lama milik lipsync (bukan milik chain/header biasa).
-    sceneRefs = sceneRefs.filter((r) => r.fromId !== state.lipsyncAssetId);
-    if (!wanted) {
-      const a = assets.find((x) => x.id === state.lipsyncAssetId);
-      syncSceneRef(); renderAssetHeader(); renderLipPreview();
-      return;
-    }
-    const a = assets.find((x) => x.id === wanted);
-    if (!a) return;
-    try {
-      const res = await fetch(a.url);
-      const blob = await res.blob();
-      const mime = blob.type || 'image/png';
-      const dataUrl = await blobToDataUrl(blob);
-      if (!dataUrl) return;
-      sceneRefs.push({ mime, data: dataUrl, label: String(a.file_name || 'Aset').slice(0, 28), fromId: a.id });
-      syncSceneRef(); renderAssetHeader(); renderLipPreview();
-    } catch { /* gagal muat -> lewati */ }
-  }
-  function buildLipsyncCharPop() {
-    const pop = $('stPop-lipsyncchar'); if (!pop) return;
-    const list = lipsyncCharacters();
-    if (!list.length) {
-      pop.innerHTML = '<div class="st-pop-empty">Belum ada karakter dengan potret. Buat karakter dulu di menu Karakter.</div>';
-      return;
-    }
-    pop.innerHTML = list.map((c) => '<button type="button" data-lip-char="' + esc(c.id) + '" class="'
-      + (state.lipsyncCharacterId === c.id ? 'on' : '') + '">'
-      + icon('user') + ' ' + esc(c.name) + '</button>').join('');
-    pop.querySelectorAll('[data-lip-char]').forEach((b) => b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      state.lipsyncCharacterId = b.dataset.lipChar;
-      renderLipsyncBar();
-      buildLipsyncCharPop();
-      pop.classList.remove('open');
-      popOpen = null;
-      syncBackdrop();
-    }));
-  }
-  async function generateLipsync() {
-    // D-287: naskah ada di langkah 1 (#stLipScript), terpisah dari composer
-    // prompt biasa.
-    const ta = $('stLipScript');
-    // D-284: token @mention (aset/karakter) DIBUANG dari naskah — kalau tidak,
-    // TTS akan membacakan "@aset-gambarreferensi" dengan suara robotik.
-    const rawScript = (ta?.value || '').trim();
-    const script = cleanScriptForTts(rawScript);
-    if (!script) {
-      window.toast?.('Tulis naskah yang mau dibacakan karakter.');
-      ta?.focus();
-      return;
-    }
-    if (!state.lipsyncCharacterId) {
-      window.toast?.('Pilih karakter yang mau bicara dulu ya.');
-      $('stLipsyncCharBtn')?.focus();
-      return;
-    }
-    if (script.length < 3) {
-      window.toast?.('Tulis naskah yang mau dibacakan karakter.');
-      ta?.focus();
-      return;
-    }
-    // D-246: sebagian model butuh durasi minimum (OmniHuman 2.0 >= 4 detik).
-    const minSec = lipsyncModel()?.minSeconds || 1;
-    if (minSec > 1 && estimateLipsyncSeconds(script) < minSec) {
-      window.toast?.('Naskah terlalu pendek — minimal ' + minSec + ' detik untuk model ini.');
-      ta?.focus();
-      return;
-    }
-    // D-283: cek batas maksimum SEBELUM kirim, biar user tahu persis harus
-    // memangkas berapa (server juga akan menolak, tapi dengan pesan yang
-    // jauh lebih jelas).
-    const lipModel = lipsyncModel();
-    const maxSec = lipModel?.maxSeconds || lipsyncCatalog.maxSeconds || 15;
-    const estSec = estimateLipsyncSeconds(script);
-    if (estSec > maxSec + 3) {
-      window.toast?.('Naskah terlalu panjang — ±' + estSec + ' detik, maksimal ' + maxSec
-        + ' detik untuk ' + (lipModel?.label || 'model ini')
-        + '. Pendekkan jadi ±' + Math.max(3, Math.floor(maxSec * 13 / 10)) + ' karakter.');
-      ta?.focus();
-      return;
-    }
-    // D-244: wajib ada gambar referensi (gambar karakter di lokasi tertentu).
-    // Kalau karakter punya potret, potret itu dipakai sebagai cadangan.
-    if (!sceneRefs.length && !lipsyncCharacterHasPortrait()) {
-      window.toast?.('Pilih gambar karakter dulu (kolom "Gambar karakter di lokasi ini"), '
-        + 'atau upload potret karakter.');
-      $('stLipImageBtn')?.focus();
-      return;
-    }
-    // D-284/D-285: token @ tak dikenal (mis. "@gambar referensi" diketik manual)
-    // -> gambar TIDAK ikut terkirim. Ingatkan user, tapi jangan blokir
-    // (mungkin memang sengaja menulis naskah biasa).
-    // D-285: periksa KEDUA field (composer + kolom gambar + arahan adegan).
-    const unknown = unknownMentionTokens();
-    if (unknown.length) {
-      window.toast?.('Token tak dikenal: ' + unknown.join(', ')
-        + ' — ketik @ lalu pilih dari daftar (token aset diawali "aset-").');
-    }
-    const btn = $('stLipsyncBtn');
-    btn.disabled = true; btn.innerHTML = icon('refresh-cw') + ' Menyiapkan…';
-    try {
-      const model = lipsyncModel();
-      // D-244: arahan adegan (lokasi/kamera/aksi) -> prompt Kie.
-      const sceneHint = ($('stSceneHint')?.value || '').trim();
-      // D-244: gambar @mention = karakter di lokasi tertentu -> image_url.
-      // Kalau tidak ada mention -> backend pakai potret karakter.
-      const refImg = sceneRefs.find((r) => r && r.mime && r.data) || null;
-      const body = {
-        characterId: state.lipsyncCharacterId,
-        script,
-        prompt: sceneHint,
-        model: model?.id || state.lipsyncModel,
-        // D-245/D-246: resolusi & provider mengikuti pilihan user.
-        resolution: state.lipsyncResolution || model?.defaultResolution || '720p',
-        provider: 'kie',
-        aspect: state.aspect,
-      };
-      if (refImg) body.referenceImage = { mime: refImg.mime, data: refImg.data };
-      const r = await fetch('/api/ai/lipsync', {
-        method: 'POST', headers: await authHeaders(),
-        body: JSON.stringify(body),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Generator karakter bicara gagal.');
-      videoTask = { id: d.id, progress: 0, status: 'running' };
-      renderVideoProgress();
-      window.toast?.('Karakter sedang bicara… (±1-3 menit)');
-      pollVideo();
-    } catch (e) {
-      window.toast?.(e.message || 'Generator karakter bicara gagal.');
-      resetGenerateButtons();
-    }
-  }
   function renderVideoProgress() {
     const box = $('stVideoProgress');
     if (!videoTask) { box?.classList.add('st-hidden'); box?.setAttribute('data-progress', '0'); return; }
@@ -3861,8 +3367,6 @@
   function resetGenerateButtons() {
     const b = $('stVideoBtn');
     if (b) { b.disabled = false; b.innerHTML = icon('film') + ' Buat'; }
-    const l = $('stLipsyncBtn');
-    if (l) { l.disabled = false; l.innerHTML = icon('mic') + ' Buat'; }
     const g = $('stGenBtn');
     if (g) { g.disabled = false; g.innerHTML = icon('image-plus') + ' Buat'; }
     // D-249: tombol render Motion Graphics.
@@ -3870,7 +3374,7 @@
     if (m) { m.disabled = false; m.innerHTML = icon('film') + ' Render'; }
   }
   /**
-   * D-288: cari task video/lipsync yang belum selesai lalu lanjut poll.
+   * D-288: cari task video yang belum selesai lalu lanjut poll.
    *
    * Dipanggil saat halaman dibuka. Tanpa ini, task yang selesai dibuat tapi
    * browser ke-close akan menggantung selamanya di server.
@@ -4021,70 +3525,12 @@
       + '</div>'
       + '</div>'
       + '</div>'
-      // D-287: ALUR 4 LANGKAH mode "Karakter Bicara".
-      //
-      // Semua field (naskah, arahan, karakter, gambar) berada dalam satu
-      // container flex `.st-lip-flow`. Di mode biasa container ini
-      // disembunyikan kecuali composer; di mode Karakter Bicara semua field
-      // tampil dengan urutan dari ATAS:
-      //   1. Tulis naskah        (composer utama, #stPrompt)
-      //   2. Arahan adegan       (#stSceneHint)
-      //   3. Pilih karakter      (dropdown, #stLipsyncCharBtn)
-      //   4. Pilih gambar ref.   (dropdown aset, #stLipImageBtn)
-      + '<div class="st-lip-flow" id="stLipFlow">'
-      // --- Langkah 1: naskah (composer utama) ---
-      + '<div class="st-lip-field st-lip-f-script" id="stLipFieldScript">'
-      + '<div class="st-lip-head"><span class="st-lip-no">1</span>'
-      + '<label for="stLipScript" id="stPromptLabel">Naskah yang dibacakan</label></div>'
-      + '<div class="st-mention-box">'
-      + '<textarea id="stLipScript" rows="2" maxlength="1200" placeholder="mis. selamat datang di Sherly Studio"></textarea>'
-      + '<div class="st-mention-list" id="stMentionListScript"></div>'
-      + '</div>'
-      + '</div>'
-      // --- Langkah 2: arahan adegan ---
-      + '<div class="st-lip-field st-lip-f-hint" id="stLipFieldHint">'
-      + '<div class="st-lip-head"><span class="st-lip-no">2</span>'
-      + '<label for="stSceneHint">Arahan adegan (untuk video)</label></div>'
-      + '<textarea id="stSceneHint" rows="2" maxlength="1000" placeholder="mis. di studio podcast, kamera close-up, dia tersenyum dan gestur tangan"></textarea>'
-      + '</div>'
-      // --- Langkah 3: karakter (dropdown) ---
-      + '<div class="st-lip-field st-lip-f-char" id="stLipFieldChar">'
-      + '<div class="st-lip-head"><span class="st-lip-no">3</span>'
-      + '<label for="stLipsyncCharBtn">Karakter yang bicara</label></div>'
-      + '<div class="st-lip-pick">'
-      + '<button type="button" class="st-lip-pick-btn" id="stLipsyncCharBtn">'
-      + '<span class="st-lip-pick-thumb" id="stLipsyncCharThumb"></span>'
-      + '<b id="stLipsyncCharName">Pilih karakter</b>' + icon('chevron-down')
-      + '</button>'
-      + '<div class="st-pop" id="stPop-lipsyncchar"></div>'
-      + '</div>'
-      + '</div>'
-      // --- Langkah 4: gambar referensi (dropdown aset) ---
-      + '<div class="st-lip-field st-lip-f-img" id="stLipFieldImg">'
-      + '<div class="st-lip-head"><span class="st-lip-no">4</span>'
-      + '<label for="stLipImageBtn">Gambar referensi</label></div>'
-      + '<div class="st-lip-pick">'
-      + '<button type="button" class="st-lip-pick-btn" id="stLipImageBtn">'
-      + '<span class="st-lip-pick-thumb" id="stLipImageThumb"></span>'
-      + '<b id="stLipImageName">Pilih gambar dari aset</b>' + icon('chevron-down')
-      + '</button>'
-      + '<div class="st-pop" id="stPop-lipsyncimg"></div>'
-      + '</div>'
-      + '</div>'
-      + '</div>'
-      // Composer untuk mode biasa (Foto/Video/Motion) — disembunyikan di
-      // mode Karakter Bicara karena naskahnya ada di langkah 1.
       + '<div class="st-mention-box st-composer" id="stComposerBox">'
       + '<div class="st-field-label" id="stComposerLabel">Prompt</div>'
       + '<textarea id="stPrompt" rows="1" maxlength="1200" placeholder="Prompt… mention @ karakter/aset dll."></textarea>'
       + '<div class="st-mention-list" id="stMentionList"></div>'
       + '</div>'
       + '<div class="st-chain st-hidden" id="stChain"></div>'
-      // D-242: bar info mode "Karakter Bicara".
-      + '<div class="st-lipsync-bar st-hidden" id="stLipsyncBar">'
-      + '<div class="st-lipsync-meta"><span id="stLipsyncMeta">Maks 15 detik</span></div>'
-      + '<div class="st-lipsync-tip" id="stLipsyncTip"></div>'
-      + '</div>'
       + '<div class="st-motion-bar st-hidden" id="stMotionBar"></div>'
       + '<div class="st-controls">'
       // D-221: di HP semua pengaturan konten jadi SATU panel dropdown.
@@ -4106,16 +3552,12 @@
       + '<div class="st-pill-wrap st-hidden" id="stDurPill"><button type="button" class="st-pill">' + icon('clock') + ' <b>8 detik</b></button><div class="st-pop" id="stPop-dur"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stTierPillWrap"><button type="button" class="st-pill" id="stTierPill">' + icon('sliders') + ' <b>Tier</b></button><div class="st-pop" id="stPop-tier"></div></div>'
       + '<div class="st-pill-wrap st-hidden" id="stResPillWrap"><button type="button" class="st-pill" id="stResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-res"></div></div>'
-      // D-245: resolusi lipsync (dipakai model InfiniteTalk / LTX 2.5 A2V).
-      + '<div class="st-pill-wrap st-hidden" id="stLipResPillWrap"><button type="button" class="st-pill" id="stLipResPill">' + icon('sparkles') + ' <b>720p</b></button><div class="st-pop" id="stPop-lipres"></div></div>'
       + '</div>'
       + '<span class="st-count" id="stCount">0/1200</span>'
       // D-243: semua tombol generate pakai label seragam "Buat" + ikon per mode,
       // supaya tombol tidak melebar dan tidak turun baris di HP.
       + '<button type="button" class="pink-btn" id="stGenBtn" title="Buat Gambar">' + icon('image-plus') + ' Buat</button>'
       + '<button type="button" class="pink-btn st-hidden" id="stVideoBtn" title="Buat Video">' + icon('film') + ' Buat</button>'
-      // D-242: mode "Karakter Bicara" (lipsync) -> potret + audio -> video bicara.
-      + '<button type="button" class="pink-btn st-hidden" id="stLipsyncBtn" title="Buat Video Bicara">' + icon('mic') + ' Buat</button>'
       // D-249: tombol render Motion Graphics (label "Render" — bukan "Buat",
       // karena hasilnya programatik, bukan hasil generator AI).
       + '<button type="button" class="pink-btn st-hidden" id="stMotionBtn" title="Render Motion Graphics">' + icon('film') + ' Render</button>'
@@ -4154,8 +3596,6 @@
     // Karakter user — dipakai untuk mention picker & header aset.
     fetch('/api/characters', { headers: await authHeaders() }).then((r) => r.json()).then((d) => {
       characters = Array.isArray(d?.characters) ? d.characters : [];
-      // D-242: bar karakter lipsync butuh daftar karakter.
-      renderLipsyncBar();
       renderAssetHeader(); updatePillLabels();
     }).catch(() => {});
     // Provider kustom dari Pengaturan otomatis jadi pilihan Mesin.
@@ -4206,8 +3646,6 @@
     $('stImgModelPill')?.addEventListener('click', () => { buildPop('imgmodel'); togglePop('imgmodel'); });
     $('stTierPill')?.addEventListener('click', () => { buildPop('tier'); togglePop('tier'); });
     $('stResPill')?.addEventListener('click', () => { buildPop('res'); togglePop('res'); });
-    // D-245: pill resolusi lipsync.
-    $('stLipResPill')?.addEventListener('click', () => { buildPop('lipres'); togglePop('lipres'); });
     // D-249: template Motion Graphics + status renderer di server.
     loadMotionTemplates();
     // D-203: katalog model gambar dari server (/api/ai/image/models).
@@ -4231,25 +3669,6 @@
         applyModelCaps(m, false);
       }
       updatePillLabels();
-    }).catch(() => {});
-    // D-242: katalog model lipsync dari server (/api/ai/lipsync/models).
-    fetch('/api/ai/lipsync/models', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (!d || !Array.isArray(d.models) || !d.models.length) return; // tetap pakai fallback lokal
-      lipsyncCatalog = {
-        defaultModel: d.defaultModel || lipsyncCatalog.defaultModel,
-        maxSeconds: d.maxSeconds || lipsyncCatalog.maxSeconds,
-        providers: Array.isArray(d.providers) && d.providers.length ? d.providers : lipsyncCatalog.providers,
-        models: d.models,
-      };
-      const m = lipsyncModel();
-      if (m) state.lipsyncModel = m.id;
-      renderLipsyncBar();
-    }).catch(() => {});
-    // D-274: saldo kredit Kie (live) -> badge kredit di composer.
-    fetch('/api/ai/credits', { headers: await authHeaders() }).then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (!d || !d.ok) return;
-      if (typeof d.credits === 'number') kieBalance = d.credits;
-      updateCreditBadge();
     }).catch(() => {});
     const ta = $('stPrompt');
     // D-199: auto-fit — tinggi textarea menyesuaikan isi (44px -> max 150px).
@@ -4325,8 +3744,6 @@
     ta?.addEventListener('input', () => {
       const c = $('stCount'); if (c) c.textContent = ta.value.length + '/1200';
       autoFit();
-      // D-243: estimasi durasi lipsync ikut berubah saat naskah diketik.
-      renderLipsyncBar();
       renderAssetHeader(); updatePillLabels(); syncMentionFromText();
       // D-216: mention aset gambar -> masuk ke header sebagai referensi.
       syncMentionedAssetRefs();
@@ -4337,18 +3754,6 @@
     ta?.addEventListener('click', () => { syncMentionFromText(); scheduleCaretScroll(); });
     // D-287: textarea naskah (langkah 1) — estimasi durasi ikut berubah
     // saat naskah diketik (D-243).
-    const lipScript = $('stLipScript');
-    lipScript?.addEventListener('input', () => {
-      renderLipsyncBar();
-      syncMentionFromText('stLipScript');
-      syncMentionedAssetRefs();
-      // D-289: badge kredit ikut berubah saat naskah diketik
-      // (durasi audio = perkiraan dari jumlah kata).
-      updateCreditBadge();
-    });
-    lipScript?.addEventListener('keyup', () => { syncMentionFromText('stLipScript'); });
-    lipScript?.addEventListener('click', () => { syncMentionFromText('stLipScript'); });
-    lipScript?.addEventListener('focus', () => { syncMentionFromText('stLipScript'); });
     ta?.addEventListener('focus', scheduleCaretScroll);
     ta?.addEventListener('select', scheduleCaretScroll);
     // D-218: saat caret berpindah (klik, panah, pilih) kursor harus tetap pas
@@ -4378,25 +3783,10 @@
     };
     ta?.addEventListener('keydown', mentionKeydown);
     ta?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
-    lipScript?.addEventListener('keydown', mentionKeydown);
-    lipScript?.addEventListener('blur', () => setTimeout(() => closeMention(), 120));
     $('stGenBtn')?.addEventListener('click', generate);
     $('stVideoBtn')?.addEventListener('click', generateVideo);
-    // D-242: mode "Karakter Bicara" (lipsync).
-    $('stLipsyncBtn')?.addEventListener('click', generateLipsync);
     // D-249: tombol render Motion Graphics.
     $('stMotionBtn')?.addEventListener('click', generateMotionGraphics);
-    $('stLipsyncCharBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      buildLipsyncCharPop();
-      togglePop('lipsyncchar');
-    });
-    // D-287: langkah 4 — dropdown gambar referensi dari aset.
-    $('stLipImageBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      buildLipsyncImgPop();
-      togglePop('lipsyncimg');
-    });
     $('stUploadBtn')?.addEventListener('click', () => $('stUploadInput')?.click());
     $('stUploadInput')?.addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
