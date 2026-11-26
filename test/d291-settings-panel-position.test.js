@@ -14,7 +14,11 @@ const app = fs.readFileSync(path.join(ROOT, 'server/app.js'), 'utf8');
 // dan berada DI LUAR media query max-width:850px (yang itu versi HP modal tengah).
 const desktopRule = (() => {
   const blocks = [...html.matchAll(/\.st-pop-settings\{([^}]*)\}/g)];
-  const hit = blocks.find((b) => /position:fixed/.test(b[1]) && /st-composer-h/.test(b[1]));
+  // Rule desktop = blok yang punya position:fixed + `display:none` (bukan rule
+  // HP yang memakai !important, dan bukan rule animation:none).
+  const hit = blocks.find(
+    (b) => /position:fixed/.test(b[1]) && !/!important/.test(b[1]) && /display:none/.test(b[1]),
+  );
   return hit ? hit[0] : null;
 })();
 
@@ -78,13 +82,13 @@ test('D-291: panel Pengaturan desktop pakai position:fixed dengan tinggi dibatas
   assert.match(desktopRule, /position:fixed/, 'harus fixed agar tinggi dihitung dari viewport');
   assert.match(
     desktopRule,
-    /max-height:calc\(100vh - var\(--st-composer-h/,
-    'tinggi panel dibatasi viewport dikurangi tinggi composer, bukan ruang ke atas composer',
+    /max-height:calc\(100vh/,
+    'tinggi panel harus dibatasi oleh viewport',
   );
   assert.match(
     desktopRule,
-    /bottom:calc\(var\(--st-composer-h/,
-    'panel harus nempel tepat di atas composer (bukan keluar layar)',
+    /bottom:0/,
+    'D-292: panel menempel di bawah layar & menutupi composer (bukan di atas composer)',
   );
 });
 

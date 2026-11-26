@@ -2541,25 +2541,24 @@
     ['aspect', 'style', 'dur', 'engine', 'model', 'tier', 'res', 'type', 'imgmodel', 'prompt', 'actions']
       .forEach((k) => $('stPop-' + k)?.classList.remove('open'));
     el.classList.add('open');
-    // D-247: HP = modal tengah; PC = dropdown di atas pemicu (gaya flow).
+    // D-247: HP = modal tengah; PC = panel yang menutupi composer.
     el.classList.toggle('st-pop-center', isMobileLayout());
-    // D-291: di desktop panel Pengaturan tampil dari BAWAH — tinggi composer
-    // ditulis ke CSS var supaya tinggi panel dihitung dari viewport (bukan
-    // dari ruang ke atas composer yang bisa terlalu kecil sehingga baris
-    // "Jenis Konten" — Foto / Video / Motion Graphics — terpotong).
+    // D-292: panel Pengaturan (desktop) MELETAKI composer — panel menempel di
+    // bawah layar & menutupi composer di belakangnya. Jadi user tidak perlu
+    // pindah menu & balik ke Studio untuk menutup panel; panel bisa ditutup
+    // langsung dari sini (Batal / Simpan).
     syncComposerHeightVar();
     popOpen = 'settings';
     syncBackdrop();
   }
 
   /**
-   * D-291: tulis tinggi composer ke CSS var `--st-composer-h`.
+   * D-291/D-292: tulis tinggi composer ke CSS var `--st-composer-h`.
    *
-   * Panel Pengaturan (desktop) diposisikan `fixed` dengan
-   * `bottom: calc(var(--st-composer-h) + 10px)` supaya nempel pas di atas
-   * composer. Tanpa var ini, panel memakai asumsi 150px — dan kalau composer
-   * lebih tinggi (mis. baris aset aktif), panel bisa menimpa composer atau
-   * meluber keluar bawah viewport.
+   * Var ini dipakai CSS untuk hal lain (mis. padding bawah galeri Studio
+   * supaya composer tidak menutupi aset terakhir). Panel Pengaturan sendiri
+   * sudah lepas dari tinggi composer sejak D-292 (panel menutupi composer,
+   * jadi ruang panel = seluruh viewport).
    */
   function syncComposerHeightVar() {
     const composer = document.querySelector('.st-composer');

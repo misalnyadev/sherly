@@ -1028,31 +1028,31 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
    device — semua setelan hidup di panel Pengaturan (satu panel HP & PC). */
 .st-settings-pills{display:none!important}
 /* Panel pengaturan — D-247: dipakai di HP & PC (satu tampilan).
-   Di PC jadi dropdown yang menempel di atas pemicu (bukan modal tengah),
-   di HP tetap modal tengah (lihat media query di bawah).
-   D-291: di DESKTOP panel Pengaturan TAMPIL DARI BAWAH.
-   ⚠️ MASALAH YANG DIPERBAIKI: sebelumnya panel desktop memakai
-   `bottom: calc(100% + 8px)` (nempel DI ATAS composer) + `max-height:70vh`.
-   Panel Pengaturan memuat grup "Jenis Konten" (Foto / Video / Motion Graphics)
-   di baris PERTAMA — dan itu persis bagian yang TERPOTONG ke atas saat panel
-   lebih tinggi dari ruang kosong di atas composer. Akibatnya user tidak bisa
-   memilih "Motion Graphics" (atau jenis konten lain) sama sekali.
+   D-292: di DESKTOP panel Pengaturan MELETAKI composer — panel menempel di
+   BAWAH layar dan MENUTUPI composer di belakangnya, jadi:
+     1. tinggi panel = seluruh tinggi viewport (tidak pernah terpotong ke atas),
+     2. user TIDAK perlu pindah menu & balik ke Studio untuk menutup panel —
+        panel menutup sendiri (tombol "Batal"/"Simpan" / klik backdrop),
+     3. panel tetap "tampil dari bawah" (animasi naik dari bawah layar).
 
-   Perbaikan: di desktop panel jadi `position:fixed` dengan `bottom` yang
-   dihitung JS dari tinggi composer (jadi nempel pas di atas composer, tapi
-   ruang tinggi panel dibatasi viewport, BUKAN ruang ke atas composer).
-   `--st-composer-h` diisi JS setiap resize/scroll.
-   Panel muncul dengan animasi turun (transform-origin bawah) supaya terasa
-   "tampil dari bawah". */
+   ⚠️ MASALAH YANG DIPERBAIKI (D-291 → D-292): sebelumnya panel desktop
+   nempel DI ATAS composer (`bottom: calc(var(--st-composer-h) + 10px)`).
+   Kalau composer tinggi — mis. mode Motion Graphics + template "Rangkaian
+   Beat" yang punya textarea 7 baris + textarea 3 baris — ruang ke atas
+   composer jadi mepet, jadi panel Pengaturan jadi tidak bisa dibuka / bagian
+   "Jenis Konten" terpotong. User harus pindah menu dulu. Sekarang panel
+   menutupi composer, jadi tidak ada lagi masalah ruang kosong di atas.
+
+   Di HP tetap modal tengah (lihat media query @media(max-width:850px)). */
 .st-pop-settings{display:none;position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(var(--st-composer-h, 150px) + 10px);
+  bottom:0;
   width:min(760px, calc(100vw - 32px));max-width:min(760px, calc(100vw - 32px));
-  max-height:calc(100vh - var(--st-composer-h, 150px) - 28px);
-  background:#0c1422f7;border:1px solid #24344e;border-radius:16px;padding:14px;
+  max-height:calc(100vh - 28px);
+  background:#0c1422f7;border:1px solid #24344e;border-radius:16px 16px 0 0;padding:14px;
   box-shadow:0 18px 50px #000c;z-index:120;overflow:hidden;
   transform-origin:bottom center;animation:stSettingsRise .18s ease-out}
 .st-pop-settings.open{display:flex;flex-direction:column}
-/* D-291: animasi "tampil dari bawah" — panel turun ke tempatnya. */
+/* D-291/D-292: animasi "tampil dari bawah" — panel naik dari bawah layar. */
 @keyframes stSettingsRise{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @media (prefers-reduced-motion: reduce){.st-pop-settings{animation:none}}
 /* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
