@@ -80,8 +80,47 @@
   // Feed live Cloud Publish: null = belum termuat (coba lagi nanti), [] = kosong/gagal → fallback demo.
   let liveItems = null;
   let fetching = false;
+  // D-293: showcase — aset yang user "pindahkan ke Portfolio" dari Studio.
+  let showcaseItems = null;
+  /**
+   * Aset showcase -> item Portfolio (type photo / video).
+   */
+  function showcaseToItem(s) {
+    if (!s || !s.publicUrl) return null;
+    const isVideo = s.mediaType === 'video';
+    const d = new Date(s.createdAt || '');
+    const date = isNaN(d) ? '' : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    return {
+      id: 'sc-' + String(s.id),
+      type: isVideo ? 'video' : 'photo',
+      title: String(s.title || 'Portfolio'),
+      client: '',
+      date,
+      tags: ['Portfolio'],
+      img: s.publicUrl,
+      desc: String(s.caption || ''),
+      headline: String(s.title || ''),
+      copy: '',
+      video: '',
+      viewCount: 0,
+      live: false,
+      showcase: true,
+    };
+  }
   function currentItems() {
-    return (liveItems && liveItems.length) ? liveItems : (window.PORTFOLIO_ITEMS || []);
+    const base = (liveItems && liveItems.length) ? liveItems : (window.PORTFOLIO_ITEMS || []);
+    // Item showcase (slot 'portfolio') digabung di depan — karya user sendiri.
+    if (showcaseItems && showcaseItems.length) return showcaseItems.concat(base);
+    return base;
+  }
+  async function loadShowcaseItems() {
+    if (showcaseItems !== null) return;
+    try {
+      const res = await fetch('/api/public/showcase');
+      const d = await res.json().catch(() => ({}));
+      const list = res.ok && Array.isArray(d.items) ? d.items : [];
+      showcaseItems = list.filter((s) => s.slot === 'portfolio').map(showcaseToItem).filter(Boolean);
+    } catch { showcaseItems = []; }
   }
   async function loadLiveItems() {
     if (liveItems !== null || fetching) return;
@@ -100,7 +139,7 @@
   window.renderPortfolio = async function renderPortfolio() {
     const grid = $('pfGrid'), fWrap = $('pfFilters');
     if (!grid || !fWrap) return;
-    await loadLiveItems();
+    await Promise.all([loadLiveItems(), loadShowcaseItems()]);
     const source = currentItems();
     const live = source !== (window.PORTFOLIO_ITEMS || []);
     const items = source.filter((i) => filter === 'all' || i.type === filter);

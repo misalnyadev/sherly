@@ -567,8 +567,16 @@
     // D-255: judul tooltip ikut menampilkan ukuran asli (klik -> preview).
     const dims = (a.width && a.height) ? (a.width + 'x' + a.height) : '';
     const tip = [a.file_name || 'aset', dims].filter(Boolean).join(' · ');
+    // D-293: badge penanda showcase di pojok kiri thumbnail
+    // (kiri, karena kanan dipakai badge asal: generate / upload).
+    const sc = showcaseSlots(a);
+    const scBadge = sc.length
+      ? '<span class="st-gal-showcase" title="' + (sc.includes('portfolio') ? 'Di Portfolio' : '') + (sc.includes('portfolio') && sc.includes('public') ? ' · ' : '') + (sc.includes('public') ? 'Konten Publik' : '') + '">'
+        + (sc.includes('portfolio') ? icon('briefcase') : '') + (sc.includes('public') ? icon('globe') : '') + '</span>'
+      : '';
     return '<button type="button" class="' + cls + '"' + style + ' data-asset-open="' + esc(a.id) + '" title="' + esc(tip) + '">'
       + '<span class="st-gal-thumb">' + assetThumb(a) + '</span>'
+      + scBadge
       + '<span class="st-gal-kind">' + (a.kind === 'generate' ? icon('sparkles') : icon('upload')) + '</span>'
       + '</button>';
   }
@@ -1045,6 +1053,8 @@
       + (a.prompt ? '<p class="st-lb-prompt">' + esc(a.prompt) + '</p>' : '')
       + '<div class="st-lb-actions">'
       + '<a class="st-act" href="' + esc(a.url) + '" download="' + esc(a.file_name || 'aset') + '">' + icon('download') + ' Unduh</a>'
+      // D-293: tombol showcase — "Pindahkan ke Portfolio" / "Jadikan Konten Publik".
+      + showcaseActionsHtml(a)
       + '<button type="button" class="st-act" data-lb-ref="1">' + icon('layers') + ' Jadikan Referensi</button>'
       + (isVideo ? '' : '<button type="button" class="st-act" data-lb-chain="1">' + icon('film') + ' Masukkan Rantai</button>')
       + (isVideo ? '<button type="button" class="st-act" data-lb-edit="1">' + icon('film') + ' Edit Video</button>' : '')
@@ -1056,6 +1066,15 @@
     box.querySelector('[data-lb-chain]')?.addEventListener('click', () => { addAssetToChain(a); closePreview(); });
     box.querySelector('[data-lb-edit]')?.addEventListener('click', () => { editAsset(a); closePreview(); });
     box.querySelector('[data-lb-del]')?.addEventListener('click', () => { deleteAsset(a); closePreview(); });
+    // D-293: tombol showcase di lightbox.
+    box.querySelector('[data-lb-portfolio]')?.addEventListener('click', async () => {
+      await setAssetShowcase(a, 'portfolio', !a.is_portfolio);
+      if (box.classList.contains('open')) openPreview(a);
+    });
+    box.querySelector('[data-lb-public]')?.addEventListener('click', async () => {
+      await setAssetShowcase(a, 'public', !a.is_public);
+      if (box.classList.contains('open')) openPreview(a);
+    });
   }
   /**
    * D-272: masukkan aset gambar ke Rantai Adegan.
@@ -1163,6 +1182,64 @@
       window.toast?.('Aset dihapus.');
     } catch (e) { window.toast?.(e.message || 'Gagal menghapus aset.'); }
   }
+
+  // ===== D-293: Showcase — aset Studio yang dipilih user untuk tampil di Beranda =====
+  //
+  // Dua slot:
+  //   'portfolio' -> "Pindahkan ke Portfolio" -> section "Portfolio" di Beranda
+  //   'public'    -> "Jadikan Konten Publik"  -> section "Konten Terbaru" di Beranda
+  //
+  // Status disimpan di server (tabel showcase_items) DAN dicerminkan di tabel
+  // assets lewat flag is_portfolio / is_public supaya badge di galeri Studio
+  // langsung tahu tanpa request tambahan.
+
+  /** Slot showcase yang sedang aktif untuk sebuah aset. */
+  function showcaseSlots(a) {
+    const s = [];
+    if (a?.is_portfolio) s.push('portfolio');
+    if (a?.is_public) s.push('public');
+    return s;
+  }
+
+  /** Nyalakan/matikan satu slot showcase untuk aset. */
+  async function setAssetShowcase(a, slot, enabled) {
+    if (!a || !a.id || !['portfolio', 'public'].includes(slot)) return;
+    try {
+      const r = await fetch('/api/studio/assets/' + encodeURIComponent(a.id) + '/showcase', {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ slot, enabled: enabled ? true : false }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Gagal menayangkan aset.');
+      // Perbarui state lokal + render ulang (badge di galeri ikut berubah).
+      const fresh = d.asset || null;
+      if (fresh) {
+        const i = assets.findIndex((x) => x.id === a.id);
+        if (i > -1) assets[i] = { ...assets[i], ...fresh };
+      } else {
+        a.is_portfolio = slot === 'portfolio' ? enabled : !!a.is_portfolio;
+        a.is_public = slot === 'public' ? enabled : !!a.is_public;
+      }
+      renderGallery();
+      window.toast?.(enabled
+        ? (slot === 'portfolio' ? 'Aset dipindahkan ke Portfolio ✨' : 'Aset dijadikan konten publik ✨')
+        : (slot === 'portfolio' ? 'Aset dikeluarkan dari Portfolio.' : 'Aset dikeluarkan dari konten publik.'));
+    } catch (e) {
+      window.toast?.(e.message || 'Gagal menayangkan aset.');
+    }
+  }
+
+  /** Tombol aksi showcase di lightbox aset (D-293). */
+  function showcaseActionsHtml(a) {
+    const isPf = !!a?.is_portfolio;
+    const isPub = !!a?.is_public;
+    return '<button type="button" class="st-act' + (isPf ? ' is-on' : '') + '" data-lb-portfolio="1">'
+      + icon('briefcase') + (isPf ? ' Di Portfolio' : ' Pindahkan ke Portfolio') + '</button>'
+      + '<button type="button" class="st-act' + (isPub ? ' is-on' : '') + '" data-lb-public="1">'
+      + icon('globe') + (isPub ? ' Konten Publik' : ' Jadikan Konten Publik') + '</button>';
+  }
+
   // D-257: baca dimensi file di browser (sebelum upload) supaya galeri bisa
   // membedakan aset VERTIKAL & HORIZONTAL. Tanpa ini metadata width/height
   // kosong -> semua video jatuh ke fallback 9:16 (tampil vertikal).

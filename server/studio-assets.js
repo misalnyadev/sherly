@@ -208,6 +208,9 @@ export async function signedAsset(asset, supabase) {
     width: asset.width || null,
     height: asset.height || null,
     duration_ms: asset.duration_ms || null,
+    // D-293: penanda showcase (Portfolio / konten publik).
+    is_portfolio: asset.is_portfolio === true,
+    is_public: asset.is_public === true,
     created_at: asset.created_at,
     url: null,
   };
