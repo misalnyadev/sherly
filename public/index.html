@@ -800,6 +800,9 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
     border:1px solid #24344e;border-radius:18px;padding:14px;box-shadow:0 24px 70px #000d;
     z-index:120;overflow:hidden;display:none;flex-direction:column}
   .st-pop.st-pop-settings.open{display:flex}
+  /* D-291: panel HP = modal tengah, bukan "tampil dari bawah" -> animasi
+     rise (translateY) tidak dipakai di HP supaya panel tetap diam di tengah. */
+  .st-pop.st-pop-settings{animation:none!important}
 }
 .st-composer{position:relative;pointer-events:auto;display:flex;flex-direction:column;
   width:100%;max-width:760px;box-sizing:border-box;margin:0 auto;
@@ -1026,12 +1029,32 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
 .st-settings-pills{display:none!important}
 /* Panel pengaturan — D-247: dipakai di HP & PC (satu tampilan).
    Di PC jadi dropdown yang menempel di atas pemicu (bukan modal tengah),
-   di HP tetap modal tengah (lihat media query di bawah). */
-.st-pop-settings{display:none;position:absolute;left:0;right:0;bottom:calc(100% + 8px);
-  width:auto;max-width:none;max-height:min(70vh,560px);
+   di HP tetap modal tengah (lihat media query di bawah).
+   D-291: di DESKTOP panel Pengaturan TAMPIL DARI BAWAH.
+   ⚠️ MASALAH YANG DIPERBAIKI: sebelumnya panel desktop memakai
+   `bottom: calc(100% + 8px)` (nempel DI ATAS composer) + `max-height:70vh`.
+   Panel Pengaturan memuat grup "Jenis Konten" (Foto / Video / Motion Graphics)
+   di baris PERTAMA — dan itu persis bagian yang TERPOTONG ke atas saat panel
+   lebih tinggi dari ruang kosong di atas composer. Akibatnya user tidak bisa
+   memilih "Motion Graphics" (atau jenis konten lain) sama sekali.
+
+   Perbaikan: di desktop panel jadi `position:fixed` dengan `bottom` yang
+   dihitung JS dari tinggi composer (jadi nempel pas di atas composer, tapi
+   ruang tinggi panel dibatasi viewport, BUKAN ruang ke atas composer).
+   `--st-composer-h` diisi JS setiap resize/scroll.
+   Panel muncul dengan animasi turun (transform-origin bawah) supaya terasa
+   "tampil dari bawah". */
+.st-pop-settings{display:none;position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(var(--st-composer-h, 150px) + 10px);
+  width:min(760px, calc(100vw - 32px));max-width:min(760px, calc(100vw - 32px));
+  max-height:calc(100vh - var(--st-composer-h, 150px) - 28px);
   background:#0c1422f7;border:1px solid #24344e;border-radius:16px;padding:14px;
-  box-shadow:0 18px 50px #000c;z-index:120;overflow:hidden}
+  box-shadow:0 18px 50px #000c;z-index:120;overflow:hidden;
+  transform-origin:bottom center;animation:stSettingsRise .18s ease-out}
 .st-pop-settings.open{display:flex;flex-direction:column}
+/* D-291: animasi "tampil dari bawah" — panel turun ke tempatnya. */
+@keyframes stSettingsRise{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@media (prefers-reduced-motion: reduce){.st-pop-settings{animation:none}}
 /* D-232: panel pengaturan = kolom fleks; body scroll, footer sticky. */
 /* D-233/D-234/D-235/D-236: header panel — judul + deskripsi (deskripsi DI BAWAH
    judul). D-236: tombol X header dihapus (sudah ada "Batal" di footer) supaya

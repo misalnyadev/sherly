@@ -906,6 +906,8 @@
       window.addEventListener('resize', () => {
         clearTimeout(rt);
         rt = setTimeout(() => packGallery($('stGallery')), 120);
+        // D-291: tinggi composer bisa berubah saat jendela di-resize.
+        syncComposerHeightVar();
       });
       // D-256: galeri sering dirender saat studionya belum tampil (view
       // tersembunyi => clientWidth 0). ResizeObserver memancing packing ulang
@@ -1334,6 +1336,9 @@
   }
   function renderAssetHeader() {
     const box = $('stAssetHeader'); if (!box) return;
+    // D-291: baris aset aktif mengubah tinggi composer -> var tinggi composer
+    // untuk panel Pengaturan harus ikut diperbarui (panel nempel di atas composer).
+    syncComposerHeightVar();
     const mentioned = mentionedCharacters();
     const parts = [];
     // D-215: referensi hanya ICON foto (tanpa nama, tanpa kapsul) supaya 3 karakter
@@ -2538,8 +2543,31 @@
     el.classList.add('open');
     // D-247: HP = modal tengah; PC = dropdown di atas pemicu (gaya flow).
     el.classList.toggle('st-pop-center', isMobileLayout());
+    // D-291: di desktop panel Pengaturan tampil dari BAWAH — tinggi composer
+    // ditulis ke CSS var supaya tinggi panel dihitung dari viewport (bukan
+    // dari ruang ke atas composer yang bisa terlalu kecil sehingga baris
+    // "Jenis Konten" — Foto / Video / Motion Graphics — terpotong).
+    syncComposerHeightVar();
     popOpen = 'settings';
     syncBackdrop();
+  }
+
+  /**
+   * D-291: tulis tinggi composer ke CSS var `--st-composer-h`.
+   *
+   * Panel Pengaturan (desktop) diposisikan `fixed` dengan
+   * `bottom: calc(var(--st-composer-h) + 10px)` supaya nempel pas di atas
+   * composer. Tanpa var ini, panel memakai asumsi 150px — dan kalau composer
+   * lebih tinggi (mis. baris aset aktif), panel bisa menimpa composer atau
+   * meluber keluar bawah viewport.
+   */
+  function syncComposerHeightVar() {
+    const composer = document.querySelector('.st-composer');
+    if (!composer) return;
+    const h = Math.round(composer.getBoundingClientRect().height || 0);
+    if (!h) return;
+    const target = document.querySelector('.st-composer-dock') || document.documentElement;
+    target.style.setProperty('--st-composer-h', h + 'px');
   }
 
   // ===== D-207: Bank Prompt (template utuh + blok modular) =====
