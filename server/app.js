@@ -37,6 +37,10 @@ import { normalizeVideoParams, videoCatalog } from './video-models.js';
 import { normalizeImageParams, imageCatalog, findImageModel, DEFAULT_IMAGE_MODEL } from './image-models.js';
 import { fetchKieCredits, IMAGE_CREDITS, VIDEO_CREDITS } from './kie-credits.js';
 import { detectDimensions } from './media-dimensions.js';
+import {
+  SHOWCASE_BUCKET, SHOWCASE_SLOTS, normalizeSlot, sanitizeShowcasePatch,
+  sanitizeShowcaseText, showcasePath, showcaseRow, collectShowcaseItems,
+} from './showcase.js';
 import { handleSherlyStatus } from './sherly-status-route.js';
 
 // D-257: dimensi default per aspect ratio (dipakai kalau header file tidak
@@ -918,6 +922,183 @@ app.delete('/api/studio/assets/:id', requireUser, requireAdmin, async (req, res)
     res.json(result);
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menghapus aset.' });
+  }
+});
+
+// ===== D-293: Showcase — aset Studio yang dipilih user untuk tampil di Beranda =====
+//
+//_slot_ 'portfolio' -> "Pindahkan ke Portfolio"   -> section "Portfolio" Beranda
+//_slot_ 'public'    -> "Jadikan Konten Publik"    -> section "Konten Terbaru" Beranda
+//
+// File aset disalin dari bucket 'studio-assets' (private) ke bucket 'showcase'
+// (public) supaya URL-nya stabil & bisa dibaca tamu di Beranda. Bucket
+// 'studio-assets' sendiri tetap private — hanya aset yang user pilih sendiri
+// yang dipublikasikan.
+
+/** Unduh file aset (bucket studio-assets) lalu simpan ke bucket showcase. */
+async function copyAssetToShowcase(supabase, userId, asset) {
+  const src = asset?.file_path;
+  if (!src) throw Object.assign(new Error('Aset tidak punya file.'), { status: 400 });
+  const { data, error: dlErr } = await supabase.storage.from(STUDIO_BUCKET).download(src);
+  if (dlErr || !data) {
+    throw Object.assign(new Error('Gagal membaca file aset: ' + (dlErr?.message || 'file kosong')), { status: 500 });
+  }
+  const buffer = Buffer.from(await data.arrayBuffer());
+  const ext = String(src.split('.').pop() || 'bin').toLowerCase().slice(0, 5);
+  const dest = showcasePath(userId, asset.id, ext);
+  const { error: upErr } = await supabase.storage.from(SHOWCASE_BUCKET).upload(dest, buffer, {
+    contentType: asset.media_type === 'video' ? 'video/mp4' : 'image/jpeg', upsert: true,
+  });
+  if (upErr) throw Object.assign(new Error('Gagal menayangkan aset: ' + upErr.message), { status: 500 });
+  return dest;
+}
+
+/** Hapus file salinan di bucket showcase (best effort). */
+async function removeShowcaseFile(supabase, path) {
+  if (!path) return;
+  try { await supabase.storage.from(SHOWCASE_BUCKET).remove([path]); } catch { /* abaikan */ }
+}
+
+/**
+ * Terapkan status showcase untuk satu aset.
+ * body: { slot: 'portfolio'|'public', enabled: bool, title?, caption? }
+ */
+app.post('/api/studio/assets/:id/showcase', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const slot = normalizeSlot(req.body?.slot);
+    if (!slot) return res.status(400).json({ ok: false, error: 'Slot showcase tidak valid.' });
+    const asset = await getAsset(req.supabase, req.user.id, req.params.id);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Aset tidak ditemukan.' });
+
+    const enabled = req.body?.enabled === true || req.body?.enabled === 'true';
+    const title = sanitizeShowcaseText(req.body?.title ?? asset.file_name, 120);
+    const caption = sanitizeShowcaseText(req.body?.caption ?? asset.prompt ?? '', 400);
+
+    // Baris showcase milik user untuk aset + slot ini.
+    const { data: existingRows, error: findErr } = await req.supabase.from('showcase_items')
+      .select('*').eq('asset_id', asset.id).eq('slot', slot).maybeSingle();
+    if (findErr) throw Object.assign(new Error(findErr.message), { status: 500 });
+
+    if (!enabled) {
+      // Matikan: hapus baris + file salinan (kalau tidak dipakai slot lain).
+      if (existingRows) {
+        await req.supabase.from('showcase_items').delete().eq('id', existingRows.id);
+        const { data: stillUsed } = await req.supabase.from('showcase_items')
+          .select('id').eq('storage_path', existingRows.storage_path).maybeSingle();
+        if (!stillUsed) await removeShowcaseFile(req.supabase, existingRows.storage_path);
+      }
+      // Matikan juga penanda di tabel assets.
+      const flag = slot === 'portfolio' ? { is_portfolio: false } : { is_public: false };
+      const { data: updated } = await req.supabase.from('assets')
+        .update(flag).eq('id', asset.id).select('*').single();
+      return res.json({ ok: true, asset: await signedAsset(updated || asset, req.supabase) });
+    }
+
+    // Nyalakan: pastikan file ada di bucket showcase (copy bila belum).
+    let storagePath = existingRows?.storage_path || '';
+    if (!storagePath) {
+      storagePath = await copyAssetToShowcase(req.supabase, req.user.id, asset);
+    }
+
+    const row = {
+      user_id: req.user.id,
+      asset_id: asset.id,
+      slot,
+      title,
+      caption,
+      storage_path: storagePath,
+      media_type: asset.media_type || 'image',
+      width: asset.width || null,
+      height: asset.height || null,
+      updated_at: new Date().toISOString(),
+    };
+    let saved;
+    if (existingRows) {
+      const { data, error } = await req.supabase.from('showcase_items')
+        .update(row).eq('id', existingRows.id).select('*').single();
+      if (error) throw Object.assign(new Error(error.message), { status: 500 });
+      saved = data;
+    } else {
+      const { data, error } = await req.supabase.from('showcase_items')
+        .insert({ ...row, created_at: new Date().toISOString() }).select('*').single();
+      if (error) throw Object.assign(new Error(error.message), { status: 500 });
+      saved = data;
+    }
+
+    // Tandai juga di tabel assets (flag ringkas untuk UI Studio).
+    const flag = slot === 'portfolio' ? { is_portfolio: true } : { is_public: true };
+    const { data: updated } = await req.supabase.from('assets')
+      .update(flag).eq('id', asset.id).select('*').single();
+
+    res.json({
+      ok: true,
+      slot,
+      asset: await signedAsset(updated || asset, req.supabase),
+      item: showcaseRow(saved, process.env.SUPABASE_URL || ''),
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal menayangkan aset.' });
+  }
+});
+
+/** Daftar showcase milik user (owner) — untuk Studio & halaman Portfolio. */
+app.get('/api/studio/showcase', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await req.supabase.from('showcase_items')
+      .select('*').eq('user_id', req.user.id).order('created_at', { ascending: false }).limit(200);
+    if (error) throw Object.assign(new Error(error.message), { status: 500 });
+    const rows = data || [];
+    // Signed URL untuk file salinan di bucket showcase (owner & guest sama
+    //-sama boleh baca file-nya; signed URL di sini biar stabil & terkontrol).
+    const withUrl = await Promise.all(rows.map(async (r) => {
+      let signedUrl = '';
+      try {
+        const { data: sd } = await req.supabase.storage.from(SHOWCASE_BUCKET).createSignedUrl(r.storage_path, 3600);
+        signedUrl = sd?.signedUrl || '';
+      } catch { /* abaikan */ }
+      return { ...r, signedUrl };
+    }));
+    res.json({ items: withUrl.map((r) => showcaseRow(r, process.env.SUPABASE_URL || '')) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memuat showcase.' });
+  }
+});
+
+/** Update penanda showcase (bulk, mis. set semua portfolio). */
+app.patch('/api/studio/showcase', requireUser, requireAdmin, async (req, res) => {
+  try {
+    const patch = sanitizeShowcasePatch(req.body || {});
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Tidak ada perubahan yang diminta.' });
+    }
+    const { data, error } = await req.supabase.from('assets')
+      .update(patch).eq('user_id', req.user.id).select('*');
+    if (error) throw Object.assign(new Error(error.message), { status: 500 });
+    res.json({ ok: true, assets: await Promise.all((data || []).map((a) => signedAsset(a, req.supabase))) });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, error: error.message || 'Gagal memperbarui showcase.' });
+  }
+});
+
+// ---------- Showcase PUBLIK (tanpa login) — untuk halaman Beranda ----------
+
+/** Beranda: konten publik (slot 'public') — dibaca lewat view publik. */
+app.get('/api/public/showcase', async (req, res) => {
+  try {
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Showcase belum dikonfigurasi.' });
+    const sb = createPublicClient();
+    const { data, error } = await sb.from('showcase_items_public')
+      .select('id,asset_id,slot,title,caption,storage_path,media_type,width,height,created_at')
+      .order('created_at', { ascending: false }).limit(60);
+    if (error) {
+      if (/does not exist|permission denied|row-level security/i.test(error.message)) {
+        return res.status(503).json({ error: 'Showcase belum bisa diakses. Jalankan supabase/showcase.sql di SQL Editor dulu.' });
+      }
+      throw new Error(error.message);
+    }
+    res.json({ items: (data || []).map((r) => showcaseRow(r, publicBucketBase())) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -2131,7 +2312,7 @@ const PUBLIC_FEED_COLS = 'id,title,caption,category,publish_at,storage_path,crea
 function publicBucketBase() { return String(process.env.SUPABASE_URL || '').replace(/\/+$/, ''); }
 app.get('/api/public/posts', async (req, res) => {
   try {
-    if (!supabaseConfigured()) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
     const sb = createPublicClient();
     const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
     if (id) {
@@ -2149,7 +2330,7 @@ app.get('/api/public/posts', async (req, res) => {
 app.post('/api/public/posts/:id/view', async (req, res) => {
   try {
     if (!isValidPostId(req.params.id)) return res.status(404).json({ error: 'Karya tidak ditemukan.' });
-    if (!supabaseConfigured()) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
+    if (!supabaseConfigured) return res.status(503).json({ error: 'Galeri publik belum dikonfigurasi.' });
     const sb = createPublicClient();
     const { error } = await sb.rpc('increment_post_view', { p_id: req.params.id });
     if (error) {
