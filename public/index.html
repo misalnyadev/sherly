@@ -81,10 +81,79 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .row-label.heading .rl-line{flex:1;height:1px;background:linear-gradient(90deg,#24344e,transparent)}
 .row-label.heading .link{flex:none;font-size:10.5px;letter-spacing:.02em;color:#cfd6e4}.row-label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#24344e,transparent)}.media-row{display:grid;grid-auto-flow:column;gap:12px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.media-row::-webkit-scrollbar{display:none}.media-row.vertical{grid-auto-columns:142px}.media-row.horizontal{grid-auto-columns:244px}.media-card{position:relative;scroll-snap-align:start;overflow:hidden;border-radius:16px;border:1px solid #24344e;cursor:pointer;aspect-ratio:9/16;background:#101b2c;transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease}.media-row.horizontal .media-card{aspect-ratio:16/10}.media-card img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .45s ease}.media-card:hover{transform:translateY(-4px);border-color:#49334e;box-shadow:0 18px 42px #00000090,0 0 0 3px #f044a81f;z-index:1}.media-card:hover img{transform:scale(1.06)}.media-card::before{content:"";position:absolute;left:0;right:0;top:0;height:56px;background:linear-gradient(180deg,#00000080,transparent);pointer-events:none;z-index:1}.media-card::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56%;background:linear-gradient(0deg,#04070fe0 0%,#04070f60 45%,transparent 100%);pointer-events:none;z-index:1}.media-card .card-meta{position:absolute;left:11px;right:44px;bottom:10px;z-index:2}.media-card .card-meta b{font-size:11px;line-height:1.35;color:#f4f5fb;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.media-card .card-meta small{font-size:9px;color:#cfd6e4;letter-spacing:.04em}.play-btn{position:absolute;right:10px;bottom:10px;z-index:2;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(216,45,145,.9);color:#fff;box-shadow:0 4px 14px #00000090;transition:transform .2s}.media-card:hover .play-btn{transform:scale(1.15)}.play-btn svg{width:14px;height:14px}.tag{position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:5px;border-radius:30px;padding:4px 11px;font-size:8.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;background:rgba(216,45,145,.92);color:#fff;box-shadow:0 4px 14px #00000080;backdrop-filter:blur(3px);margin:0}.tag.blue,.tag.purple{background:rgba(255,255,255,.18);color:#fff}
 .dash-layout{display:grid;gap:16px}.dash-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}.dash-main{display:grid;gap:16px;min-width:0}.dash-side{display:grid;gap:16px}.dash-stat{background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:15px;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}.dash-stat:hover{border-color:#f044a8;box-shadow:0 0 0 3px #f044a814,0 12px 30px #0009;transform:translateY(-2px)}.dash-works{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.dash-work{display:flex;flex-direction:column;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;border-radius:14px;overflow:hidden;padding:0;cursor:pointer;font:inherit;color:#f4f5fb;text-align:left;transition:border-color .18s,transform .18s,box-shadow .18s}.dash-work:hover{border-color:#f044a8;transform:translateY(-2px);box-shadow:0 0 0 3px #f044a814}.dash-work img{width:100%;height:116px;object-fit:cover;display:block;background:#160f20}.dash-work>div{padding:10px 12px;display:grid;gap:3px}.dash-work b{font-size:12.5px}.dash-work small{color:var(--muted);font-size:10px}.admin-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.admin-quick button{display:flex;flex-direction:column;align-items:center;gap:7px;border:0;background:transparent;color:#f4f5fb;font-size:10px;padding:7px 2px;cursor:pointer}.admin-quick .aq-ico{display:grid;place-items:center;width:52px;height:52px;border-radius:13px;background:#311738;color:#ff72c5;box-shadow:0 0 18px #f044a820;transition:box-shadow .18s,transform .18s}.admin-quick .aq-ico svg{width:24px;height:24px}.admin-quick button:hover .aq-ico{box-shadow:0 0 22px #f044a840;transform:translateY(-2px)}@media(max-width:850px){#homeAdminMenu{grid-column:1/-1}}.dash-card b{font-size:13.5px;display:flex;align-items:center;gap:7px}.dash-card p{margin:0;color:var(--muted);font-size:11.5px;line-height:1.55}.assets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.home-top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:stretch}
+.home-top{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:stretch}
 .home-top>section{display:flex;flex-direction:column;min-width:0}
 .home-top #homeProdPanel .assets{flex:1}
 #homeCharsPanel{display:flex;flex-direction:column;min-width:0}
+
+/* ===== D-294: Beranda — kartu showcase (Portfolio & Konten Publik) =====
+   D-293 memakai kartu ".asset" (kecil, tinggi 112px) untuk Portfolio, padahal
+   di Beranda semua karya lain pakai kartu ".media-card" (besar, 9:16 / 16:10).
+   Sekarang Portfolio ikut pakai kartu besar yang sama, plus:
+     - thumbnail VIDEO yang benar (bukan kotak kosong),
+     - AUTOPLAY saat kursor di atas (PC) / ketuk (HP),
+     - KLIK untuk lihat ukuran asli (lightbox). */
+.sc-row{display:grid;grid-auto-flow:column;gap:12px;overflow-x:auto;scroll-snap-type:x proximity;
+  padding:2px 2px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.sc-row::-webkit-scrollbar{display:none}
+.sc-row.vertical{grid-auto-columns:186px}
+.sc-row.horizontal{grid-auto-columns:268px}
+/* D-294: baris Portfolio — kartu BESAR & SERAGAM (9:16), UKURAN SAMA dengan
+   kartu Konten potret (186px) supaya tampilannya konsisten. */
+.sc-row.portfolio{grid-auto-columns:186px}
+.sc-row.portfolio .sc-card{aspect-ratio:9/16}
+/* Kartu Portfolio (baris atas) & Konten (baris bawah) — sama ukurannya. */
+.sc-card{position:relative;scroll-snap-align:start;overflow:hidden;border-radius:16px;
+  border:1px solid #24344e;cursor:pointer;aspect-ratio:9/16;background:#101b2c;
+  transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease}
+.sc-row.horizontal .sc-card{aspect-ratio:16/10}
+.sc-card:hover{transform:translateY(-4px);border-color:#49334e;box-shadow:0 18px 42px #00000090,0 0 0 3px #f044a81f;z-index:1}
+.sc-card img,.sc-card video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;
+  background:#101b2c;transition:transform .45s ease}
+.sc-card:hover img,.sc-card:hover video{transform:scale(1.06)}
+.sc-card::before{content:"";position:absolute;left:0;right:0;top:0;height:56px;
+  background:linear-gradient(180deg,#00000080,transparent);pointer-events:none;z-index:1}
+.sc-card::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56%;
+  background:linear-gradient(0deg,#04070fe0 0%,#04070f60 45%,transparent 100%);pointer-events:none;z-index:1}
+.sc-card .sc-meta{position:absolute;left:11px;right:11px;bottom:10px;z-index:2;pointer-events:none}
+.sc-card .sc-meta b{display:block;font-size:11.5px;line-height:1.35;color:#f4f5fb;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sc-card .sc-meta small{font-size:9.5px;color:#cfd6e4;letter-spacing:.04em}
+.sc-card .sc-tag{position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:5px;
+  border-radius:30px;padding:4px 11px;font-size:8.5px;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;background:rgba(216,45,145,.92);color:#fff;
+  box-shadow:0 4px 14px #00000080;backdrop-filter:blur(3px);pointer-events:none}
+/* Tombol putar: halus, muncul saat hover (bukan bulatan pink mencolok). */
+.sc-play{position:absolute;right:9px;bottom:9px;z-index:3;width:26px;height:26px;border-radius:50%;
+  display:grid;place-items:center;background:rgba(4,7,15,.72);color:#fff;
+  border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(4px);
+  opacity:0;transform:scale(.85);transition:opacity .2s,transform .2s;pointer-events:none}
+.sc-card:hover .sc-play{opacity:1;transform:scale(1)}
+.sc-play svg{width:12px;height:12px;fill:currentColor}
+/* Placeholder saat thumbnail video belum siap / gagal. */
+.sc-fallback{position:absolute;inset:0;display:grid;place-items:center;color:#91a2b9;background:#101b2c;z-index:0}
+.sc-fallback svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.6}
+/* Lightbox Beranda (klik -> lihat ukuran asli). */
+.sc-lightbox{position:fixed;inset:0;z-index:150;display:none}
+.sc-lightbox.open{display:block}
+.sc-lb-backdrop{position:absolute;inset:0;background:rgba(4,7,15,.92);backdrop-filter:blur(6px)}
+.sc-lb-panel{position:relative;margin:4vh auto;max-width:min(920px,94vw);max-height:92vh;display:flex;
+  flex-direction:column;background:linear-gradient(145deg,#101b2c,#0a1220);border:1px solid #49334e;
+  border-radius:18px;overflow:hidden;box-shadow:0 30px 90px #000c}
+.sc-lb-head{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.sc-lb-head b{display:block;color:#fff;font-size:13.5px;font-weight:600;word-break:break-all}
+.sc-lb-head span{font-size:11px;color:var(--muted)}
+.sc-lb-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;
+  color:#cfd6e4;cursor:pointer;display:grid;place-items:center;margin-left:auto;flex:none;transition:.18s}
+.sc-lb-x:hover{border-color:#f044a8;color:#ff9bdc}
+.sc-lb-x svg{width:13px;height:13px}
+.sc-lb-body{overflow:auto;background:#070b14;display:grid;place-items:center;min-height:0}
+.sc-lb-body img,.sc-lb-body video{max-width:100%;max-height:74vh;display:block;object-fit:contain}
+/* Caption di BAWAH media (jangan menutupi gambar). */
+.sc-lb-cap{padding:11px 15px;border-top:1px solid var(--line);color:#cfd6e4;font-size:12px;
+  line-height:1.5;word-break:break-word}
+@media(max-width:560px){.sc-row.vertical{grid-auto-columns:150px}.sc-row.horizontal{grid-auto-columns:210px}
+  .sc-row.portfolio{grid-auto-columns:150px}}
 #homeCharsPanel .character{flex:1;min-height:0;display:flex;flex-direction:column}
 #homeCharsPanel .dash-chars{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;margin:-2px;padding:2px}
 #homeCharsPanel .dash-chars::-webkit-scrollbar{display:none}.asset{overflow:hidden}.asset img{width:100%;height:112px;object-fit:cover;display:block}.asset div{padding:9px}.asset b{font-size:11px;display:block}.asset small{color:var(--muted);font-size:9px}
@@ -2173,15 +2242,17 @@ button:focus-visible{outline:2px solid #f044a880;outline-offset:2px}
  <div class="layout">
  <section class="maincol">
   <section class="hero"><img class="hero-mark" src="assets/sherly-mark.png" alt="SherlyStudio mark"><div class="hero-copy"><h1>Sherly<span>Studio</span></h1><p>CREATE · EDIT · SHARE</p></div><div class="hero-note"><span class="note-a">Your</span><span class="note-b">Creative Space</span><span class="note-c"><span class="note-white">with</span> Sherly <span class="note-heart">&#10084;&#65038;</span></span></div></section>
+  <!-- D-294: Portfolio jadi LEBAR PENUH (baris sendiri, kartu besar) — dulu
+       berdesakan di kolom kiri baris "home-top" sehingga thumbnailnya kecil. -->
+  <section id="homeProdPanel"><div class="section-head"><h2><i data-icon="briefcase"></i> Portfolio</h2><button class="link" data-page="Portfolio">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="sc-row horizontal" id="homePortfolio"><div class="empty-state">Memuat portfolio…</div></div></section>
   <div class="home-top">
-  <section id="homeProdPanel"><div class="section-head"><h2><i data-icon="briefcase"></i> Portfolio</h2><button class="link" data-page="Portfolio">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="assets" id="homePortfolio"><div class="empty-state">Memuat portfolio…</div></div></section>
   <section id="homeCharsPanel"><div class="section-head"><h2><span data-icon="users"></span> Karakter Tersedia</h2><button class="link" data-page="Karakter Publik">Lihat Semua <span data-icon="arrow-right"></span></button></div><div class="character"><div class="dash-chars" id="homeChars"><div class="empty-state">Memuat karakter…</div></div></div></section>
   </div>
   <section>
  <p class="row-label heading"><span>KONTEN TERBARU</span><span class="rl-line" aria-hidden="true"></span><button type="button" class="link" onclick="toast('Menampilkan semua proyek demo')">Lihat Semua <span data-icon="arrow-right"></span></button></p>
-   <div class="media-row vertical" id="homeLatestRow"></div>
+   <div class="sc-row vertical" id="homeLatestRow"></div>
    <p class="row-label">HORIZONTAL</p>
-   <div class="media-row horizontal" id="homePublicRow"><div class="empty-state">Belum ada konten publik — pilih aset di Studio lalu tekan "Jadikan Konten Publik".</div></div>
+   <div class="sc-row horizontal" id="homePublicRow"><div class="empty-state">Belum ada konten publik — pilih aset di Studio lalu tekan "Jadikan Konten Publik".</div></div>
   </section>
   <!-- D-293: konten lama (demo) dipindah ke bawah agar Beranda menampilkan
        karya asli user: Portfolio + konten publik. -->

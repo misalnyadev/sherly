@@ -77,12 +77,12 @@ async function renderHome(browser, w, h) {
       const head = q('#homeProdPanel .section-head h2');
       return {
         heading: head ? head.textContent.trim() : '',
-        portfolioCount: pf ? pf.querySelectorAll('.asset').length : -1,
+        portfolioCount: pf ? pf.querySelectorAll('.sc-card').length : -1,
         portfolioEmpty: pf ? !!pf.querySelector('.empty-state') : false,
-        horizontalCount: hrow ? hrow.querySelectorAll('.media-card').length : -1,
-        verticalCount: vrow ? vrow.querySelectorAll('.media-card').length : -1,
-        horizontalTitles: hrow ? [...hrow.querySelectorAll('.media-card b')].map((b) => b.textContent.trim()) : [],
-        verticalTitles: vrow ? [...vrow.querySelectorAll('.media-card b')].map((b) => b.textContent.trim()) : [],
+        horizontalCount: hrow ? hrow.querySelectorAll('.sc-card').length : -1,
+        verticalCount: vrow ? vrow.querySelectorAll('.sc-card').length : -1,
+        horizontalTitles: hrow ? [...hrow.querySelectorAll('.sc-card .sc-meta b')].map((b) => b.textContent.trim()) : [],
+        verticalTitles: vrow ? [...vrow.querySelectorAll('.sc-card .sc-meta b')].map((b) => b.textContent.trim()) : [],
         hasPortfolioHeading: /Portfolio/i.test(head ? head.textContent : ''),
         noProduksi: !/Produksi Terbaru/.test(head ? head.textContent : ''),
       };
