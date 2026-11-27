@@ -93,6 +93,7 @@
     const box = $('homePortfolio');
     if (!box) return;
     const list = items.filter((i) => i.slot === 'portfolio');
+    box.className = 'sc-row portfolio';
     if (!list.length) {
       box.innerHTML = '<div class="empty-state">Portfolio masih kosong — buka Studio, pilih aset, lalu tekan "Pindahkan ke Portfolio".</div>';
       return;
@@ -100,7 +101,6 @@
     // D-294: Portfolio = karya pilihan user -> kartu BESAR & SERAGAM (9:16),
     // sama seperti kartu Konten. Aset landscape tetap di-crop (object-fit:cover)
     // supaya baris rapi — tidak campur tinggi.
-    box.className = 'sc-row portfolio';
     box.innerHTML = list.slice(0, 10).map((a) => cardHTML(a, 'Portfolio', 9 / 16)).join('');
   }
 
