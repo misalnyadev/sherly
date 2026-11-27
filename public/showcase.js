@@ -78,17 +78,6 @@
       + '</article>';
   }
 
-  /**
-   * Rasio aset (lebar/tinggi). Tanpa dimensi -> 9:16 (potret).
-   * Dipakai untuk MEMISAHKAN baris potret & horizontal.
-   */
-  function assetRatio(a) {
-    const w = Number(a && a.width) || 0;
-    const h = Number(a && a.height) || 0;
-    if (w > 0 && h > 0) return w / h;
-    return 9 / 16;
-  }
-
   function renderPortfolio(items) {
     const box = $('homePortfolio');
     if (!box) return;
@@ -98,29 +87,29 @@
       box.innerHTML = '<div class="empty-state">Portfolio masih kosong — buka Studio, pilih aset, lalu tekan "Pindahkan ke Portfolio".</div>';
       return;
     }
-    // D-294: Portfolio = karya pilihan user -> kartu BESAR & SERAGAM (9:16),
-    // sama seperti kartu Konten. Aset landscape tetap di-crop (object-fit:cover)
-    // supaya baris rapi — tidak campur tinggi.
-    box.innerHTML = list.slice(0, 10).map((a) => cardHTML(a, 'Portfolio', 9 / 16)).join('');
+    // D-295: Portfolio tampil 3 karya saja ( kolom kiri, sejajar Karakter).
+    // Aset landscape di-crop (object-fit:cover) supaya baris rapi.
+    box.innerHTML = list.slice(0, 3).map((a) => cardHTML(a, 'Portfolio', 9 / 16)).join('');
   }
 
   function renderLatest(items) {
-    // "Konten Terbaru" baris VERTIKAL = konten publik yang berorientasi potret.
+    // "Konten Terbaru" baris VERTIKAL = konten publik yang berorientasi potret (4).
+    // Rasio kartu TETAP 9:16 (desain awal) — aset dengan rasio lain di-crop.
     const row = $('homeLatestRow');
     if (row) {
       const vert = items.filter((i) => i.slot === 'public' && !isLandscape(i));
       row.className = 'sc-row vertical';
       row.innerHTML = vert.length
-        ? vert.slice(0, 10).map((a) => cardHTML(a, 'Konten', assetRatio(a))).join('')
+        ? vert.slice(0, 4).map((a) => cardHTML(a, 'Konten', 9 / 16)).join('')
         : '<div class="empty-state">Belum ada konten publik — pilih aset di Studio lalu tekan "Jadikan Konten Publik".</div>';
     }
-    // Baris HORIZONTAL = konten publik yang berorientasi landscape.
+    // Baris HORIZONTAL = konten publik yang berorientasi landscape (3), 16:10.
     const hrow = $('homePublicRow');
     if (hrow) {
       const horz = items.filter((i) => i.slot === 'public' && isLandscape(i));
       hrow.className = 'sc-row horizontal';
       hrow.innerHTML = horz.length
-        ? horz.slice(0, 10).map((a) => cardHTML(a, 'Konten', assetRatio(a))).join('')
+        ? horz.slice(0, 3).map((a) => cardHTML(a, 'Konten', 16 / 10)).join('')
         : '<div class="empty-state">Belum ada konten publik horizontal — pilih aset horizontal di Studio lalu tekan "Jadikan Konten Publik".</div>';
     }
   }
