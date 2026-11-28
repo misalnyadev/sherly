@@ -240,6 +240,23 @@ async function renderHome(w, h, extra) {
           }
           return last ? Math.round(b.right - last.right) : -1;
         })(),
+        // Semua kartu yang dirender harus muat penuh di dalam baris.
+        verticalAllFit: (() => {
+          if (!vrow) return false;
+          const b = vrow.getBoundingClientRect();
+          return [...vrow.querySelectorAll('.sc-card')].every((c) => {
+            const r = c.getBoundingClientRect();
+            return r.left >= b.left - 2 && r.right <= b.right + 2;
+          });
+        })(),
+        horizontalAllFit: (() => {
+          if (!hrow) return false;
+          const b = hrow.getBoundingClientRect();
+          return [...hrow.querySelectorAll('.sc-card')].every((c) => {
+            const r = c.getBoundingClientRect();
+            return r.left >= b.left - 2 && r.right <= b.right + 2;
+          });
+        })(),
         portfolioCanScroll: pf ? pf.scrollWidth > pf.clientWidth : false,
         verticalCanScroll: vrow ? vrow.scrollWidth > vrow.clientWidth : false,
         horizontalCanScroll: hrow ? hrow.scrollWidth > hrow.clientWidth : false,
@@ -347,16 +364,19 @@ test('D-297: tinggi panel Portfolio PERSIS SAMA dengan panel Karakter', async (t
   );
 });
 
-test('D-296: Konten vertikal muat 5 & horizontal muat 3, semua bisa scroll horizontal', async (t) => {
+test('D-299: Konten vertikal 5 & horizontal 3, TANPA potongan card berikutnya', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  // Semua baris harus bisa digeser horizontal (desain awal) & tidak boleh
-  // memotong daftar (semua karya tetap ada di DOM).
+  // Baris tetap bisa digeser horizontal (desain awal).
   assert.ok(info.portfolioCanScroll, 'baris Portfolio harus bisa scroll horizontal');
-  assert.ok(info.verticalCanScroll, 'baris konten vertikal harus bisa scroll horizontal');
-  assert.ok(info.horizontalCanScroll, 'baris konten horizontal harus bisa scroll horizontal');
   assert.equal(info.verticalOverflowX, 'auto', 'baris vertikal harus overflow-x:auto');
   assert.equal(info.horizontalOverflowX, 'auto', 'baris horizontal harus overflow-x:auto');
+  // TEPAT 5 (vertikal) & 3 (horizontal) — tidak ada kartu ke-6/ke-4 yang mengintip.
+  assert.equal(info.verticalCount, 5, `konten vertikal harus 5 kartu (${info.verticalCount})`);
+  assert.equal(info.horizontalCount, 3, `konten horizontal harus 3 kartu (${info.horizontalCount})`);
+  // Semua kartu yang ada harus muat penuh di dalam baris (tidak ada yang terpotong).
+  assert.equal(info.verticalAllFit, true, 'semua kartu vertikal harus muat penuh (tidak ada potongan)');
+  assert.equal(info.horizontalAllFit, true, 'semua kartu horizontal harus muat penuh (tidak ada potongan)');
   // Yang MUA T terlihat: 5 (vertikal) & 3 (horizontal).
   assert.ok(info.verticalFits >= 5, `konten vertikal harus muat >= 5 kartu (${info.verticalFits})`);
   assert.ok(info.horizontalFits >= 3, `konten horizontal harus muat >= 3 kartu (${info.horizontalFits})`);

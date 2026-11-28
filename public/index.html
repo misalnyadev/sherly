@@ -114,7 +114,11 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .sc-row.vertical{grid-auto-columns:142px}
 .sc-row.horizontal{grid-auto-columns:242px}
 /* Portfolio ikut baris vertikal (9:16) — ukurannya sama dengan Konten potret. */
-.sc-row.portfolio{grid-auto-columns:138px}
+.sc-row.portfolio{grid-auto-columns:138px;
+  /* D-299: ujung kanan baris Portfolio diberi fade tipis -> kartu berikutnya
+     yang mengintip sedikit terhalus, TIDAK terlihat terpotong. */
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent 100%)}
 .sc-row.portfolio .sc-card{aspect-ratio:9/16}
 /* Kartu Portfolio (baris atas) & Konten (baris bawah) — sama ukurannya. */
 .sc-card{position:relative;scroll-snap-align:start;overflow:hidden;border-radius:16px;
