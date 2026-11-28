@@ -36,9 +36,11 @@ try {
 
 const SKIP = { skip: 'Chromium tidak tersedia di lingkungan ini' };
 
-// Ukuran kartu (D-297: dikecilkan 4px dari desain awal supaya 5 & 3 PAS di batas).
-const W_VERTICAL = 138;
-const W_HORIZONTAL = 240;
+// Ukuran kartu (D-298: pas di batas kanan baris — sisa < 6px).
+const W_VERTICAL = 142;
+const W_HORIZONTAL = 242;
+// Kartu Portfolio 138px supaya 3 kartu + gap persis di kolom 430px.
+const W_PORTFOLIO = 138;
 
 // PNG 1x1 (dipakai sebagai gambar).
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -203,6 +205,41 @@ async function renderHome(w, h, extra) {
           }
           return n;
         })(),
+        gapPortfolioToChars: (() => {
+          const pp = q('#homeProdPanel'); const dc = q('#homeChars');
+          if (!pp || !dc) return -1;
+          return Math.round(dc.getBoundingClientRect().left - pp.getBoundingClientRect().right);
+        })(),
+        gapPanelToLabel: (() => {
+          const pp = q('#homeProdPanel'); const lb = q('.row-label.heading');
+          if (!pp || !lb) return -1;
+          return Math.round(lb.getBoundingClientRect().top - pp.getBoundingClientRect().bottom);
+        })(),
+        // Sisa ruang di kanan baris setelah kartu terakhir yang muat.
+        verticalRemain: (() => {
+          if (!vrow) return -1;
+          const b = vrow.getBoundingClientRect();
+          const cards = [...vrow.querySelectorAll('.sc-card')];
+          let last = null;
+          for (const c of cards) {
+            const r = c.getBoundingClientRect();
+            if (r.right > b.right + 2) break;
+            last = r;
+          }
+          return last ? Math.round(b.right - last.right) : -1;
+        })(),
+        horizontalRemain: (() => {
+          if (!hrow) return -1;
+          const b = hrow.getBoundingClientRect();
+          const cards = [...hrow.querySelectorAll('.sc-card')];
+          let last = null;
+          for (const c of cards) {
+            const r = c.getBoundingClientRect();
+            if (r.right > b.right + 2) break;
+            last = r;
+          }
+          return last ? Math.round(b.right - last.right) : -1;
+        })(),
         portfolioCanScroll: pf ? pf.scrollWidth > pf.clientWidth : false,
         verticalCanScroll: vrow ? vrow.scrollWidth > vrow.clientWidth : false,
         horizontalCanScroll: hrow ? hrow.scrollWidth > hrow.clientWidth : false,
@@ -236,10 +273,10 @@ test('D-294: Portfolio & Konten memakai kartu besar (bukan ".asset" kecil)', asy
   );
 });
 
-test('D-295: ukuran kartu TIDAK berubah dari desain awal (142px / 244px)', async (t) => {
+test('D-298: ukuran kartu pas di batas (vertikal 142px / horizontal 242px)', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  assert.equal(info.portfolioCardSize.w, W_VERTICAL, `kartu Portfolio harus ${W_VERTICAL}px`);
+  assert.equal(info.portfolioCardSize.w, W_PORTFOLIO, `kartu Portfolio harus ${W_PORTFOLIO}px`);
   assert.equal(info.verticalCardSize.w, W_VERTICAL, `kartu Konten vertikal harus ${W_VERTICAL}px`);
   assert.equal(info.horizontalCardSize.w, W_HORIZONTAL, `kartu Konten horizontal harus ${W_HORIZONTAL}px`);
   // Rasio 9:16 & 16:10 (dari desain awal).
@@ -262,10 +299,38 @@ test('D-296: Portfolio di kolom KIRI (3 kartu pas), Karakter kolom lebih sempit'
   assert.ok(Math.abs(info.portfolioPanel.top - info.charsPanel.top) <= 1, 'Portfolio & Karakter harus sejajar baris');
   // Kolom Portfolio pas untuk 3 kartu (3x138 + 2x8 gap = 430px).
   assert.ok(info.portfolioPanel.w >= 430, `kolom Portfolio harus >= 430px (${info.portfolioPanel.w})`);
+  // Jarak panel Portfolio <-> panel Karakter SAMA dengan jarak antar section (18px).
+  assert.ok(
+    Math.abs(info.portfolioPanel.w - 430) <= 2,
+    `kolom Portfolio harus pas 3 kartu (${info.portfolioPanel.w})`,
+  );
   // Kolom Karakter LEBIH SEMPIT dari kolom Portfolio (bukan 1:1).
   assert.ok(
     info.charsPanel.w < info.portfolioPanel.w,
     `panel Karakter harus lebih sempit dari Portfolio (${info.charsPanel.w} vs ${info.portfolioPanel.w})`,
+  );
+});
+
+test('D-298: jarak antar panel SERAGAM (18px) & kartu pas di batas kanan', async (t) => {
+  if (!puppeteer || !chromium) return t.skip(SKIP);
+  const { info } = await renderHome(1352, 768);
+  // Jarak Portfolio <-> Karakter harus sama dengan jarak antar section lain (18px).
+  assert.ok(
+    Math.abs(info.gapPortfolioToChars - 18) <= 2,
+    `jarak Portfolio ke Karakter harus ~18px (${info.gapPortfolioToChars})`,
+  );
+  assert.ok(
+    Math.abs(info.gapPanelToLabel - 18) <= 2,
+    `jarak panel ke label baris harus ~18px (${info.gapPanelToLabel})`,
+  );
+  // Kartu terakhir yang muat harus berakhir DEKAT batas kanan baris (sisa < 12px).
+  assert.ok(
+    info.verticalRemain < 12,
+    `konten vertikal harus pas di batas (sisa ${info.verticalRemain}px)`,
+  );
+  assert.ok(
+    info.horizontalRemain < 12,
+    `konten horizontal harus pas di batas (sisa ${info.horizontalRemain}px)`,
   );
 });
 
