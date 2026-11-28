@@ -95,23 +95,25 @@
 
   function renderLatest(items) {
     // "Konten Terbaru" baris VERTIKAL = konten publik yang berorientasi potret.
-    // Yang MUA T terlihat = 5, TANPA potongan card ke-6 di batas kanan.
-    // Rasio kartu TETAP 9:16 (desain awal) — aset dengan rasio lain di-crop.
+    // SEMUA karya dirender & baris bisa digeser horizontal (desain awal).
+    // Yang terlihat penuh = 5 (vertikal) & 3 (horizontal) — jarak antar kartu
+    // (gap) dibuat sedikit lebih longgar supaya kartu berikutnya TIDAK
+    // mengintip di batas kanan, tapi tetap bisa digeser untuk melihatnya.
     const row = $('homeLatestRow');
     if (row) {
       const vert = items.filter((i) => i.slot === 'public' && !isLandscape(i));
       row.className = 'sc-row vertical';
       row.innerHTML = vert.length
-        ? vert.slice(0, 5).map((a) => cardHTML(a, 'Konten', 9 / 16)).join('')
+        ? vert.map((a) => cardHTML(a, 'Konten', 9 / 16)).join('')
         : '<div class="empty-state">Belum ada konten publik — pilih aset di Studio lalu tekan "Jadikan Konten Publik".</div>';
     }
-    // Baris HORIZONTAL = konten publik yang berorientasi landscape (muat 3), 16:10.
+    // Baris HORIZONTAL = konten publik yang berorientasi landscape, 16:10.
     const hrow = $('homePublicRow');
     if (hrow) {
       const horz = items.filter((i) => i.slot === 'public' && isLandscape(i));
       hrow.className = 'sc-row horizontal';
       hrow.innerHTML = horz.length
-        ? horz.slice(0, 3).map((a) => cardHTML(a, 'Konten', 16 / 10)).join('')
+        ? horz.map((a) => cardHTML(a, 'Konten', 16 / 10)).join('')
         : '<div class="empty-state">Belum ada konten publik horizontal — pilih aset horizontal di Studio lalu tekan "Jadikan Konten Publik".</div>';
     }
   }

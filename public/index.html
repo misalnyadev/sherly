@@ -107,6 +107,15 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
      - KLIK untuk lihat ukuran asli (lightbox). */
 .sc-row{display:grid;grid-auto-flow:column;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;
   padding:0 0 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+/* D-300: baris konten (vertikal 5 kartu / horizontal 3 kartu) memakai FLEX
+   dengan basis = (lebar baris - gap) / jumlah kartu yang muat. Efeknya:
+     - 5 (vertikal) & 3 (horizontal) kartu MUA PAS PERSIS di batas kanan,
+     - kartu berikutnya otomatis mulai DI LUAR area (tidak mengintip),
+     - sisa karya tetap bisa DIGESER horizontal (scroll tidak dihapus),
+     - responsive: pas di lebar layar berapa pun. */
+.sc-row.vertical,.sc-row.horizontal{display:flex}
+.sc-row.vertical>.sc-card{flex:0 0 calc((100% - 4 * 8px) / 5)}
+.sc-row.horizontal>.sc-card{flex:0 0 calc((100% - 2 * 8px) / 3)}
 .sc-row::-webkit-scrollbar{display:none}
 /* D-297: UKURAN KARTU — dikecilkan SEDIKIT (4px) dari desain awal supaya
    5 kartu vertikal & 3 kartu horizontal PAS di batas pembatas, rapi di
@@ -114,11 +123,7 @@ main{min-width:0;padding:18px 22px 28px}.topbar{display:flex;align-items:center;
 .sc-row.vertical{grid-auto-columns:142px}
 .sc-row.horizontal{grid-auto-columns:242px}
 /* Portfolio ikut baris vertikal (9:16) — ukurannya sama dengan Konten potret. */
-.sc-row.portfolio{grid-auto-columns:138px;
-  /* D-299: ujung kanan baris Portfolio diberi fade tipis -> kartu berikutnya
-     yang mengintip sedikit terhalus, TIDAK terlihat terpotong. */
-  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent 100%);
-  mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent 100%)}
+.sc-row.portfolio{grid-auto-columns:138px}
 .sc-row.portfolio .sc-card{aspect-ratio:9/16}
 /* Kartu Portfolio (baris atas) & Konten (baris bawah) — sama ukurannya. */
 .sc-card{position:relative;scroll-snap-align:start;overflow:hidden;border-radius:16px;
