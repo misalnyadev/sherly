@@ -36,9 +36,9 @@ try {
 
 const SKIP = { skip: 'Chromium tidak tersedia di lingkungan ini' };
 
-// Ukuran kartu resmi (SAMA dengan desain awal ".media-row").
-const W_VERTICAL = 142;
-const W_HORIZONTAL = 244;
+// Ukuran kartu (D-297: dikecilkan 4px dari desain awal supaya 5 & 3 PAS di batas).
+const W_VERTICAL = 138;
+const W_HORIZONTAL = 240;
 
 // PNG 1x1 (dipakai sebagai gambar).
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -136,7 +136,7 @@ async function renderHome(w, h, extra) {
       const all = (s) => [...document.querySelectorAll(s)];
       const pf = q('#homePortfolio');
       const cards = pf ? [...pf.querySelectorAll('.sc-card')] : [];
-      const rect = (el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), left: Math.round(r.left), right: Math.round(r.right) }; };
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom) }; };
       const prodPanel = q('#homeProdPanel');
       const charsPanel = q('#homeCharsPanel');
       const vids = all('.sc-card video');
@@ -239,9 +239,9 @@ test('D-294: Portfolio & Konten memakai kartu besar (bukan ".asset" kecil)', asy
 test('D-295: ukuran kartu TIDAK berubah dari desain awal (142px / 244px)', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  assert.equal(info.portfolioCardSize.w, W_VERTICAL, 'kartu Portfolio harus 142px');
-  assert.equal(info.verticalCardSize.w, W_VERTICAL, 'kartu Konten vertikal harus 142px');
-  assert.equal(info.horizontalCardSize.w, W_HORIZONTAL, 'kartu Konten horizontal harus 244px');
+  assert.equal(info.portfolioCardSize.w, W_VERTICAL, `kartu Portfolio harus ${W_VERTICAL}px`);
+  assert.equal(info.verticalCardSize.w, W_VERTICAL, `kartu Konten vertikal harus ${W_VERTICAL}px`);
+  assert.equal(info.horizontalCardSize.w, W_HORIZONTAL, `kartu Konten horizontal harus ${W_HORIZONTAL}px`);
   // Rasio 9:16 & 16:10 (dari desain awal).
   assert.equal(info.verticalCardSize.h, Math.round((W_VERTICAL * 16) / 9), 'rasio vertikal harus 9:16');
   assert.equal(info.horizontalCardSize.h, Math.round((W_HORIZONTAL * 10) / 16), 'rasio horizontal harus 16:10');
@@ -260,12 +260,25 @@ test('D-296: Portfolio di kolom KIRI (3 kartu pas), Karakter kolom lebih sempit'
   );
   // Sejajar (baris yang sama).
   assert.ok(Math.abs(info.portfolioPanel.top - info.charsPanel.top) <= 1, 'Portfolio & Karakter harus sejajar baris');
-  // Kolom Portfolio pas untuk 3 kartu (3x142 + 2x8 gap = 442px).
-  assert.ok(info.portfolioPanel.w >= 442, `kolom Portfolio harus >= 442px (${info.portfolioPanel.w})`);
+  // Kolom Portfolio pas untuk 3 kartu (3x138 + 2x8 gap = 430px).
+  assert.ok(info.portfolioPanel.w >= 430, `kolom Portfolio harus >= 430px (${info.portfolioPanel.w})`);
   // Kolom Karakter LEBIH SEMPIT dari kolom Portfolio (bukan 1:1).
   assert.ok(
     info.charsPanel.w < info.portfolioPanel.w,
     `panel Karakter harus lebih sempit dari Portfolio (${info.charsPanel.w} vs ${info.portfolioPanel.w})`,
+  );
+});
+
+test('D-297: tinggi panel Portfolio PERSIS SAMA dengan panel Karakter', async (t) => {
+  if (!puppeteer || !chromium) return t.skip(SKIP);
+  const { info } = await renderHome(1352, 768);
+  assert.ok(
+    Math.abs(info.portfolioPanel.h - info.charsPanel.h) <= 1,
+    `tinggi Portfolio harus sama dengan Karakter (${info.portfolioPanel.h} vs ${info.charsPanel.h})`,
+  );
+  assert.ok(
+    Math.abs(info.portfolioPanel.bottom - info.charsPanel.bottom) <= 1,
+    `batas bawah kedua panel harus rata (${info.portfolioPanel.bottom} vs ${info.charsPanel.bottom})`,
   );
 });
 
