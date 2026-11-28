@@ -50,16 +50,19 @@ const ITEMS = [
   { id: 'p2', assetId: 'a2', slot: 'portfolio', title: 'Karya Portfolio 2', caption: '', mediaType: 'image', width: 900, height: 900, createdAt: '2026-01-01T00:00:00Z', publicUrl: PIXEL },
   { id: 'p3', assetId: 'a3', slot: 'portfolio', title: 'Karya Portfolio 3', caption: '', mediaType: 'image', width: 720, height: 1280, createdAt: '2026-01-03T00:00:00Z', publicUrl: PIXEL },
   { id: 'p4', assetId: 'a4', slot: 'portfolio', title: 'Karya Portfolio 4', caption: '', mediaType: 'image', width: 720, height: 1280, createdAt: '2026-01-04T00:00:00Z', publicUrl: PIXEL },
+  { id: 'p5', assetId: 'a4b', slot: 'portfolio', title: 'Karya Portfolio 5', caption: '', mediaType: 'image', width: 720, height: 1280, createdAt: '2026-01-04bT00:00:00Z', publicUrl: PIXEL },
   { id: 'v1', assetId: 'a14', slot: 'public', title: 'Konten Video', caption: '', mediaType: 'video', width: 1080, height: 1920, createdAt: '2026-01-12T00:00:00Z', publicUrl: MP4 },
   { id: 'u1', assetId: 'a5', slot: 'public', title: 'Konten Publik Potret 1', caption: 'Deskripsi', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-03T00:00:00Z', publicUrl: PIXEL },
   { id: 'u2', assetId: 'a6', slot: 'public', title: 'Konten Publik Potret 2', caption: '', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-04T00:00:00Z', publicUrl: PIXEL },
   { id: 'u3', assetId: 'a7', slot: 'public', title: 'Konten Publik Potret 3', caption: '', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-05T00:00:00Z', publicUrl: PIXEL },
   { id: 'u4', assetId: 'a8', slot: 'public', title: 'Konten Publik Potret 4', caption: '', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-06T00:00:00Z', publicUrl: PIXEL },
   { id: 'u5', assetId: 'a9', slot: 'public', title: 'Konten Publik Potret 5', caption: '', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-07T00:00:00Z', publicUrl: PIXEL },
+  { id: 'u6', assetId: 'a9b', slot: 'public', title: 'Konten Publik Potret 6', caption: '', mediaType: 'image', width: 1080, height: 1920, createdAt: '2026-01-07bT00:00:00Z', publicUrl: PIXEL },
   { id: 'h1', assetId: 'a10', slot: 'public', title: 'Konten Publik Landscape 1', caption: '', mediaType: 'image', width: 1920, height: 1080, createdAt: '2026-01-08T00:00:00Z', publicUrl: PIXEL },
   { id: 'h2', assetId: 'a11', slot: 'public', title: 'Konten Publik Landscape 2', caption: '', mediaType: 'image', width: 1920, height: 1080, createdAt: '2026-01-09T00:00:00Z', publicUrl: PIXEL },
   { id: 'h3', assetId: 'a12', slot: 'public', title: 'Konten Publik Landscape 3', caption: '', mediaType: 'image', width: 1920, height: 1080, createdAt: '2026-01-10T00:00:00Z', publicUrl: PIXEL },
   { id: 'h4', assetId: 'a13', slot: 'public', title: 'Konten Publik Landscape 4', caption: '', mediaType: 'image', width: 1920, height: 1080, createdAt: '2026-01-11T00:00:00Z', publicUrl: PIXEL },
+  { id: 'h5', assetId: 'a13b', slot: 'public', title: 'Konten Publik Landscape 5', caption: '', mediaType: 'image', width: 1920, height: 1080, createdAt: '2026-01-11bT00:00:00Z', publicUrl: PIXEL },
 ];
 
 // Satu browser dipakai semua test (hemat resource).
@@ -89,11 +92,15 @@ async function renderHome(w, h, extra) {
     const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
     const bodyMatch = html.match(/<div class="layout">([\s\S]*?)<footer class="page-sign">/);
     const body = bodyMatch ? bodyMatch[1] : '';
+    // Reproduksi layout NYATA: sidebar (kiri) + maincol + rightcol (360px),
+    // supaya lebar kolom sama dengan yang dilihat user di browser.
+    const sidebar = html.match(/<aside class="sidebar"[\s\S]*?<\/aside>/)?.[0] || '';
+    const rightcol = '<div class="rightcol"><div class="panel" style="height:200px">Quick Menu</div></div>';
     const file = path.join(ROOT, 'public', '__d294_home.html');
     writeFileSync(file, `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${styles}</style></head><body>
-<div class="layout">${body}</div>
+<div class="app">${sidebar}<main><div class="layout">${body}${rightcol}</div></main></div>
 <script>
   window.__stub = ${JSON.stringify(JSON.stringify({ items: ITEMS }))};
   const origFetch = window.fetch;
@@ -159,6 +166,48 @@ async function renderHome(w, h, extra) {
         verticalCount: vrow ? vrow.querySelectorAll('.sc-card').length : -1,
         verticalCardSize: vrow && vrow.querySelector('.sc-card') ? rect(vrow.querySelector('.sc-card')) : null,
         horizontalCardSize: hrow && hrow.querySelector('.sc-card') ? rect(hrow.querySelector('.sc-card')) : null,
+        // Berapa kartu yang MUA T penuh di dalam baris (tidak terpotong).
+        portfolioFits: (() => {
+          if (!pf) return 0;
+          const b = pf.getBoundingClientRect();
+          let n = 0;
+          for (const c of pf.querySelectorAll('.sc-card')) {
+            const r = c.getBoundingClientRect();
+            if (r.left < b.left - 2) continue;
+            if (r.right > b.right + 2) break;
+            n++;
+          }
+          return n;
+        })(),
+        verticalFits: (() => {
+          if (!vrow) return 0;
+          const b = vrow.getBoundingClientRect();
+          let n = 0;
+          for (const c of vrow.querySelectorAll('.sc-card')) {
+            const r = c.getBoundingClientRect();
+            if (r.left < b.left - 2) continue;
+            if (r.right > b.right + 2) break;
+            n++;
+          }
+          return n;
+        })(),
+        horizontalFits: (() => {
+          if (!hrow) return 0;
+          const b = hrow.getBoundingClientRect();
+          let n = 0;
+          for (const c of hrow.querySelectorAll('.sc-card')) {
+            const r = c.getBoundingClientRect();
+            if (r.left < b.left - 2) continue;
+            if (r.right > b.right + 2) break;
+            n++;
+          }
+          return n;
+        })(),
+        portfolioCanScroll: pf ? pf.scrollWidth > pf.clientWidth : false,
+        verticalCanScroll: vrow ? vrow.scrollWidth > vrow.clientWidth : false,
+        horizontalCanScroll: hrow ? hrow.scrollWidth > hrow.clientWidth : false,
+        verticalOverflowX: vrow ? getComputedStyle(vrow).overflowX : '',
+        horizontalOverflowX: hrow ? getComputedStyle(hrow).overflowX : '',
         hasLightboxEl: !!document.getElementById('scLightbox'),
       };
     });
@@ -198,10 +247,9 @@ test('D-295: ukuran kartu TIDAK berubah dari desain awal (142px / 244px)', async
   assert.equal(info.horizontalCardSize.h, Math.round((W_HORIZONTAL * 10) / 16), 'rasio horizontal harus 16:10');
 });
 
-test('D-295: Portfolio 3 karya di kolom KIRI, sejajar dengan Karakter di kanan', async (t) => {
+test('D-296: Portfolio di kolom KIRI (3 kartu pas), Karakter kolom lebih sempit', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  assert.equal(info.portfolioCards, 3, 'Portfolio harus menampilkan 3 karya');
   assert.ok(info.portfolioInsideHomeTop, 'section Portfolio harus di dalam grid home-top');
   assert.equal(info.homeTopColumns, 2, 'home-top harus 2 kolom (Portfolio | Karakter)');
   // Portfolio di kiri, Karakter di kanan.
@@ -212,13 +260,28 @@ test('D-295: Portfolio 3 karya di kolom KIRI, sejajar dengan Karakter di kanan',
   );
   // Sejajar (baris yang sama).
   assert.ok(Math.abs(info.portfolioPanel.top - info.charsPanel.top) <= 1, 'Portfolio & Karakter harus sejajar baris');
+  // Kolom Portfolio pas untuk 3 kartu (3x142 + 2x8 gap = 442px).
+  assert.ok(info.portfolioPanel.w >= 442, `kolom Portfolio harus >= 442px (${info.portfolioPanel.w})`);
+  // Kolom Karakter LEBIH SEMPIT dari kolom Portfolio (bukan 1:1).
+  assert.ok(
+    info.charsPanel.w < info.portfolioPanel.w,
+    `panel Karakter harus lebih sempit dari Portfolio (${info.charsPanel.w} vs ${info.portfolioPanel.w})`,
+  );
 });
 
-test('D-295: Konten vertikal 4 karya & horizontal 3 karya', async (t) => {
+test('D-296: Konten vertikal muat 5 & horizontal muat 3, semua bisa scroll horizontal', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  assert.equal(info.verticalCount, 4, 'konten vertikal harus 4 karya');
-  assert.equal(info.horizontalCount, 3, 'konten horizontal harus 3 karya');
+  // Semua baris harus bisa digeser horizontal (desain awal) & tidak boleh
+  // memotong daftar (semua karya tetap ada di DOM).
+  assert.ok(info.portfolioCanScroll, 'baris Portfolio harus bisa scroll horizontal');
+  assert.ok(info.verticalCanScroll, 'baris konten vertikal harus bisa scroll horizontal');
+  assert.ok(info.horizontalCanScroll, 'baris konten horizontal harus bisa scroll horizontal');
+  assert.equal(info.verticalOverflowX, 'auto', 'baris vertikal harus overflow-x:auto');
+  assert.equal(info.horizontalOverflowX, 'auto', 'baris horizontal harus overflow-x:auto');
+  // Yang MUA T terlihat: 5 (vertikal) & 3 (horizontal).
+  assert.ok(info.verticalFits >= 5, `konten vertikal harus muat >= 5 kartu (${info.verticalFits})`);
+  assert.ok(info.horizontalFits >= 3, `konten horizontal harus muat >= 3 kartu (${info.horizontalFits})`);
 });
 
 test('D-294: thumbnail video pakai preload=auto + ada placeholder fallback', async (t) => {
@@ -299,6 +362,6 @@ test('D-295: Beranda HP juga memakai kartu besar', async (t) => {
   const { info } = await renderHome(390, 844);
   assert.ok(info.portfolioCardSize.w >= 120, `lebar kartu HP harus >= 120 (${info.portfolioCardSize.w})`);
   assert.ok(info.portfolioCardSize.h >= 200, `tinggi kartu HP harus >= 200 (${info.portfolioCardSize.h})`);
-  assert.equal(info.horizontalCount, 3, 'HP juga harus split konten potret/landscape');
-  assert.equal(info.verticalCount, 4, 'HP juga harus split konten potret/landscape');
+  assert.ok(info.horizontalCount >= 3, 'HP juga harus split konten potret/landscape');
+  assert.ok(info.verticalCount >= 5, 'HP juga harus split konten potret/landscape');
 });
