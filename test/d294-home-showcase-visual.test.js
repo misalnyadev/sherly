@@ -257,6 +257,28 @@ async function renderHome(w, h, extra) {
             return r.left >= b.left - 2 && r.right <= b.right + 2;
           });
         })(),
+        // Kartu berikutnya (setelah yang muat) — harus DI LUAR area baris.
+        verticalNextVisible: (() => {
+          if (!vrow) return null;
+          const b = vrow.getBoundingClientRect();
+          const cards = [...vrow.querySelectorAll('.sc-card')];
+          const full = cards.filter((c) => c.getBoundingClientRect().right <= b.right + 2).length;
+          const next = cards[full];
+          return next ? next.getBoundingClientRect().left < b.right : false;
+        })(),
+        horizontalNextVisible: (() => {
+          if (!hrow) return null;
+          const b = hrow.getBoundingClientRect();
+          const cards = [...hrow.querySelectorAll('.sc-card')];
+          const full = cards.filter((c) => c.getBoundingClientRect().right <= b.right + 2).length;
+          const next = cards[full];
+          return next ? next.getBoundingClientRect().left < b.right : false;
+        })(),
+        verticalRowWidth: vrow ? Math.round(vrow.getBoundingClientRect().width) : 0,
+        horizontalRowWidth: hrow ? Math.round(hrow.getBoundingClientRect().width) : 0,
+        portfolioMask: pf ? getComputedStyle(pf).maskImage : '',
+        verticalMask: vrow ? getComputedStyle(vrow).maskImage : '',
+        horizontalMask: hrow ? getComputedStyle(hrow).maskImage : '',
         portfolioCanScroll: pf ? pf.scrollWidth > pf.clientWidth : false,
         verticalCanScroll: vrow ? vrow.scrollWidth > vrow.clientWidth : false,
         horizontalCanScroll: hrow ? hrow.scrollWidth > hrow.clientWidth : false,
@@ -290,15 +312,25 @@ test('D-294: Portfolio & Konten memakai kartu besar (bukan ".asset" kecil)', asy
   );
 });
 
-test('D-298: ukuran kartu pas di batas (vertikal 142px / horizontal 242px)', async (t) => {
+test('D-300: kartu konten fleksibel — pas di batas di setiap lebar layar', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
+  // Portfolio tetap fixed (3 kartu di kolom 430px).
   assert.equal(info.portfolioCardSize.w, W_PORTFOLIO, `kartu Portfolio harus ${W_PORTFOLIO}px`);
-  assert.equal(info.verticalCardSize.w, W_VERTICAL, `kartu Konten vertikal harus ${W_VERTICAL}px`);
-  assert.equal(info.horizontalCardSize.w, W_HORIZONTAL, `kartu Konten horizontal harus ${W_HORIZONTAL}px`);
-  // Rasio 9:16 & 16:10 (dari desain awal).
-  assert.equal(info.verticalCardSize.h, Math.round((W_VERTICAL * 16) / 9), 'rasio vertikal harus 9:16');
-  assert.equal(info.horizontalCardSize.h, Math.round((W_HORIZONTAL * 10) / 16), 'rasio horizontal harus 16:10');
+  // Kartu konten FLEKSIBEL: lebarnya = (lebar baris - gap) / jumlah kartu muat.
+  // 5 vertikal & 3 horizontal -> pas persis di batas kanan.
+  const gap = 8;
+  const vExpected = Math.floor((info.verticalRowWidth - gap * 4) / 5);
+  const hExpected = Math.floor((info.horizontalRowWidth - gap * 2) / 3);
+  assert.ok(Math.abs(info.verticalCardSize.w - vExpected) <= 1,
+    `kartu vertikal harus ~${vExpected}px (${info.verticalCardSize.w})`);
+  assert.ok(Math.abs(info.horizontalCardSize.w - hExpected) <= 1,
+    `kartu horizontal harus ~${hExpected}px (${info.horizontalCardSize.w})`);
+  // Rasio tetap 9:16 & 16:10 (dari desain awal).
+  assert.ok(Math.abs(info.verticalCardSize.h / info.verticalCardSize.w - 16 / 9) < 0.03,
+    `rasio vertikal harus 9:16 (${info.verticalCardSize.h}/${info.verticalCardSize.w})`);
+  assert.ok(Math.abs(info.horizontalCardSize.h / info.horizontalCardSize.w - 10 / 16) < 0.03,
+    `rasio horizontal harus 16:10 (${info.horizontalCardSize.h}/${info.horizontalCardSize.w})`);
 });
 
 test('D-296: Portfolio di kolom KIRI (3 kartu pas), Karakter kolom lebih sempit', async (t) => {
@@ -364,22 +396,27 @@ test('D-297: tinggi panel Portfolio PERSIS SAMA dengan panel Karakter', async (t
   );
 });
 
-test('D-299: Konten vertikal 5 & horizontal 3, TANPA potongan card berikutnya', async (t) => {
+test('D-300: 5 (vertikal) & 3 (horizontal) pas di batas, TAPI scroll tetap ada', async (t) => {
   if (!puppeteer || !chromium) return t.skip(SKIP);
   const { info } = await renderHome(1440, 900);
-  // Baris tetap bisa digeser horizontal (desain awal).
+  // Semua baris harus bisa digeser horizontal (scroll TIDAK dihapus).
   assert.ok(info.portfolioCanScroll, 'baris Portfolio harus bisa scroll horizontal');
+  assert.ok(info.verticalCanScroll, 'baris konten vertikal harus bisa scroll horizontal');
+  assert.ok(info.horizontalCanScroll, 'baris konten horizontal harus bisa scroll horizontal');
   assert.equal(info.verticalOverflowX, 'auto', 'baris vertikal harus overflow-x:auto');
   assert.equal(info.horizontalOverflowX, 'auto', 'baris horizontal harus overflow-x:auto');
-  // TEPAT 5 (vertikal) & 3 (horizontal) — tidak ada kartu ke-6/ke-4 yang mengintip.
-  assert.equal(info.verticalCount, 5, `konten vertikal harus 5 kartu (${info.verticalCount})`);
-  assert.equal(info.horizontalCount, 3, `konten horizontal harus 3 kartu (${info.horizontalCount})`);
-  // Semua kartu yang ada harus muat penuh di dalam baris (tidak ada yang terpotong).
-  assert.equal(info.verticalAllFit, true, 'semua kartu vertikal harus muat penuh (tidak ada potongan)');
-  assert.equal(info.horizontalAllFit, true, 'semua kartu horizontal harus muat penuh (tidak ada potongan)');
+  // SEMUA karya tetap dirender (tidak dipotong slice).
+  assert.ok(info.verticalCount > 5, `semua karya vertikal harus dirender (${info.verticalCount})`);
+  assert.ok(info.horizontalCount > 3, `semua karya horizontal harus dirender (${info.horizontalCount})`);
   // Yang MUA T terlihat: 5 (vertikal) & 3 (horizontal).
-  assert.ok(info.verticalFits >= 5, `konten vertikal harus muat >= 5 kartu (${info.verticalFits})`);
-  assert.ok(info.horizontalFits >= 3, `konten horizontal harus muat >= 3 kartu (${info.horizontalFits})`);
+  assert.equal(info.verticalFits, 5, `konten vertikal harus pas 5 kartu (${info.verticalFits})`);
+  assert.equal(info.horizontalFits, 3, `konten horizontal harus pas 3 kartu (${info.horizontalFits})`);
+  // Kartu BERIKUTNYA tidak boleh mengintip di batas kanan.
+  assert.equal(info.verticalNextVisible, false, 'kartu ke-6 vertikal tidak boleh nongol di batas kanan');
+  assert.equal(info.horizontalNextVisible, false, 'kartu ke-4 horizontal tidak boleh nongol di batas kanan');
+  // TIDAK ADA fade/hitam blur di batas baris (user minta jangan dikaburkan).
+  assert.equal(info.portfolioMask, 'none', 'baris Portfolio tidak boleh pakai fade/mask');
+  assert.equal(info.verticalMask, 'none', 'baris vertikal tidak boleh pakai fade/mask');
 });
 
 test('D-294: thumbnail video pakai preload=auto + ada placeholder fallback', async (t) => {
